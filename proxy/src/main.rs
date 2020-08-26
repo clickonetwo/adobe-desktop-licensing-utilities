@@ -2,8 +2,12 @@ use hyper::{service::{make_service_fn, service_fn}, Body, Client, Request,
             Response, Server, Uri};
 use std::net::SocketAddr;
 
-async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    Ok(Response::new(Body::from("proxy responding")))
+async fn serve_req(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+    println!("received request at {:?}", req.uri());
+    let url_str = "http://example.com";
+    let url = url_str.parse::<Uri>().expect("failed to parse url");
+    let res = Client::new().get(url).await?;
+    Ok(res)
 }
 
 async fn run_server(addr: SocketAddr) {
@@ -19,6 +23,6 @@ async fn run_server(addr: SocketAddr) {
 
 #[tokio::main]
 async fn main() {
-    let addr = "127.0.0.1:3030".parse::<SocketAddr>().unwrap();
+    let addr = "127.0.0.1:3030".parse::<SocketAddr>().expect("failed to parse server host");
     run_server(addr).await;
 }
