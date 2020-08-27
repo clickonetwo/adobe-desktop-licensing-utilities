@@ -7,9 +7,10 @@ async fn serve_req(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
     println!("method {:?}", req.method());
     println!("headers {:?}", req.headers());
     // use the echo server for now
+    let lcs_host ="http://localhost:3000";
     let url_str = match req.uri().query() {
-        Some(qstring) => format!("{}{}?{}", "http://localhost:3000", req.uri().path(), qstring),
-        None => format!("{}{}", "http://localhost:3000", req.uri().path()),
+        Some(qstring) => format!("{}{}?{}", lcs_host, req.uri().path(), qstring),
+        None => format!("{}{}", lcs_host, req.uri().path()),
     };
     let mut client_req_builder = Request::builder()
         .method(req.method())
