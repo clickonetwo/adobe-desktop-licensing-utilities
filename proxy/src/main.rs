@@ -10,7 +10,6 @@ use settings::Settings;
 use cli::Opt;
 
 async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>, hyper::Error> {
-    println!("conf: {:?}", conf);
     println!("received request at {:?}", req.uri());
     println!("method {:?}", req.method());
     println!("headers {:?}", req.headers());
@@ -57,9 +56,11 @@ async fn run_server(addr: SocketAddr, conf: &Settings) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let opt = Opt::from_args();
+    println!("{:?}", opt);
     match opt {
-        cli::Opt::Start => {
-            let conf = Settings::new()?;
+        cli::Opt::Start { config_file } => {
+            let conf = Settings::new(config_file)?;
+            println!("conf: {:?}", conf);
             let addr = conf.proxy.host.parse::<SocketAddr>()?;
             run_server(addr, &conf).await;
         }

@@ -24,9 +24,13 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
+    pub fn new(config_file: Option<String>) -> Result<Self, ConfigError> {
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
+        match config_file {
+            Some(filename) => { s.merge(ConfigFile::with_name(filename.as_str()))?; }
+            None => ()
+        }
         s.try_into()
     }
 }
