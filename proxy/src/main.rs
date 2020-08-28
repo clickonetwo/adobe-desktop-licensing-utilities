@@ -1,10 +1,13 @@
 use hyper::{service::{make_service_fn, service_fn}, Body, Client, Request,
             Response, Server};
 use std::net::SocketAddr;
+use structopt::StructOpt;
 
 mod settings;
+mod cli;
 
 use settings::Settings;
+use cli::Opt;
 
 async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>, hyper::Error> {
     println!("conf: {:?}", conf);
@@ -53,8 +56,17 @@ async fn run_server(addr: SocketAddr, conf: &Settings) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let conf = Settings::new()?;
-    let addr = conf.proxy.host.parse::<SocketAddr>()?;
-    run_server(addr, &conf).await;
+    let opt = Opt::from_args();
+    match opt {
+        cli::Opt::Start => {
+            let conf = Settings::new()?;
+            let addr = conf.proxy.host.parse::<SocketAddr>()?;
+            run_server(addr, &conf).await;
+        }
+        cli::Opt::InitConfig { out_file } => {
+            settings::config_template(out_file)?;
+            std::process::exit(0);
+        }
+    }
     Ok(())
 }

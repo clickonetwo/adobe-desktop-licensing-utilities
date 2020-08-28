@@ -1,5 +1,7 @@
-use config::{ConfigError, Config, File, FileFormat};
+use config::{ConfigError, Config, File as ConfigFile, FileFormat};
 use serde::{Deserialize};
+use std::fs::File;
+use std::io::prelude::*;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Proxy {
@@ -24,7 +26,14 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
         let mut s = Config::new();
-        s.merge(File::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
+        s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
         s.try_into()
     }
+}
+
+pub fn config_template(filename: String) -> std::io::Result<()> {
+    let template = include_str!("res/template.toml");
+    let mut file = File::create(filename)?;
+    file.write_all(template.as_bytes())?;
+    Ok(())
 }

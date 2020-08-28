@@ -1,0 +1,11 @@
+[proxy]
+# Settings to invoke proxy server
+host = "127.0.0.1:3030"
+remote_host = "http://localhost:3000"
+
+[logging]
+# Logging settings
+console_log_level = "warn"
+log_to_file = false
+file_log_level = "info"
+file_log_path = "frl-proxy.log"
