@@ -2,17 +2,17 @@ use hyper::{service::{make_service_fn, service_fn}, Body, Client, Request,
             Response, Server};
 use std::net::SocketAddr;
 
-mod config;
+mod settings;
 
-use crate::config::Config;
+use settings::Settings;
 
-async fn serve_req(req: Request<Body>, conf: Config) -> Result<Response<Body>, hyper::Error> {
+async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>, hyper::Error> {
     println!("conf: {:?}", conf);
     println!("received request at {:?}", req.uri());
     println!("method {:?}", req.method());
     println!("headers {:?}", req.headers());
     // use the echo server for now
-    let lcs_host = conf.remote_host;
+    let lcs_host = conf.proxy.remote_host;
     let url_str = match req.uri().query() {
         Some(qstring) => format!("{}{}?{}", lcs_host, req.uri().path(), qstring),
         None => format!("{}{}", lcs_host, req.uri().path()),
@@ -33,7 +33,7 @@ async fn serve_req(req: Request<Body>, conf: Config) -> Result<Response<Body>, h
     Ok(res)
 }
 
-async fn run_server(addr: SocketAddr, conf: &Config) {
+async fn run_server(addr: SocketAddr, conf: &Settings) {
     println!("Listening on http://{}", addr);
     let make_svc = make_service_fn(move |_| {
         let conf = conf.clone();
@@ -53,8 +53,8 @@ async fn run_server(addr: SocketAddr, conf: &Config) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let conf = Config::default();
-    let addr = conf.host.parse::<SocketAddr>()?;
+    let conf = Settings::new()?;
+    let addr = conf.proxy.host.parse::<SocketAddr>()?;
     run_server(addr, &conf).await;
     Ok(())
 }
