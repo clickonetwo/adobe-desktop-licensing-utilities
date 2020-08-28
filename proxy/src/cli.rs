@@ -7,6 +7,12 @@ pub enum Opt {
     Start {
         #[structopt(short, long)]
         config_file: Option<String>,
+
+        #[structopt(long)]
+        host: Option<String>,
+
+        #[structopt(long)]
+        remote_host: Option<String>,
     },
     /// Create a template config file
     InitConfig {

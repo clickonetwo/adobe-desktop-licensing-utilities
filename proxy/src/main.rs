@@ -58,8 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let opt = Opt::from_args();
     println!("{:?}", opt);
     match opt {
-        cli::Opt::Start { config_file } => {
-            let conf = Settings::new(config_file)?;
+        cli::Opt::Start { config_file, host, remote_host } => {
+            let conf = Settings::new(config_file, host, remote_host)?;
             println!("conf: {:?}", conf);
             let addr = conf.proxy.host.parse::<SocketAddr>()?;
             run_server(addr, &conf).await;
