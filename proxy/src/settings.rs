@@ -1,5 +1,6 @@
 use config::{ConfigError, Config, File as ConfigFile, FileFormat};
 use serde::{Deserialize};
+use eyre::{eyre, Result};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -7,6 +8,9 @@ use std::io::prelude::*;
 pub struct Proxy {
     pub host: String,
     pub remote_host: String,
+    pub ssl: Option<bool>,
+    pub ssl_cert: Option<String>,
+    pub ssl_key: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -40,6 +44,19 @@ impl Settings {
             None => ()
         }
         s.try_into()
+    }
+}
+
+pub fn validate(conf: &Settings) -> Result<()> {
+    match conf.proxy.ssl {
+        Some(ssl_enable) => {
+            if ssl_enable && (conf.proxy.ssl_cert.is_none() || conf.proxy.ssl_key.is_none()) {
+                Err(eyre!("ssl_cert and ssl_key must be specified if SSL is enabled"))
+            } else {
+                Ok(())
+            }
+        }
+        None => Ok(()) 
     }
 }
 

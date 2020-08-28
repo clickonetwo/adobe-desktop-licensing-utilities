@@ -1,6 +1,7 @@
 [proxy]
 host = "127.0.0.1:3030"
 remote_host = "http://localhost:3000"
+ssl = false
 
 [logging]
 console_log_level = "warn"
