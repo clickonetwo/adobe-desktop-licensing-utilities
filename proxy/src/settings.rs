@@ -28,7 +28,9 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(config_file: Option<String>, host: Option<String>, remote_host: Option<String>) -> Result<Self, ConfigError> {
+    pub fn new(config_file: Option<String>, host: Option<String>, remote_host: Option<String>,
+        ssl: bool, ssl_cert: Option<String>, ssl_key: Option<String>) -> Result<Self, ConfigError> {
+
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
         match config_file {
@@ -43,20 +45,29 @@ impl Settings {
             Some(remote_host) => { s.set("proxy.remote_host", remote_host)?; }
             None => ()
         }
+        s.set("proxy.ssl", ssl)?;
+        match ssl_cert {
+            Some(ssl_cert) => { s.set("proxy.ssl_cert", ssl_cert)?; }
+            None => ()
+        }
+        match ssl_key {
+            Some(ssl_key) => { s.set("proxy.ssl_key", ssl_key)?; }
+            None => ()
+        }
         s.try_into()
     }
-}
 
-pub fn validate(conf: &Settings) -> Result<()> {
-    match conf.proxy.ssl {
-        Some(ssl_enable) => {
-            if ssl_enable && (conf.proxy.ssl_cert.is_none() || conf.proxy.ssl_key.is_none()) {
-                Err(eyre!("ssl_cert and ssl_key must be specified if SSL is enabled"))
-            } else {
-                Ok(())
+    pub fn validate(self: &Self) -> Result<()> {
+        match self.proxy.ssl {
+            Some(ssl_enable) => {
+                if ssl_enable && (self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none()) {
+                    Err(eyre!("ssl_cert and ssl_key must be specified if SSL is enabled"))
+                } else {
+                    Ok(())
+                }
             }
+            None => Ok(()) 
         }
-        None => Ok(()) 
     }
 }
 

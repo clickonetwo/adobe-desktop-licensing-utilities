@@ -13,6 +13,15 @@ pub enum Opt {
 
         #[structopt(long)]
         remote_host: Option<String>,
+
+        #[structopt(long)]
+        ssl: bool,
+
+        #[structopt(long)]
+        ssl_cert: Option<String>,
+
+        #[structopt(long)]
+        ssl_key: Option<String>,
     },
     /// Create a template config file
     InitConfig {
