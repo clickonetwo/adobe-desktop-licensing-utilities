@@ -33,26 +33,21 @@ impl Settings {
 
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
-        match config_file {
-            Some(filename) => { s.merge(ConfigFile::with_name(filename.as_str()))?; }
-            None => ()
+        if let Some(filename) = config_file {
+            s.merge(ConfigFile::with_name(filename.as_str()))?;
         }
-        match host {
-            Some(host) => { s.set("proxy.host", host)?; }
-            None => ()
+        if let Some(host) = host {
+            s.set("proxy.host", host)?;
         }
-        match remote_host {
-            Some(remote_host) => { s.set("proxy.remote_host", remote_host)?; }
-            None => ()
+        if let Some(remote_host) = remote_host {
+            s.set("proxy.remote_host", remote_host)?;
         }
         s.set("proxy.ssl", ssl)?;
-        match ssl_cert {
-            Some(ssl_cert) => { s.set("proxy.ssl_cert", ssl_cert)?; }
-            None => ()
+        if let Some(ssl_cert) = ssl_cert {
+            s.set("proxy.ssl_cert", ssl_cert)?;
         }
-        match ssl_key {
-            Some(ssl_key) => { s.set("proxy.ssl_key", ssl_key)?; }
-            None => ()
+        if let Some(ssl_key) = ssl_key {
+            s.set("proxy.ssl_key", ssl_key)?;
         }
         s.try_into()
     }
