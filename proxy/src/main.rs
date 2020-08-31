@@ -6,7 +6,7 @@ mod proxy;
 
 use settings::Settings;
 use cli::Opt;
-use proxy::plain;
+use proxy::{plain, secure};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -17,7 +17,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let conf = Settings::new(config_file, host, remote_host, ssl, ssl_cert, ssl_key)?;
             conf.validate()?;
             println!("conf: {:?}", conf);
-            plain::run_server(&conf).await?;
+            if let Some(true) = conf.proxy.ssl {
+                secure::run_server(&conf).await?;
+            } else {
+                plain::run_server(&conf).await?;
+            }
         }
         cli::Opt::InitConfig { out_file } => {
             settings::config_template(out_file)?;
