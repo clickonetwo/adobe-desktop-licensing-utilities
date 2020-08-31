@@ -3,7 +3,7 @@ use futures_util::{
     stream::{Stream, StreamExt},
 };
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::Server;
 use rustls::internal::pemfile;
 use std::pin::Pin;
 use std::vec::Vec;
@@ -13,6 +13,8 @@ use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 
 use crate::settings::Settings;
+
+use super::serve_req;
 
 fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
@@ -59,7 +61,15 @@ pub async fn run_server(conf: &Settings) -> Result<(), Box<dyn std::error::Error
         })
         .boxed();
 
-    let service = make_service_fn(|_| async { Ok::<_, io::Error>(service_fn(echo)) });
+    let service = make_service_fn(move |_| {
+        let conf = conf.clone();
+        async move {
+            Ok::<_, hyper::Error>(service_fn(move |_req| {
+                let conf = conf.clone();
+                async move { serve_req(_req, conf).await }
+            }))
+        }
+    });
     let server = Server::builder(HyperAcceptor {
         acceptor: incoming_tls_stream,
     })
@@ -85,27 +95,6 @@ impl hyper::server::accept::Accept for HyperAcceptor<'_> {
     ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
         Pin::new(&mut self.acceptor).poll_next(cx)
     }
-}
-
-// Custom echo service, handling two different routes and a
-// catch-all 404 responder.
-async fn echo(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let mut response = Response::new(Body::empty());
-    match (req.method(), req.uri().path()) {
-        // Help route.
-        (&Method::GET, "/") => {
-            *response.body_mut() = Body::from("Try POST /echo\n");
-        }
-        // Echo service route.
-        (&Method::POST, "/echo") => {
-            *response.body_mut() = req.into_body();
-        }
-        // Catch-all 404.
-        _ => {
-            *response.status_mut() = StatusCode::NOT_FOUND;
-        }
-    };
-    Ok(response)
 }
 
 // Load public certificate from file.
