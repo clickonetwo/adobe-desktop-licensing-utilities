@@ -11,6 +11,7 @@ use std::{fs, io, sync};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
+use log::{info, error};
 
 use crate::settings::Settings;
 
@@ -47,14 +48,14 @@ pub async fn run_server(conf: &Settings) -> Result<(), Box<dyn std::error::Error
             let client = match s {
                 Ok(x) => x,
                 Err(e) => {
-                    eprintln!("Failed to accept client");
+                    error!("Failed to accept client");
                     return Some(Err(e));
                 }
             };
             match tls_acceptor.accept(client).await {
                 Ok(x) => Some(Ok(x)),
                 Err(e) => {
-                    eprintln!("[!] Voluntary server halt: {}", e);
+                    error!("[!] Voluntary server halt: {}", e);
                     None
                 }
             }
@@ -76,7 +77,7 @@ pub async fn run_server(conf: &Settings) -> Result<(), Box<dyn std::error::Error
     .serve(service);
 
     // Run the future, keep going until an error occurs.
-    println!("Starting to serve on https://{}", conf.proxy.host);
+    info!("Starting to serve on https://{}", conf.proxy.host);
     server.await?;
     Ok(())
 }

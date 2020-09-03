@@ -8,15 +8,17 @@ use settings::Settings;
 use cli::Opt;
 use proxy::{plain, secure};
 
+use log::debug;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let opt = Opt::from_args();
-    println!("{:?}", opt);
+    debug!("{:?}", opt);
     match opt {
         cli::Opt::Start { config_file, host, remote_host, ssl, ssl_cert, ssl_key } => {
             let conf = Settings::new(config_file, host, remote_host, ssl, ssl_cert, ssl_key)?;
             conf.validate()?;
-            println!("conf: {:?}", conf);
+            debug!("conf: {:?}", conf);
             if let Some(true) = conf.proxy.ssl {
                 secure::run_server(&conf).await?;
             } else {

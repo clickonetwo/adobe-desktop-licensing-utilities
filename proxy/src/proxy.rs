@@ -4,6 +4,8 @@ pub mod secure;
 use hyper::{Body, Client, Request, Response, Uri};
 use hyper_tls::HttpsConnector;
 use futures::TryStreamExt;
+use log::{info, debug};
+
 use crate::settings::Settings;
 
 async fn get_entire_body(body: Body) -> Result<Vec<u8>, hyper::Error> {
@@ -17,12 +19,12 @@ async fn get_entire_body(body: Body) -> Result<Vec<u8>, hyper::Error> {
 
 async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>, hyper::Error> {
     let (parts, body) = req.into_parts();
-    println!("received request at {:?}", parts.uri);
-    println!("REQ method {:?}", parts.method);
-    println!("REQ headers {:?}", parts.headers);
+    info!("received request at {:?}", parts.uri);
+    debug!("REQ method {:?}", parts.method);
+    debug!("REQ headers {:?}", parts.headers);
 
     let entire_body = get_entire_body(body).await?;
-    println!("REQ body {:?}", std::str::from_utf8(&entire_body).unwrap());
+    debug!("REQ body {:?}", std::str::from_utf8(&entire_body).unwrap());
     // use the echo server for now
     let lcs_uri = conf.proxy.remote_host.parse::<Uri>().expect(format!("failed to parse uri: {}", conf.proxy.remote_host).as_str());
 
@@ -45,7 +47,7 @@ async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>,
         None => format!("{}://{}{}", lcs_scheme, lcs_host, parts.uri.path()),
     };
 
-    println!("REQ URI {}", url_str);
+    debug!("REQ URI {}", url_str);
 
     let mut client_req_builder = Request::builder()
         .method(parts.method)
@@ -68,10 +70,10 @@ async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>,
     };
 
     let (parts, body) = res.into_parts();
-    println!("RES code {:?}", parts.status);
-    println!("RES headers {:?}", parts.headers);
+    debug!("RES code {:?}", parts.status);
+    debug!("RES headers {:?}", parts.headers);
 
     let entire_body = get_entire_body(body).await?;
-    println!("RES body {:?}", std::str::from_utf8(&entire_body).unwrap());
+    debug!("RES body {:?}", std::str::from_utf8(&entire_body).unwrap());
     Ok(Response::from_parts(parts, Body::from(entire_body)))
 }

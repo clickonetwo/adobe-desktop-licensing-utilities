@@ -1,13 +1,14 @@
 use hyper::{service::{make_service_fn, service_fn}, Server};
 use std::net::SocketAddr;
 use eyre::Result;
+use log::{info, error};
 
 use crate::settings::Settings;
 use super::serve_req;
 
 pub async fn run_server(conf: &Settings) -> Result<()> {
     let addr: SocketAddr = conf.proxy.host.parse()?;
-    println!("Listening on http://{}", addr);
+    info!("Listening on http://{}", addr);
     let make_svc = make_service_fn(move |_| {
         let conf = conf.clone();
         async move {
@@ -20,7 +21,7 @@ pub async fn run_server(conf: &Settings) -> Result<()> {
     let serve_future = Server::bind(&addr)
         .serve(make_svc);
     if let Err(e) = serve_future.await {
-        eprintln!("server error: {}", e);
+        error!("server error: {}", e);
     }
     Ok(())
 }
