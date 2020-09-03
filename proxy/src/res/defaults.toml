@@ -1,6 +1,6 @@
 [proxy]
 host = "127.0.0.1:3030"
-remote_host = "http://localhost:3000"
+remote_host = "https://lcs-cops.adobe.io"
 ssl = false
 
 [logging]
