@@ -1,7 +1,7 @@
 [proxy]
 # Settings to invoke proxy server
-host = "127.0.0.1:3030"
-remote_host = "http://localhost:3000"
+host = "127.0.0.1:8080"
+remote_host = "https://lcs-cops.adobe.io"
 ssl = false
 # ssl_cert = "/path/to/ssl_cert.pem"
 # ssl_key = "/path/to/ssl_key.pem"
