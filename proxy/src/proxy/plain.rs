@@ -4,7 +4,7 @@ use eyre::Result;
 use log::{info, error};
 
 use crate::settings::Settings;
-use super::serve_req;
+use super::{serve_req, ctrlc_handler};
 
 pub async fn run_server(conf: &Settings) -> Result<()> {
     let addr: SocketAddr = conf.proxy.host.parse()?;
@@ -18,10 +18,19 @@ pub async fn run_server(conf: &Settings) -> Result<()> {
             }))
         }
     });
-    let serve_future = Server::bind(&addr)
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    ctrlc_handler(move || tx.send(()).unwrap_or(()));
+    let server = Server::bind(&addr)
         .serve(make_svc);
-    if let Err(e) = serve_future.await {
+
+    let graceful = server
+        .with_graceful_shutdown(async {
+            rx.await.ok();
+        });
+
+    if let Err(e) = graceful.await {
         error!("server error: {}", e);
     }
+
     Ok(())
 }

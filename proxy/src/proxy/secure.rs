@@ -15,7 +15,7 @@ use log::{info, error};
 
 use crate::settings::Settings;
 
-use super::serve_req;
+use super::{serve_req, ctrlc_handler};
 
 fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
@@ -76,9 +76,17 @@ pub async fn run_server(conf: &Settings) -> Result<(), Box<dyn std::error::Error
     })
     .serve(service);
 
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    ctrlc_handler(move || tx.send(()).unwrap_or(()));
+
+    let graceful = server
+        .with_graceful_shutdown(async {
+            rx.await.ok();
+        });
+
     // Run the future, keep going until an error occurs.
     info!("Starting to serve on https://{}", conf.proxy.host);
-    server.await?;
+    graceful.await?;
     Ok(())
 }
 

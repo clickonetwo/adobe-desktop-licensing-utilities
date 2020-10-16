@@ -5,8 +5,26 @@ use hyper::{Body, Client, Request, Response, Uri};
 use hyper_tls::HttpsConnector;
 use futures::TryStreamExt;
 use log::{info, debug};
+use std::sync::Mutex;
 
 use crate::settings::Settings;
+
+fn ctrlc_handler<F>(f: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    let call_once = Mutex::new(Some(f));
+
+    ctrlc::set_handler(move || {
+        if let Some(f) = call_once.lock().unwrap().take() {
+            info!("Starting graceful shutdown");
+            f();
+        } else {
+            info!("Already sent signal to start graceful shutdown");
+        }
+    })
+    .unwrap();
+}
 
 async fn get_entire_body(body: Body) -> Result<Vec<u8>, hyper::Error> {
     body
