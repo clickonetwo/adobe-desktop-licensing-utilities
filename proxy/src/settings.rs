@@ -29,7 +29,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(config_file: Option<String>, host: Option<String>, remote_host: Option<String>,
-        ssl: bool, ssl_cert: Option<String>, ssl_key: Option<String>) -> Result<Self, ConfigError> {
+        ssl: Option<bool>, ssl_cert: Option<String>, ssl_key: Option<String>) -> Result<Self, ConfigError> {
 
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
@@ -42,7 +42,9 @@ impl Settings {
         if let Some(remote_host) = remote_host {
             s.set("proxy.remote_host", remote_host)?;
         }
-        s.set("proxy.ssl", ssl)?;
+        if let Some(ssl) = ssl {
+            s.set("proxy.ssl", ssl)?;
+        }
         if let Some(ssl_cert) = ssl_cert {
             s.set("proxy.ssl_cert", ssl_cert)?;
         }

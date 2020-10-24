@@ -19,7 +19,7 @@ pub enum Opt {
 
         #[structopt(long)]
         /// Enable SSL
-        ssl: bool,
+        ssl: Option<bool>,
 
         #[structopt(long)]
         /// Path to SSL certificate
