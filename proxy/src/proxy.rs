@@ -44,7 +44,7 @@ async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>,
     let entire_body = get_entire_body(body).await?;
     debug!("REQ body {:?}", std::str::from_utf8(&entire_body).unwrap());
     // use the echo server for now
-    let lcs_uri = conf.proxy.remote_host.parse::<Uri>().expect(format!("failed to parse uri: {}", conf.proxy.remote_host).as_str());
+    let lcs_uri = conf.proxy.remote_host.parse::<Uri>().unwrap_or_else(|_| panic!("failed to parse uri: {}", conf.proxy.remote_host));
 
     // if no scheme is specified for remote_host, assume http
     let lcs_scheme = match lcs_uri.scheme_str() {

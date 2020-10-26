@@ -52,7 +52,7 @@ impl Settings {
         s.try_into()
     }
 
-    pub fn validate(self: &Self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         match self.proxy.ssl {
             Some(ssl_enable) => {
                 if ssl_enable && (self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none()) {

@@ -29,8 +29,8 @@ pub fn init(conf: &Settings) -> Result<(), InitError> {
     Ok(())
 }
 
-fn log_level(level: &String) -> LevelFilter {
-    match level.as_str() {
+fn log_level(level: &str) -> LevelFilter {
+    match level {
         "trace" => LevelFilter::Trace,
         "info" => LevelFilter::Info,
         "debug" => LevelFilter::Debug,

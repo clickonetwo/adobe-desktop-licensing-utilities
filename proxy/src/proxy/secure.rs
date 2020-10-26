@@ -128,7 +128,7 @@ fn load_private_key(filename: &str) -> io::Result<rustls::PrivateKey> {
     // try rsa first
     let keys = pemfile::rsa_private_keys(&mut reader)
         .map_err(|_| error("failed to load private key".into()))?;
-    if keys.len() > 0 {
+    if !keys.is_empty() {
         return Ok(keys[0].clone());
     }
     // if not try pkcs8
