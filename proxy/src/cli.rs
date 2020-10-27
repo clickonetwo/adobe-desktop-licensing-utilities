@@ -1,4 +1,5 @@
 use structopt::StructOpt;
+use std::str::ParseBoolError;
 
 #[derive(Debug, StructOpt)]
 /// FRL Proxy
@@ -17,8 +18,8 @@ pub enum Opt {
         /// Remote (licensing server) hostname
         remote_host: Option<String>,
 
-        #[structopt(long, parse(from_str = parse_bool))]
-        /// Enable SSL? (yes or no)
+        #[structopt(long, parse(try_from_str = parse_bool))]
+        /// Enable SSL? (true or false)
         ssl: Option<bool>,
 
         #[structopt(long)]
@@ -37,9 +38,10 @@ pub enum Opt {
     }
 }
 
-fn parse_bool(arg: &str) -> bool {
+fn parse_bool(arg: &str) -> Result<bool,ParseBoolError> {
     match arg.to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" => true,
-        _ => false,
+        "1" | "yes" => Ok(true),
+        "0" | "no" => Ok(false),
+        arg => arg.parse(),
     }
 }
