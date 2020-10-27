@@ -8,3 +8,8 @@ console_log_level = "info"
 log_to_file = false
 file_log_level = "info"
 file_log_path = "frl-proxy.log"
+
+[cache]
+enabled = true
+cache_file_path = "frl-proxy.cache"
+

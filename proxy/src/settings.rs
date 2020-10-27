@@ -45,15 +45,21 @@ pub struct Logging {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct Cache {
+    pub enabled: Option<bool>,
+    pub cache_file_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Settings {
     pub proxy: Proxy,
     pub logging: Logging,
+    pub cache: Cache,
 }
 
 impl Settings {
-    pub fn new(config_file: Option<String>, host: Option<String>, remote_host: Option<String>,
+    pub fn from_start(config_file: Option<String>, host: Option<String>, remote_host: Option<String>,
         ssl: Option<bool>, ssl_cert: Option<String>, ssl_key: Option<String>) -> Result<Self, ConfigError> {
-
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
         if let Some(filename) = config_file {
@@ -77,17 +83,33 @@ impl Settings {
         s.try_into()
     }
 
-    pub fn validate(&self) -> Result<()> {
-        match self.proxy.ssl {
-            Some(ssl_enable) => {
-                if ssl_enable && (self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none()) {
-                    Err(eyre!("ssl_cert and ssl_key must be specified if SSL is enabled"))
-                } else {
-                    Ok(())
-                }
-            }
-            None => Ok(()) 
+    pub fn from_cache_control(config_file: Option<String>) -> Result<Self, ConfigError> {
+        let mut s = Config::new();
+        s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
+        if let Some(filename) = config_file {
+            s.merge(ConfigFile::with_name(filename.as_str()))?;
         }
+        s.try_into()
+    }
+
+    pub fn validate(self: &Self) -> Result<()> {
+        if let Some(true) = self.proxy.ssl {
+            if self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none() {
+                return Err(eyre!("ssl_cert and ssl_key must be specified if SSL is enabled"));
+            } else if self.proxy.ssl_cert.as_ref().unwrap().is_empty() {
+                return Err(eyre!("ssl_cert pathname cannot be an empty string"));
+            } else if self.proxy.ssl_key.as_ref().unwrap().is_empty() {
+                return Err(eyre!("ssl_key pathname cannot be an empty string"));
+            }
+        }
+        if let Some(true) = self.cache.enabled {
+            if self.cache.cache_file_path.is_none() {
+                return Err(eyre!("cache_file_path must be specified if the cache is enabled"));
+            } else if self.cache.cache_file_path.as_ref().unwrap().is_empty() {
+                return Err(eyre!("The cache_file_path cannot be an empty string"))
+            }
+        }
+        Ok(())
     }
 }
 

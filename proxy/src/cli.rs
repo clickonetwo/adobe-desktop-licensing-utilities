@@ -58,6 +58,19 @@ pub enum Opt {
         #[structopt(short, long, default_value = "config.toml")]
         /// path to config filename
         out_file: String,
+    },
+    /// Manage the cache file
+    CacheControl {
+        #[structopt(short, long)]
+        /// Path to optional config file
+        config_file: Option<String>,
+
+        #[structopt(long)]
+        /// Whether to clear the cache (dangerous!)
+        clear: Option<String>,
+
+        #[structopt(short, long)]
+        export_file: Option<String>,
     }
 }
 
