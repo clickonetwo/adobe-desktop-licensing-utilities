@@ -17,8 +17,8 @@ pub enum Opt {
         /// Remote (licensing server) hostname
         remote_host: Option<String>,
 
-        #[structopt(long)]
-        /// Enable SSL
+        #[structopt(long, parse(from_str = parse_bool))]
+        /// Enable SSL? (yes or no)
         ssl: Option<bool>,
 
         #[structopt(long)]
@@ -34,5 +34,12 @@ pub enum Opt {
         #[structopt(short, long, default_value = "config.toml")]
         /// path to config filename
         out_file: String,
+    }
+}
+
+fn parse_bool(arg: &str) -> bool {
+    match arg.to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" => true,
+        _ => false,
     }
 }
