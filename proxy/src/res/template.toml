@@ -12,3 +12,8 @@ console_log_level = "warn"
 log_to_file = false
 file_log_level = "info"
 file_log_path = "frl-proxy.log"
+
+[cache]
+# Cache settings
+enabled = true
+cache_file_path = "frl-proxy.cache"

@@ -25,6 +25,7 @@ use structopt::StructOpt;
 
 mod cli;
 mod logging;
+mod cache;
 mod proxy;
 mod settings;
 
@@ -33,6 +34,7 @@ use proxy::{plain, secure};
 use settings::Settings;
 
 use log::debug;
+use crate::cache::cache_control;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -49,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             ssl_key,
         } => {
             let conf =
-                Settings::new(config_file, host, remote_host, ssl, ssl_cert, ssl_key)?;
+                Settings::from_start(config_file, host, remote_host, ssl, ssl_cert, ssl_key)?;
             conf.validate()?;
             logging::init(&conf)?;
             debug!("conf: {:?}", conf);
@@ -58,10 +60,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             } else {
                 plain::run_server(&conf).await?;
             }
-        }
+        },
         cli::Opt::InitConfig { out_file } => {
             settings::config_template(out_file)?;
             std::process::exit(0);
+        },
+        cli::Opt::CacheControl { config_file, clear, export_file } => {
+            let conf = Settings::from_cache_control(config_file)?;
+            conf.validate()?;
+            cache_control(&conf, clear, export_file).await?;
+            debug!("conf: {:?}", conf);
         }
     }
     Ok(())
