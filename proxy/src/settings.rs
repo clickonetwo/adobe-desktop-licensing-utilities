@@ -93,7 +93,8 @@ impl Settings {
 
 pub fn config_template(filename: String) -> std::io::Result<()> {
     let template = include_str!("res/template.toml");
-    let mut file = File::create(filename)?;
+    let mut file = File::create(&filename)?;
     file.write_all(template.as_bytes())?;
+    println!("Created config file '{}'", filename);
     Ok(())
 }
