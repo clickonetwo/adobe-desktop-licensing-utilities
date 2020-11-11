@@ -21,12 +21,12 @@
 # SOFTWARE.
 
 $cmd = $args[0];
-$serviceName = "FRL Proxy";
+$serviceName = "FRL Online Proxy";
 
 switch ($cmd) {
     start {
         $cfg = "$PSScriptRoot\config.toml"
-        if (!$cfg) {
+        if (![System.IO.File]::Exists($cfg)) {
             echo "Config file required";
             exit 1;
         }
