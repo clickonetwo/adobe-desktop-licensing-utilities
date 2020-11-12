@@ -22,6 +22,7 @@
  * SOFTWARE.
  */
 use structopt::StructOpt;
+use openssl_probe;
 
 mod settings;
 mod cli;
@@ -36,6 +37,7 @@ use log::debug;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    openssl_probe::init_ssl_cert_env_vars();
     let opt = Opt::from_args();
 
     match opt {
