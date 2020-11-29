@@ -12,4 +12,3 @@ file_log_path = "frl-proxy.log"
 [cache]
 enabled = true
 cache_file_path = "frl-proxy.cache"
-

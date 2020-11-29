@@ -120,6 +120,10 @@ async fn serve_req(
         Client::new().request(client_req).await?
     };
 
+    // if res.status() == 200 {
+    //     cache::cache_request_and_response(&client_req, res);
+    // }
+
     let (parts, body) = res.into_parts();
     debug!("RES code {:?}", parts.status);
     debug!("RES headers {:?}", parts.headers);

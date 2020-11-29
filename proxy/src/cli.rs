@@ -59,6 +59,22 @@ pub enum Opt {
         /// path to config filename
         out_file: String,
     },
+    /// Manage the cache file
+    CacheControl {
+        #[structopt(short, long)]
+        /// Path to optional config file
+        config_file: Option<String>,
+
+        #[structopt(long, parse(try_from_str = parse_bool))]
+        /// Whether to clear the cache (dangerous!)
+        clear: Option<bool>,
+
+        #[structopt(short, long)]
+        export_file: Option<String>,
+
+        #[structopt(short, long)]
+        import_file: Option<String>,
+    },
 }
 
 fn parse_bool(arg: &str) -> Result<bool, ParseBoolError> {
