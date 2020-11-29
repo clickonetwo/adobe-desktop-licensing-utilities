@@ -53,15 +53,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             } else {
                 plain::run_server(&conf).await?;
             }
-        },
+        }
         cli::Opt::InitConfig { out_file } => {
             settings::config_template(out_file)?;
             std::process::exit(0);
-        },
-        cli::Opt::CacheControl { config_file, clear, export_file } => {
+        }
+        cli::Opt::CacheControl {
+            config_file, clear, export_file, import_file
+        } => {
             let conf = Settings::from_cache_control(config_file)?;
             conf.validate()?;
-            cache_control(&conf, clear, export_file).await?;
+            let cache = cache::Cache::from_conf(&conf).await?;
+            cache::cache_control(&cache, clear, export_file, import_file).await?;
             debug!("conf: {:?}", conf);
         }
     }

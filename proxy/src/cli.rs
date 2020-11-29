@@ -65,12 +65,15 @@ pub enum Opt {
         /// Path to optional config file
         config_file: Option<String>,
 
-        #[structopt(long)]
+        #[structopt(long, parse(try_from_str = parse_bool))]
         /// Whether to clear the cache (dangerous!)
-        clear: Option<String>,
+        clear: Option<bool>,
 
         #[structopt(short, long)]
         export_file: Option<String>,
+
+        #[structopt(short, long)]
+        import_file: Option<String>,
     }
 }
 

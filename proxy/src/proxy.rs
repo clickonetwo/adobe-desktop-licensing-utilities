@@ -101,7 +101,6 @@ async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>,
         }
     }
     let client_req = client_req_builder.body(Body::from(entire_body)).expect("error building client request");
-
     let https = HttpsConnector::new();
     let res = if lcs_scheme == "https" {
         let client = Client::builder().build::<_, hyper::Body>(https);
@@ -109,6 +108,10 @@ async fn serve_req(req: Request<Body>, conf: Settings) -> Result<Response<Body>,
     } else {
         Client::new().request(client_req).await?
     };
+
+    // if res.status() == 200 {
+    //     cache::cache_request_and_response(&client_req, res);
+    // }
 
     let (parts, body) = res.into_parts();
     debug!("RES code {:?}", parts.status);
