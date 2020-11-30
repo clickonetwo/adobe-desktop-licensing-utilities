@@ -21,9 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-use config::{ConfigError, Config, File as ConfigFile, FileFormat};
-use serde::{Deserialize};
+use config::{Config, ConfigError, File as ConfigFile, FileFormat};
 use eyre::{eyre, Result};
+use serde::Deserialize;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -51,11 +51,15 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(config_file: Option<String>, host: Option<String>, remote_host: Option<String>,
-        ssl: Option<bool>, ssl_cert: Option<String>, ssl_key: Option<String>) -> Result<Self, ConfigError> {
-
+    pub fn new(
+        config_file: Option<String>, host: Option<String>, remote_host: Option<String>,
+        ssl: Option<bool>, ssl_cert: Option<String>, ssl_key: Option<String>,
+    ) -> Result<Self, ConfigError> {
         let mut s = Config::new();
-        s.merge(ConfigFile::from_str(include_str!("res/defaults.toml"), FileFormat::Toml))?;
+        s.merge(ConfigFile::from_str(
+            include_str!("res/defaults.toml"),
+            FileFormat::Toml,
+        ))?;
         if let Some(filename) = config_file {
             s.merge(ConfigFile::with_name(filename.as_str()))?;
         }
@@ -80,13 +84,17 @@ impl Settings {
     pub fn validate(&self) -> Result<()> {
         match self.proxy.ssl {
             Some(ssl_enable) => {
-                if ssl_enable && (self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none()) {
-                    Err(eyre!("ssl_cert and ssl_key must be specified if SSL is enabled"))
+                if ssl_enable
+                    && (self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none())
+                {
+                    Err(eyre!(
+                        "ssl_cert and ssl_key must be specified if SSL is enabled"
+                    ))
                 } else {
                     Ok(())
                 }
             }
-            None => Ok(()) 
+            None => Ok(()),
         }
     }
 }

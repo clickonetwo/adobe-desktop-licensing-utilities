@@ -21,13 +21,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-use hyper::{service::{make_service_fn, service_fn}, Server};
-use std::net::SocketAddr;
 use eyre::Result;
-use log::{info, error};
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Server,
+};
+use log::{error, info};
+use std::net::SocketAddr;
 
+use super::{ctrlc_handler, serve_req};
 use crate::settings::Settings;
-use super::{serve_req, ctrlc_handler};
 
 pub async fn run_server(conf: &Settings) -> Result<()> {
     let addr: SocketAddr = conf.proxy.host.parse()?;
@@ -43,13 +46,11 @@ pub async fn run_server(conf: &Settings) -> Result<()> {
     });
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     ctrlc_handler(move || tx.send(()).unwrap_or(()));
-    let server = Server::bind(&addr)
-        .serve(make_svc);
+    let server = Server::bind(&addr).serve(make_svc);
 
-    let graceful = server
-        .with_graceful_shutdown(async {
-            rx.await.ok();
-        });
+    let graceful = server.with_graceful_shutdown(async {
+        rx.await.ok();
+    });
 
     if let Err(e) = graceful.await {
         error!("server error: {}", e);

@@ -21,8 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-use structopt::StructOpt;
 use std::str::ParseBoolError;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 /// FRL Proxy
@@ -58,10 +58,10 @@ pub enum Opt {
         #[structopt(short, long, default_value = "config.toml")]
         /// path to config filename
         out_file: String,
-    }
+    },
 }
 
-fn parse_bool(arg: &str) -> Result<bool,ParseBoolError> {
+fn parse_bool(arg: &str) -> Result<bool, ParseBoolError> {
     match arg.to_ascii_lowercase().as_str() {
         "1" | "yes" => Ok(true),
         "0" | "no" => Ok(false),

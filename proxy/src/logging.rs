@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-use fern::{Dispatch, InitError, log_file};
+use fern::{log_file, Dispatch, InitError};
 use log::LevelFilter;
 use std::io;
 
@@ -38,14 +38,16 @@ pub fn init(conf: &Settings) -> Result<(), InitError> {
                 message
             ))
         })
-        .chain(Dispatch::new()
-            .level(log_level(&conf.logging.console_log_level))
-            .chain(io::stdout())
+        .chain(
+            Dispatch::new()
+                .level(log_level(&conf.logging.console_log_level))
+                .chain(io::stdout()),
         );
     if conf.logging.log_to_file {
-        base_config = base_config.chain(Dispatch::new()
-            .level(log_level(&conf.logging.file_log_level))
-            .chain(log_file(&conf.logging.file_log_path)?)
+        base_config = base_config.chain(
+            Dispatch::new()
+                .level(log_level(&conf.logging.file_log_level))
+                .chain(log_file(&conf.logging.file_log_path)?),
         );
     }
     base_config.apply()?;

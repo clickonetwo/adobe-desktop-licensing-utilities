@@ -21,17 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-use structopt::StructOpt;
 use openssl_probe;
+use structopt::StructOpt;
 
-mod settings;
 mod cli;
-mod proxy;
 mod logging;
+mod proxy;
+mod settings;
 
-use settings::Settings;
 use cli::Opt;
 use proxy::{plain, secure};
+use settings::Settings;
 
 use log::debug;
 
@@ -41,8 +41,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let opt = Opt::from_args();
 
     match opt {
-        cli::Opt::Start { config_file, host, remote_host, ssl, ssl_cert, ssl_key } => {
-            let conf = Settings::new(config_file, host, remote_host, ssl, ssl_cert, ssl_key)?;
+        cli::Opt::Start {
+            config_file,
+            host,
+            remote_host,
+            ssl,
+            ssl_cert,
+            ssl_key,
+        } => {
+            let conf =
+                Settings::new(config_file, host, remote_host, ssl, ssl_cert, ssl_key)?;
             conf.validate()?;
             logging::init(&conf)?;
             debug!("conf: {:?}", conf);
