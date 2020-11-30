@@ -22,11 +22,10 @@
  * SOFTWARE.
  */
 use core::task::{Context, Poll};
-use futures_util::{
-    stream::{Stream, StreamExt},
-};
+use futures_util::stream::{Stream, StreamExt};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
+use log::{error, info};
 use rustls::internal::pemfile;
 use std::pin::Pin;
 use std::vec::Vec;
@@ -34,17 +33,18 @@ use std::{fs, io, sync};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
-use log::{info, error};
 
 use crate::settings::Settings;
 
-use super::{serve_req, ctrlc_handler};
+use super::{ctrlc_handler, serve_req};
 
 fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
 }
 
-pub async fn run_server(conf: &Settings) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_server(
+    conf: &Settings,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Build TLS configuration.
     let tls_cfg = {
         // Load public certificate.
@@ -102,10 +102,9 @@ pub async fn run_server(conf: &Settings) -> Result<(), Box<dyn std::error::Error
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     ctrlc_handler(move || tx.send(()).unwrap_or(()));
 
-    let graceful = server
-        .with_graceful_shutdown(async {
-            rx.await.ok();
-        });
+    let graceful = server.with_graceful_shutdown(async {
+        rx.await.ok();
+    });
 
     // Run the future, keep going until an error occurs.
     info!("Starting to serve on https://{}", conf.proxy.host);
@@ -122,8 +121,7 @@ impl hyper::server::accept::Accept for HyperAcceptor<'_> {
     type Error = io::Error;
 
     fn poll_accept(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
+        mut self: Pin<&mut Self>, cx: &mut Context,
     ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
         Pin::new(&mut self.acceptor).poll_next(cx)
     }
