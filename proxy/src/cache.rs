@@ -1,117 +1,55 @@
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::time::SystemTime;
+/*
+Copyright 2020 Adobe
+All Rights Reserved.
 
-use base64;
-use hyper::{HeaderMap, Uri};
-use log::{error, info};
-use seahash::SeaHasher;
-use serde_json::{from_str, to_string, Value};
-use sqlx::sqlite::{SqlitePool, SqliteQueryAs};
-use url::Url;
+NOTICE: Adobe permits you to use, modify, and distribute this file in
+accordance with the terms of the Adobe license agreement accompanying
+it.
+*/
+use crate::cops::{Kind, Request as CRequest, Response as CResponse};
+use crate::settings::{ProxyMode, Settings};
+use log::{debug, error, info};
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::Row;
+use std::sync::Arc;
 
-use crate::settings::Settings;
-
+#[derive(Default)]
 pub struct Cache {
     enabled: bool,
     db_name: Option<String>,
     db_pool: Option<SqlitePool>,
 }
 
-#[derive(Hash)]
-struct ActivationData {
-    package_id: String,
-    app_id: String,
-    ngl_lib_version: String,
-    machine_or_user_id: String,
-    os_name: String,
-}
-
-const ACTIVATION_SCHEMA: &str = r#"
-    create table if not exists activations (
-        id integer primary key,
-        package_id text not null,
-        app_id text not null,
-        ngl_lib_version text not null
-        machine_or_user_id text not null,
-        os_name text not null,
-        unique (package_id, app_id, ngl_lib_version, machine_or_user_id, os_name)
-    );
-    create index if not exists deactivation_index on activations (
-        package_id, machine_or_user_id, os_name
-    );
-    "#;
-
-struct ActivationRequest {
-    headers: String,
-    body: String,
-    timestamp: i64,
-}
-
-struct DeactivationRequest {
-    query_string: String,
-    timestamp: i64,
-}
-
-const REQUEST_SCHEMA: &str =
-    r#"create table if not exists requests (
-        id integer primary key,
-        activation_key unique references activations(id),
-        timestamp integer not null,
-        method text not null
-        uri text not null,
-        headers text not null,
-        body text not null,
-        type text not null,
-    )"#;
-
-struct ResponseData {
-    status_code: i16,
-    status_line: String,
-    headers: String,
-    body: String,
-    timestamp: i64,
-    response_type: RequestType,
-}
-
-const RESPONSE_SCHEMA: &str =
-    r#"create table if not exists responses (
-        id integer primary key,
-        activation_key unique references activations(id),
-        timestamp integer not null,
-        status_line text not null,
-        headers text not null,
-        body text not null
-    )"#;
-
-const CLEAR_ALL: &str = r#"
-    delete from responses;
-    delete from requests;
-    delete from activations;
-    "#;
-
 impl Cache {
-    pub async fn from_conf(conf: &Settings) -> Result<Cache, sqlx::Error> {
-        if let None | Some(false) = &conf.cache.enabled {
-            return Ok(Cache { enabled: false, db_name: None, db_pool: None });
+    pub async fn new_from(conf: &Settings) -> Result<Arc<Cache>, sqlx::Error> {
+        if let ProxyMode::Passthrough = conf.proxy.mode {
+            return Ok(Arc::new(Cache::default()));
         }
         // make sure the database exists
         let db_name = conf.cache.cache_file_path.as_ref().unwrap().to_string();
-        let pool = SqlitePool::builder()
-            .max_size(5)
-            .build(format!("sqlite:{}", db_name).as_str()).await?;
-        sqlx::query(ACTIVATION_SCHEMA).execute(&pool).await?;
-        sqlx::query(REQUEST_SCHEMA).execute(&pool).await?;
-        sqlx::query(RESPONSE_SCHEMA).execute(&pool).await?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect(format!("sqlite:{}", db_name).as_str())
+            .await?;
+        sqlx::query(ACTIVATION_REQUEST_SCHEMA)
+            .execute(&pool)
+            .await?;
+        sqlx::query(DEACTIVATION_REQUEST_SCHEMA)
+            .execute(&pool)
+            .await?;
+        sqlx::query(ACTIVATION_RESPONSE_SCHEMA)
+            .execute(&pool)
+            .await?;
         info!("Valid cache enabled at '{}'", &db_name);
-        Ok(Cache { enabled: true, db_name: Some(db_name), db_pool: Some(pool) })
+        Ok(Arc::new(Cache {
+            enabled: true,
+            db_name: Some(db_name),
+            db_pool: Some(pool),
+        }))
     }
 
     pub async fn control(
-        &self,
-        clear: Option<bool>,
-        export_file: Option<String>,
+        &self, clear: Option<bool>, export_file: Option<String>,
         import_file: Option<String>,
     ) -> Result<(), sqlx::Error> {
         if !self.enabled {
@@ -121,10 +59,12 @@ impl Cache {
         println!("cache-control: Cache is valid.");
         let db_name = self.db_name.as_ref().unwrap().to_string();
         let pool = self.db_pool.as_ref().unwrap();
-        if let Some(_) = import_file {
+        if let Some(path) = import_file {
+            println!("cache-control: Requesting import of cache from '{}'", path);
             eprintln!("cache-control: Import of cache not yet supported, sorry");
         }
-        if let Some(_) = export_file {
+        if let Some(path) = export_file {
+            println!("cache-control: Requesting export of cache to '{}'", path);
             eprintln!("cache-control: Export of cache not yet supported, sorry");
         }
         if let Some(clear) = clear {
@@ -139,120 +79,391 @@ impl Cache {
         Ok(())
     }
 
-    pub async fn save_request(
-        &self, method: &str, uri: &Uri, headers: &HeaderMap, body: &str
-    ) -> i64 {
-        if !self.enabled {
-            return 0;
+    pub async fn store_request(&self, req: &CRequest) {
+        if !self.enabled { return }
+        match req.kind {
+            Kind::Activation => self.store_activation_request(req).await,
+            Kind::Deactivation => self.store_deactivation_request(req).await,
         }
-        if !method.eq_ignore_ascii_case("POST") && !method.eq_ignore_ascii_case("DELETE") {
-            return 0;
+    }
+
+    async fn store_activation_request(&self, req: &CRequest) {
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let field_list = r#"
+            (
+                activation_key, deactivation_key, api_key, request_id, session_id, package_id,
+                asnp_id, device_id, os_user_id, is_vdi, is_domain_user, is_virtual,
+                os_name, os_version, app_id, app_version, ngl_version
+            )"#;
+        let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let i_str = format!(
+            "insert or replace into activation_requests {} values {}",
+            field_list, value_list
+        );
+        let a_key = activation_id(req);
+        debug!(
+            "Storing activation request {} with key: {}",
+            &req.request_id, &a_key
+        );
+        let result = sqlx::query(&i_str)
+            .bind(&a_key)
+            .bind(deactivation_id(req))
+            .bind(&req.api_key)
+            .bind(&req.request_id)
+            .bind(&req.session_id)
+            .bind(&req.package_id)
+            .bind(&req.asnp_id)
+            .bind(&req.device_id)
+            .bind(&req.os_user_id)
+            .bind(req.is_vdi)
+            .bind(req.is_domain_user)
+            .bind(req.is_virtual)
+            .bind(&req.os_name)
+            .bind(&req.os_version)
+            .bind(&req.app_id)
+            .bind(&req.app_version)
+            .bind(&req.ngl_version)
+            .execute(pool)
+            .await;
+        match result {
+            Ok(done) => debug!("Stored activation request has rowid {}", done.last_insert_rowid()),
+            Err(err) => error!("Cache store of activation request failed: {:?}", err)
         }
-        let uri = uri.to_string();
-        let (uri, uri_key) = uri_string_and_hash(uri);
-        let headers = pickle_headers(headers);
-        let (body, body_key) = body_string_and_hash(body);
-        let key = if method.eq_ignore_ascii_case("POST") { body_key } else { uri_key };
-        let key_str = b64encode(&key.to_le_bytes().to_vec());
-        let uri_str = b64encode(&uri);
-        let header_str = b64encode(&headers);
-        let body_str = b64encode(&body);
-        let timestamp = chrono::offset::Utc::now().timestamp();
-        let pool = self.db_pool.as_ref().unwrap();
-        let mut tx = pool.begin()
-            .await.expect("Can't begin cache transaction");
-        sqlx::query!(r#"
-            replace into requests (timestamp, activation_key, method, uri, headers, body)
-            values (?, ?, ?, ?, ?);
-            "#, timestamp, &key_str, method, &uri_str, &header_str, &body_str)
-            .execute(&mut tx)
-            .await.expect("Can't insert or replace request in cache");
-        let result: (i64, ) = sqlx::query_as("select last_insert_rowid()")
-            .fetch_one(&mut tx)
-            .await.expect("Lookup of inserted request row failed");
-        result.0
+    }
+
+    async fn store_deactivation_request(&self, req: &CRequest) {
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let field_list = r#"
+            (
+                deactivation_key, api_key, request_id, package_id,
+                device_id, os_user_id, is_vdi, is_domain_user, is_virtual,
+                timestamp
+            )"#;
+        let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let i_str = format!(
+            "insert or replace into deactivation_requests {} values {}",
+            field_list, value_list
+        );
+        let d_key = deactivation_id(req);
+        debug!(
+            "Storing deactivation request {} with key: {}",
+            &req.request_id, &d_key
+        );
+        let result = sqlx::query(&i_str)
+            .bind(&d_key)
+            .bind(&req.api_key)
+            .bind(&req.request_id)
+            .bind(&req.package_id)
+            .bind(&req.device_id)
+            .bind(&req.os_user_id)
+            .bind(req.is_vdi)
+            .bind(req.is_domain_user)
+            .bind(req.is_virtual)
+            .bind(&req.timestamp)
+            .execute(pool)
+            .await;
+        match result {
+            Ok(done) => debug!("Stored deactivation request has rowid {}", done.last_insert_rowid()),
+            Err(err) => error!("Cache store of deactivation request failed: {:?}", err)
+        }
+    }
+
+    pub async fn store_response(&self, req: &CRequest, resp: &CResponse) {
+        if !self.enabled { return }
+        match req.kind {
+            Kind::Activation => self.store_activation_response(req, resp).await,
+            Kind::Deactivation => self.store_deactivation_response(req, resp).await,
+        }
+    }
+
+    async fn store_activation_response(&self, req: &CRequest, resp: &CResponse) {
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let field_list = "(activation_key, body, timestamp)";
+        let value_list = "(?, ?, ?)";
+        let i_str = format!(
+            "insert or replace into activation_responses {} values {}",
+            field_list, value_list
+        );
+        let a_key = activation_id(req);
+        debug!(
+            "Storing activation response {} with key: {}",
+            &req.request_id, &a_key
+        );
+        let result = sqlx::query(&i_str)
+            .bind(&a_key)
+            .bind(std::str::from_utf8(&resp.body).unwrap())
+            .bind(&req.timestamp)
+            .execute(pool)
+            .await;
+        match result {
+            Ok(done) => debug!("Stored deactivation response has rowid {}", done.last_insert_rowid()),
+            Err(err) => error!("Cache store of deactivation response failed: {:?}", err)
+        }
+        // when we see a live activation, we remove any stored deactivation requests
+        // that are superseded by this later activation, so they won't be later forwarded.
+        let d_key = deactivation_id(req);
+        debug!("Removing deactivation requests with key: {}", d_key);
+        let d_str = "delete from deactivation_requests where deactivation_key = ?";
+        let result = sqlx::query(d_str).bind(&d_key).execute(pool).await;
+        if let Err(err) = result {
+            error!("Cache delete of deactivation requests failed: {:?}", err);
+        }
+    }
+
+    async fn store_deactivation_response(&self, req: &CRequest, _resp: &CResponse) {
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        // when we get a live deactivation, we remove all the activation request/response pairs
+        // this response deactivates, so later requests will not receive a cached activation.
+        let d_key = deactivation_id(req);
+        debug!(
+            "Removing activation requests with deactivation key: {}",
+            d_key
+        );
+        let d_str = "delete from activation_requests where deactivation_key = ?";
+        let result = sqlx::query(d_str).bind(&d_key).execute(pool).await;
+        if let Err(err) = result {
+            error!("Cache delete of activation requests failed: {:?}", err);
+        }
+        debug!(
+            "Removing activation responses with deactivation key: {}",
+            d_key
+        );
+        let d_str = "delete from activation_responses where deactivation_key = ?";
+        let result = sqlx::query(d_str).bind(&d_key).execute(pool).await;
+        if let Err(err) = result {
+            error!("Cache delete of activation responses failed: {:?}", err);
+        }
+        // Since we don't store this response, its request would later be forwarded again,
+        // so we remove any pending requests to avoid their being made again.
+        debug!("Removing deactivation requests with key: {}", d_key);
+        let d_str = "delete from deactivation_requests where deactivation_key = ?";
+        let result = sqlx::query(&d_str).bind(&d_key).execute(pool).await;
+        if let Err(err) = result {
+            error!("Cache delete of deactivation requests failed: {:?}", err);
+        }
+    }
+
+    pub async fn fetch_response(&self, req: &CRequest) -> Option<CResponse> {
+        if !self.enabled { return None }
+        match req.kind {
+            Kind::Activation => self.fetch_activation_response(req).await,
+            Kind::Deactivation => self.fetch_deactivation_response(req).await,
+        }
+    }
+
+    async fn fetch_activation_response(&self, req: &CRequest) -> Option<CResponse> {
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let a_key = activation_id(req);
+        let q_str = "select body from activation_responses where activation_key = ?";
+        debug!("Finding activation response with key: {}", &a_key);
+        let result = sqlx::query(&q_str).bind(&a_key).fetch_optional(pool).await;
+        if let Ok(Some(row)) = result {
+            let body: String = row.get("body");
+            let timestamp: String = row.get("timestamp");
+            Some(CResponse {
+                kind: req.kind.clone(),
+                request_id: req.request_id.clone(),
+                timestamp,
+                body: body.into_bytes(),
+            })
+        } else {
+            if let Err(err) = result {
+                debug!("Error during fetch of activation response: {:?}", err);
+            }
+            None
+        }
+    }
+
+    async fn fetch_deactivation_response(&self, req: &CRequest) -> Option<CResponse> {
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let a_key = activation_id(req);
+        let q_str = "select body from activation_responses where activation_key = ?";
+        debug!("Finding deactivation response with key: {}", &a_key);
+        let result = sqlx::query(&q_str).bind(&a_key).fetch_optional(pool).await;
+        if let Ok(Some(row)) = result {
+            let body: String = row.get("body");
+            let timestamp: String = row.get("timestamp");
+            Some(CResponse {
+                kind: req.kind.clone(),
+                request_id: req.request_id.clone(),
+                timestamp,
+                body: body.into_bytes(),
+            })
+        } else {
+            if let Err(err) = result {
+                debug!("Error during fetch of deactivation response: {:?}", err);
+            }
+            None
+        }
+    }
+
+    pub async fn fetch_stored_requests(&self) -> Vec<CRequest> {
+        let mut activations = self.fetch_stored_activations().await;
+        let mut deactivations = self.fetch_stored_deactivations().await;
+        activations.append(&mut deactivations);
+        activations.sort_unstable_by(|r1, r2| r1.timestamp.cmp(&r2.timestamp));
+        activations
+    }
+
+    async fn fetch_stored_activations(&self) -> Vec<CRequest> {
+        let mut result: Vec<CRequest> = Vec::new();
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let q_str =
+            r#"select * from activation_requests req where not exists
+                    (select 1 from activation_responses where
+                        activation_key = req.activation_key)"#;
+        let rows = sqlx::query(q_str).fetch_all(pool).await;
+        if let Err(err) = rows {
+            debug!("Error during fetch of activation requests: {:?}", err);
+            return result;
+        }
+        for row in rows.unwrap().iter() {
+            result.push(CRequest {
+                kind: Kind::Activation,
+                api_key: row.get("api_key"),
+                request_id: row.get("request_id"),
+                session_id: row.get("session_id"),
+                package_id: row.get("package_id"),
+                asnp_id: row.get("ansp_id"),
+                device_id: row.get("device_id"),
+                device_date: row.get("device_date"),
+                is_vdi: row.get("is_vdi"),
+                is_virtual: row.get("is_virtual"),
+                os_name: row.get("os_name"),
+                os_version: row.get("os_version"),
+                os_user_id: row.get("os_user_id"),
+                is_domain_user: row.get("is_domain_user"),
+                app_id: row.get("app_id"),
+                app_version: row.get("app_version"),
+                ngl_version: row.get("ngl_version"),
+                timestamp: row.get("timestamp"),
+            })
+        }
+        result
+    }
+
+    async fn fetch_stored_deactivations(&self) -> Vec<CRequest> {
+        let mut result: Vec<CRequest> = Vec::new();
+        let pool = self
+            .db_pool
+            .as_ref()
+            .expect("Invoke of cache while disabled.");
+        let q_str =
+            r#"select * from deactivation_requests"#;
+        let rows = sqlx::query(q_str).fetch_all(pool).await;
+        if let Err(err) = rows {
+            debug!("Error during fetch of activation requests: {:?}", err);
+            return result;
+        }
+        for row in rows.unwrap().iter() {
+            result.push(CRequest {
+                kind: Kind::Deactivation,
+                api_key: row.get("api_key"),
+                request_id: row.get("request_id"),
+                package_id: row.get("package_id"),
+                device_id: row.get("device_id"),
+                is_vdi: row.get("is_vdi"),
+                is_virtual: row.get("is_virtual"),
+                os_user_id: row.get("os_user_id"),
+                is_domain_user: row.get("is_domain_user"),
+                timestamp: row.get("timestamp"),
+                ..Default::default()
+            })
+        }
+        result
     }
 }
 
-#[derive(Hash)]
-struct BodyKey {
-    package_id: String,
-    app_id: String,
-    app_version: String,
-    ngl_lib_version: String,
-    machine_id: String,
-    os_name: String,
-    os_user_id: String,
+fn activation_id(req: &CRequest) -> String {
+    let factors: Vec<String> = vec![
+        deactivation_id(req),
+        req.app_id.clone(),
+        req.ngl_version.clone(),
+    ];
+    factors.join("|")
 }
 
-#[derive(Hash)]
-struct UriKey {
-    package_id: String,
-    machine_id: String,
+fn deactivation_id(req: &CRequest) -> String {
+    let factors: Vec<&str> = vec![
+        req.package_id.as_str(),
+        if req.is_vdi {
+            req.os_user_id.as_str()
+        } else {
+            req.device_id.as_str()
+        },
+    ];
+    factors.join("|")
 }
 
-fn uri_hash(url: &str) -> u64 {
-    let mut machine_id = "no-machine-id".to_string();
-    let mut package_id = "no-package-id".to_string();
-    for (k, v) in Url::parse(url).unwrap().query_pairs() {
-        if k.eq_ignore_ascii_case("deviceId") {
-            machine_id = v.to_string();
-        } else if k.eq_ignore_ascii_case("npdId") {
-            package_id = v.to_string();
-        }
-    }
-    let key = UriKey { package_id, machine_id };
-    let mut hasher = SeaHasher::new();
-    key.hash(&mut hasher);
-    hasher.finish()
-}
+const ACTIVATION_REQUEST_SCHEMA: &str = r#"
+    create table if not exists activation_requests (
+        activation_key text not null unique,
+        deactivation_key text not null,
+        api_key text not null,
+        session_id text not null,
+        package_id text not null,
+        asnp_id text not null,
+        device_id text not null,
+        os_user_id text not null,
+        is_domain_user boolean not null,
+        is_vdi boolean not null,
+        is_virtual boolean not null,
+        os_name text not null,
+        os_version text not null,
+        app_id text not null,
+        app_version text not null,
+        ngl_version text not null,
+        timestamp string not null
+    );
+    create index if not exists deactivation_request_index on activations (deactivation_key);
+    "#;
 
-fn headers_to_string(header_map: &HeaderMap) -> String {
-    let headers = serde_json::map::Map::new();
-    for (k, v) in header_map.iter() {
-        let k_str = k.as_str().to_string();
-        let v_str = v.to_str().unwrap().to_string();
-        if headers.contains_key(&k_str) {
-            error!("Request contains multiple '{}' headers; ignoring all but first", &k_str);
-            continue;
-        }
-        headers[k_str] = v_str;
-    }
-    let string = serde_json::to_string(&headers).unwrap();
-    debug!("Cached request headers: {}", string);
-    string
-}
+const ACTIVATION_RESPONSE_SCHEMA: &str = r#"
+    create table if not exists activation_responses (
+        activation_key text not null unique
+        deactivation_key text not null
+        body text not null,
+        timestamp string not null
+    );
+    create index if not exists deactivation_response_index on activations (deactivation_key);
+    "#;
 
-fn body_hashes(body_str: &str) -> (u64, u64) {
-    let body: Value = from_str(body_str).expect("Can't parse request body");
-    let package_id = string_or(&body["npdId"], "no-package-ID");
-    let app_id = string_or(&body["appDetails"]["nglAppId"], "no-app-ID");
-    let ngl_lib_version = string_or(&body["appDetails"]["nglLibVersion"], "no-lib-version");
-    let machine_id = string_or(&body["deviceDetails"]["deviceId"], "no-device-ID");
-    let os_name = string_or(&body["deviceDetails"]["osName"], "no-OS-name");
-    let os_user_id = string_or(&body["deviceDetails"]["osUserId"], "no-OS-user");
-    let key = UriKey { package_id, machine_id };
-    let mut uri_hasher = SeaHasher::new();
-    key.hash(&mut uri_hasher);
-    let key = BodyKey { package_id, app_id, ngl_lib_version, machine_id, os_name, os_user_id };
-    let mut body_hasher = SeaHasher::new();
-    key.hash(&mut body_hasher);
-    (uri_hasher.finish(), body_hasher.finish())
-}
+const DEACTIVATION_REQUEST_SCHEMA: &str = r#"
+    create table if not exists deactivation_requests (
+        deactivation_key text not null unique,
+        api_key text not null,
+        package_id text not null,
+        device_id text not null,
+        os_user_id text not null,
+        is_domain_user boolean not null,
+        is_vdi boolean not null,
+        is_virtual boolean not null,
+        timestamp string not null
+    )"#;
 
-fn string_or(v: &Value, default: &str) -> String {
-    if v.is_string() {
-        to_string(v).unwrap()
-    } else {
-        default.to_string()
-    }
-}
-
-pub fn b64encode(v: &Vec<u8>) -> String {
-    base64::encode_config(v.as_ref(), base64::URL_SAFE_NO_PAD).unwrap()
-}
-
-pub fn b64decode(s: &str) -> Vec<u8> {
-    base64::decode_config(s, base64::URL_SAFE_NO_PAD).unwrap()
-}
-
+const CLEAR_ALL: &str = r#"
+    delete from deactivation_requests;
+    delete from activation_responses;
+    delete from activation_requests;
+    "#;

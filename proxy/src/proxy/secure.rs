@@ -1,30 +1,15 @@
 /*
- * MIT License
- *
- * Copyright (c) 2020 Adobe, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+Copyright 2020 Adobe
+All Rights Reserved.
+
+NOTICE: Adobe permits you to use, modify, and distribute this file in
+accordance with the terms of the Adobe license agreement accompanying
+it.
+*/
 use core::task::{Context, Poll};
 use futures_util::stream::{Stream, StreamExt};
+use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::Server;
 use log::{error, info};
 use rustls::internal::pemfile;
 use std::pin::Pin;
@@ -34,16 +19,18 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 
+use crate::cache::Cache;
 use crate::settings::Settings;
 
-use super::{ctrlc_handler, serve_req};
+use super::{ctrl_c_handler, serve_req};
+use std::sync::Arc;
 
 fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
 }
 
 pub async fn run_server(
-    conf: &Settings,
+    conf: &Settings, cache: Arc<Cache>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Build TLS configuration.
     let tls_cfg = {
@@ -87,10 +74,12 @@ pub async fn run_server(
 
     let service = make_service_fn(move |_| {
         let conf = conf.clone();
+        let cache = Arc::clone(&cache);
         async move {
             Ok::<_, hyper::Error>(service_fn(move |_req| {
                 let conf = conf.clone();
-                async move { serve_req(_req, conf).await }
+                let cache = Arc::clone(&cache);
+                async move { serve_req(_req, conf, cache).await }
             }))
         }
     });
@@ -100,7 +89,7 @@ pub async fn run_server(
     .serve(service);
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-    ctrlc_handler(move || tx.send(()).unwrap_or(()));
+    ctrl_c_handler(move || tx.send(()).unwrap_or(()));
 
     let graceful = server.with_graceful_shutdown(async {
         rx.await.ok();

@@ -1,5 +1,6 @@
 [proxy]
 # Settings to invoke proxy server
+mode = "passthrough"
 host = "127.0.0.1:8080"
 remote_host = "https://lcs-cops.adobe.io"
 ssl = false
@@ -15,5 +16,4 @@ file_log_path = "frl-proxy.log"
 
 [cache]
 # Cache settings
-enabled = true
 cache_file_path = "frl-proxy.cache"

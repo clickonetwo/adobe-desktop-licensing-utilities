@@ -1,38 +1,25 @@
 /*
- * MIT License
- *
- * Copyright (c) 2020 Adobe, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+Copyright 2020 Adobe
+All Rights Reserved.
+
+NOTICE: Adobe permits you to use, modify, and distribute this file in
+accordance with the terms of the Adobe license agreement accompanying
+it.
+*/
 pub mod plain;
 pub mod secure;
 
-use futures::TryStreamExt;
-use hyper::{Body, Client, Request, Response, Uri};
+// use futures::TryStreamExt;
+use crate::cache::Cache;
+use crate::cops::{agent, BadRequest, Request as CRequest, Response as CResponse};
+use hyper::{Body, Client, Request as HRequest, Response as HResponse, Uri};
 use hyper_tls::HttpsConnector;
-use log::{debug, info};
-use std::sync::Mutex;
+use log::{debug, error, info};
+use std::sync::{Arc, Mutex};
 
-use crate::settings::Settings;
+use crate::settings::{ProxyMode, Settings};
 
-fn ctrlc_handler<F>(f: F)
+fn ctrl_c_handler<F>(f: F)
 where
     F: FnOnce() + Send + 'static,
 {
@@ -49,86 +36,162 @@ where
     .unwrap();
 }
 
-async fn get_entire_body(body: Body) -> Result<Vec<u8>, hyper::Error> {
-    body.try_fold(Vec::new(), |mut data, chunk| async move {
-        data.extend_from_slice(&chunk);
-        Ok(data)
-    })
-    .await
+async fn serve_req(
+    req: HRequest<Body>, conf: Settings, cache: Arc<Cache>,
+) -> Result<HResponse<Body>, hyper::Error> {
+    let (parts, body) = req.into_parts();
+    let body = hyper::body::to_bytes(body).await?;
+    info!("Received request for {:?}", parts.uri);
+    debug!("Received request method: {:?}", parts.method);
+    debug!("Received request headers: {:?}", parts.headers);
+    debug!(
+        "Received request body: {}",
+        std::str::from_utf8(&body).unwrap()
+    );
+
+    // Analyze and handle the request
+    match CRequest::from_network(&parts, &body) {
+        Err(err) => Ok(bad_request_response(&err)),
+        Ok(req) => {
+            info!("Received request id: {}", &req.request_id);
+            cache.store_request(&req).await;
+            let net_resp = if let ProxyMode::Store = conf.proxy.mode {
+                debug!("Store mode - not contacting COPS");
+                proxy_offline_response()
+            } else {
+                match call_cops(&conf, &req).await {
+                    Ok(resp) => resp,
+                    Err(err) => cops_failure_response(err),
+                }
+            };
+            let (parts, body) = net_resp.into_parts();
+            let body = hyper::body::to_bytes(body).await?;
+            if parts.status.is_success() {
+                // the COPS call succeeded,
+                info!("Received success response ({:?}) from COPS", parts.status);
+                debug!("Received success response headers {:?}", parts.headers);
+                debug!("Received success response body {}",  std::str::from_utf8(&body).unwrap());
+                // cache the response
+                let resp = CResponse::from_network(&req, &body);
+                cache.store_response(&req, &resp).await;
+                // return the response
+                Ok(HResponse::from_parts(parts, Body::from(body)))
+            } else if let Some(resp) = cache.fetch_response(&req).await {
+                // COPS call failed, but we have a cached response to use
+                info!("Using previously cached response to request");
+                let net_resp = resp.to_network();
+                Ok(net_resp)
+            } else {
+                // COPS call failed, and no cache, so tell client
+                info!("Returning failure response ({:?}) from COPS", parts.status);
+                debug!("Received failure response headers {:?}", parts.headers);
+                debug!("Received failure response body {}", std::str::from_utf8(&body).unwrap());
+                Ok(HResponse::from_parts(parts, Body::from(body)))
+            }
+        }
+    }
 }
 
-async fn serve_req(
-    req: Request<Body>, conf: Settings,
-) -> Result<Response<Body>, hyper::Error> {
-    let (parts, body) = req.into_parts();
-    info!("received request at {:?}", parts.uri);
-    debug!("REQ method {:?}", parts.method);
-    debug!("REQ headers {:?}", parts.headers);
+pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
+    let requests = cache.fetch_stored_requests().await;
+    for req in requests.iter() {
+        info!("Forwarding stored {} request {}", req.kind, &req.request_id);
+        match call_cops(&conf, &req).await {
+            Ok(net_resp) => {
+                let (parts, body) = net_resp.into_parts();
+                let body = hyper::body::to_bytes(body).await.unwrap();
+                if parts.status.is_success() {
+                    // the COPS call succeeded,
+                    info!("Received success response ({:?}) from COPS", parts.status);
+                    debug!("Received success response headers {:?}", parts.headers);
+                    debug!(
+                        "Received success response body {}",
+                        std::str::from_utf8(&body).unwrap()
+                    );
+                    // cache the response
+                    let resp = CResponse::from_network(&req, &body);
+                    cache.store_response(&req, &resp).await;
+                } else {
+                    // the COPS call failed
+                    info!("Received failure response ({:?}) from COPS", parts.status );
+                    debug!("Received failure response headers {:?}", parts.headers);
+                    debug!("Received failure response body {}", std::str::from_utf8(&body).unwrap());
+                }
+            },
+            Err(err) => {
+                error!("No response received from COPS: {:?}", err)
+            },
+        };
+    }
+}
 
-    let entire_body = get_entire_body(body).await?;
-    debug!("REQ body {:?}", std::str::from_utf8(&entire_body).unwrap());
-    // use the echo server for now
-    let lcs_uri =
+async fn call_cops(
+    conf: &Settings, req: &CRequest,
+) -> Result<HResponse<Body>, hyper::Error> {
+    let cops_uri =
         conf.proxy.remote_host.parse::<Uri>().unwrap_or_else(|_| {
             panic!("failed to parse uri: {}", conf.proxy.remote_host)
         });
 
     // if no scheme is specified for remote_host, assume http
-    let lcs_scheme = match lcs_uri.scheme_str() {
+    let cops_scheme = match cops_uri.scheme_str() {
         Some("https") => "https",
         _ => "http",
     };
 
-    let lcs_host = match lcs_uri.port() {
+    let cops_host = match cops_uri.port() {
         Some(port) => {
-            let h = lcs_uri.host().unwrap();
+            let h = cops_uri.host().unwrap();
             format!("{}:{}", h, port.as_str())
         }
-        None => String::from(lcs_uri.host().unwrap()),
+        None => String::from(cops_uri.host().unwrap()),
     };
 
-    let url_str = match parts.uri.query() {
-        Some(qstring) => format!(
-            "{}://{}{}?{}",
-            lcs_scheme,
-            lcs_host,
-            parts.uri.path(),
-            qstring
-        ),
-        None => format!("{}://{}{}", lcs_scheme, lcs_host, parts.uri.path()),
-    };
-
-    debug!("REQ URI {}", url_str);
-
-    let mut client_req_builder = Request::builder().method(parts.method).uri(url_str);
-    for (k, v) in parts.headers.iter() {
-        if k == "host" {
-            client_req_builder = client_req_builder.header(k, lcs_host.clone());
-        } else {
-            client_req_builder = client_req_builder.header(k, v);
-        }
-    }
-    let client_req = client_req_builder
-        .body(Body::from(entire_body))
-        .expect("error building client request");
-
-    let https = HttpsConnector::new();
-    let res = if lcs_scheme == "https" {
+    info!(
+        "Forwarding request {} to COPS at {}{}",
+        req.request_id, cops_scheme, cops_host
+    );
+    let net_req = req.to_network(&cops_host);
+    if cops_scheme == "https" {
+        let https = HttpsConnector::new();
         let client = Client::builder().build::<_, hyper::Body>(https);
-        client.request(client_req).await?
+        client.request(net_req).await
     } else {
-        Client::new().request(client_req).await?
-    };
+        Client::new().request(net_req).await
+    }
+}
 
-    // if res.status() == 200 {
-    //     cache::cache_request_and_response(&client_req, res);
-    // }
+fn bad_request_response(err: &BadRequest) -> HResponse<Body> {
+    info!("Rejecting request with 400 response: {}", err.reason);
+    let body = serde_json::json!({"statusCode": 400, "message": err.reason});
+    HResponse::builder()
+        .status(400)
+        .header("content-type", "application/json;charset=UTF-8")
+        .header("server", agent())
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
 
-    let (parts, body) = res.into_parts();
-    debug!("RES code {:?}", parts.status);
-    debug!("RES headers {:?}", parts.headers);
+fn cops_failure_response(err: hyper::Error) -> HResponse<Body> {
+    let msg = format!("Failed to get a response from COPS: {:?}", err);
+    error!("{}", msg);
+    let body = serde_json::json!({"statusCode": 502, "message": msg});
+    HResponse::builder()
+        .status(502)
+        .header("content-type", "application/json;charset=UTF-8")
+        .header("server", agent())
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
 
-    let entire_body = get_entire_body(body).await?;
-    debug!("RES body {:?}", std::str::from_utf8(&entire_body).unwrap());
-    Ok(Response::from_parts(parts, Body::from(entire_body)))
+fn proxy_offline_response() -> HResponse<Body> {
+    let msg = "Proxy is operating offline: request stored for later replay";
+    debug!("{}", msg);
+    let body = serde_json::json!({"statusCode": 502, "message": msg});
+    HResponse::builder()
+        .status(502)
+        .header("content-type", "application/json;charset=UTF-8")
+        .header("server", agent())
+        .body(Body::from(body.to_string()))
+        .unwrap()
 }

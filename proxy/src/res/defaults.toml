@@ -1,4 +1,5 @@
 [proxy]
+mode = "cache"
 host = "127.0.0.1:3030"
 remote_host = "https://lcs-cops.adobe.io"
 ssl = false
@@ -10,5 +11,4 @@ file_log_level = "info"
 file_log_path = "frl-proxy.log"
 
 [cache]
-enabled = true
 cache_file_path = "frl-proxy.cache"
