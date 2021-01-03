@@ -6,7 +6,6 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use crate::settings::ProxyMode;
 use std::str::ParseBoolError;
 use structopt::StructOpt;
 
@@ -19,9 +18,9 @@ pub enum Opt {
         /// Path to optional config file
         config_file: Option<String>,
 
-        #[structopt(short, long, parse(try_from_str))]
+        #[structopt(short, long)]
         /// Mode to run the proxy in
-        mode: Option<ProxyMode>,
+        mode: Option<String>,
 
         #[structopt(long)]
         /// Proxy hostname

@@ -12,53 +12,9 @@ use serde::Deserialize;
 use std::fs::File;
 use std::io::prelude::*;
 
-#[derive(Clone, Debug, Deserialize)]
-pub enum ProxyMode {
-    Cache,
-    Passthrough,
-    Store,
-    Forward,
-}
-
-impl std::fmt::Display for ProxyMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            ProxyMode::Cache => "cache".fmt(f),
-            ProxyMode::Passthrough => "passthrough".fmt(f),
-            ProxyMode::Store => "store".fmt(f),
-            ProxyMode::Forward => "forward".fmt(f),
-        }
-    }
-}
-
-impl std::str::FromStr for ProxyMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let sl = &s.to_ascii_lowercase();
-        if "cache".starts_with(sl) {
-            Ok(ProxyMode::Cache)
-        } else if "passthrough".starts_with(sl) || "pass-through".starts_with(sl) {
-            Ok(ProxyMode::Passthrough)
-        } else if "store".starts_with(sl) {
-            Ok(ProxyMode::Store)
-        } else if "forward".starts_with(sl) {
-            Ok(ProxyMode::Forward)
-        } else {
-            Err(format!("Not a recognized proxy mode: '{}'", s))
-        }
-    }
-}
-
-impl Default for ProxyMode {
-    fn default() -> Self {
-        ProxyMode::Passthrough
-    }
-}
-
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Proxy {
-    pub mode: ProxyMode,
+    pub mode: String,
     pub host: String,
     pub remote_host: String,
     pub ssl: Option<bool>,
@@ -88,7 +44,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn from_start(
-        config_file: Option<String>, mode: Option<ProxyMode>, host: Option<String>,
+        config_file: Option<String>, mode: Option<String>, host: Option<String>,
         remote_host: Option<String>, ssl: Option<bool>, ssl_cert: Option<String>,
         ssl_key: Option<String>,
     ) -> Result<Self, ConfigError> {
@@ -101,7 +57,7 @@ impl Settings {
             s.merge(ConfigFile::with_name(filename.as_str()))?;
         }
         if let Some(mode) = mode {
-            s.set("proxy.mode", mode.to_string())?;
+            s.set("proxy.mode", mode)?;
         }
         if let Some(host) = host {
             s.set("proxy.host", host)?;
@@ -135,7 +91,12 @@ impl Settings {
         s.try_into()
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&mut self) -> Result<()> {
+        self.proxy.mode = self.proxy.mode.to_ascii_lowercase();
+        let mode = self.proxy.mode.as_str();
+        if !"cache".starts_with(mode) && !"passthrough".starts_with(mode) && !"store".starts_with(mode) && !"forward".starts_with(mode) {
+            return Err(eyre!("Mode must be cache, passthrough, store, or forward"));
+        }
         if let Some(true) = self.proxy.ssl {
             if self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none() {
                 return Err(eyre!(
@@ -147,7 +108,7 @@ impl Settings {
                 return Err(eyre!("ssl_key pathname cannot be an empty string"));
             }
         }
-        if let ProxyMode::Passthrough = self.proxy.mode {
+        if self.proxy.mode.starts_with('p') {
             // don't need a cache file, so fall through to next check
         } else if self.cache.cache_file_path.is_none() {
             return Err(eyre!(

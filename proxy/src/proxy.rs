@@ -17,7 +17,7 @@ use hyper_tls::HttpsConnector;
 use log::{debug, error, info};
 use std::sync::{Arc, Mutex};
 
-use crate::settings::{ProxyMode, Settings};
+use crate::settings::Settings;
 
 fn ctrl_c_handler<F>(f: F)
 where
@@ -55,7 +55,7 @@ async fn serve_req(
         Ok(req) => {
             info!("Received request id: {}", &req.request_id);
             cache.store_request(&req).await;
-            let net_resp = if let ProxyMode::Store = conf.proxy.mode {
+            let net_resp = if conf.proxy.mode.starts_with('s') {
                 debug!("Store mode - not contacting COPS");
                 proxy_offline_response()
             } else {

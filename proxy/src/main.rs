@@ -21,7 +21,6 @@ use proxy::{plain, secure};
 use settings::Settings;
 
 use log::debug;
-use crate::settings::ProxyMode;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -38,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             ssl_cert,
             ssl_key,
         } => {
-            let conf = Settings::from_start(
+            let mut conf = Settings::from_start(
                 config_file,
                 mode,
                 host,
@@ -51,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             logging::init(&conf)?;
             let cache = Cache::new_from(&conf).await?;
             debug!("conf: {:?}", conf);
-            if let ProxyMode::Forward = conf.proxy.mode {
+            if conf.proxy.mode.starts_with('f') {
                 proxy::forward_stored_requests(&conf, cache).await;
             } else if let Some(true) = conf.proxy.ssl {
                 secure::run_server(&conf, cache).await?;
@@ -69,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             export_file,
             import_file,
         } => {
-            let conf = Settings::from_cache_control(config_file)?;
+            let mut conf = Settings::from_cache_control(config_file)?;
             conf.validate()?;
             let cache = Cache::new_from(&conf).await?;
             Cache::control(&cache, clear, export_file, import_file).await?;

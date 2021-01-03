@@ -7,7 +7,7 @@ accordance with the terms of the Adobe license agreement accompanying
 it.
 */
 use crate::cops::{Kind, Request as CRequest, Response as CResponse};
-use crate::settings::{ProxyMode, Settings};
+use crate::settings::Settings;
 use log::{debug, error, info};
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
@@ -22,14 +22,15 @@ pub struct Cache {
 
 impl Cache {
     pub async fn new_from(conf: &Settings) -> Result<Arc<Cache>, sqlx::Error> {
-        if let ProxyMode::Passthrough = conf.proxy.mode {
+        if conf.proxy.mode.starts_with('p') {
             return Ok(Arc::new(Cache::default()));
         }
         // make sure the database exists
         let db_name = conf.cache.cache_file_path.as_ref().unwrap().to_string();
+        let db_url = format!("file:{}?mode=rwc", db_name);
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
-            .connect(format!("sqlite:{}", db_name).as_str())
+            .connect(db_url.as_str())
             .await?;
         sqlx::query(ACTIVATION_REQUEST_SCHEMA)
             .execute(&pool)
@@ -436,18 +437,20 @@ const ACTIVATION_REQUEST_SCHEMA: &str = r#"
         ngl_version text not null,
         timestamp string not null
     );
-    create index if not exists deactivation_request_index on activations (deactivation_key);
-    "#;
+    create index if not exists deactivation_request_index on activation_requests (
+        deactivation_key
+    );"#;
 
 const ACTIVATION_RESPONSE_SCHEMA: &str = r#"
     create table if not exists activation_responses (
-        activation_key text not null unique
-        deactivation_key text not null
+        activation_key text not null unique,
+        deactivation_key text not null,
         body text not null,
         timestamp string not null
     );
-    create index if not exists deactivation_response_index on activations (deactivation_key);
-    "#;
+    create index if not exists deactivation_response_index on activation_responses (
+        deactivation_key
+    );"#;
 
 const DEACTIVATION_REQUEST_SCHEMA: &str = r#"
     create table if not exists deactivation_requests (
