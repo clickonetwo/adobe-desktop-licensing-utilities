@@ -150,13 +150,16 @@ fn load_private_key(filename: &str) -> io::Result<rustls::PrivateKey> {
     // Load and return a single private key.
     // try rsa first
     let keys = pemfile::rsa_private_keys(&mut reader)
-        .map_err(|_| error("failed to load private key".into()))?;
+        .map_err(|_| error("failed to load RSA private key".into()))?;
     if !keys.is_empty() {
         return Ok(keys[0].clone());
     }
     // if not try pkcs8
     let keys = pemfile::pkcs8_private_keys(&mut reader)
-        .map_err(|_| error("failed to load private key".into()))?;
+        .map_err(|_| error("failed to load pkcs8 private key".into()))?;
+    if keys.is_empty() {
+        return Err(error("no valid key was found".into()));
+    }
     if keys.len() != 1 {
         return Err(error("expected a single private key".into()));
     }
