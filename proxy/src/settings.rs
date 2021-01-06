@@ -19,7 +19,7 @@ pub struct Proxy {
     pub remote_host: String,
     pub ssl: Option<bool>,
     pub ssl_cert: Option<String>,
-    pub ssl_key: Option<String>,
+    pub ssl_password: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -98,13 +98,13 @@ impl Settings {
             return Err(eyre!("Mode must be cache, passthrough, store, or forward"));
         }
         if let Some(true) = self.proxy.ssl {
-            if self.proxy.ssl_cert.is_none() || self.proxy.ssl_key.is_none() {
+            if self.proxy.ssl_cert.is_none() || self.proxy.ssl_password.is_none() {
                 return Err(eyre!(
                     "ssl_cert and ssl_key must be specified if SSL is enabled"
                 ));
             } else if self.proxy.ssl_cert.as_ref().unwrap().is_empty() {
                 return Err(eyre!("ssl_cert pathname cannot be an empty string"));
-            } else if self.proxy.ssl_key.as_ref().unwrap().is_empty() {
+            } else if self.proxy.ssl_password.as_ref().unwrap().is_empty() {
                 return Err(eyre!("ssl_key pathname cannot be an empty string"));
             }
         }

@@ -7,7 +7,7 @@ accordance with the terms of the Adobe license agreement accompanying
 it.
 */
 use eyre::Result;
-use hyper::server::Server;
+use hyper::Server;
 use hyper::service::{make_service_fn, service_fn};
 use log::{error, info};
 use std::net::SocketAddr;

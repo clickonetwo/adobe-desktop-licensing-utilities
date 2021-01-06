@@ -35,12 +35,12 @@ pub enum Opt {
         ssl: Option<bool>,
 
         #[structopt(long)]
-        /// Path to SSL certificate
+        /// Path to SSL certificate (pkcs12 format)
         ssl_cert: Option<String>,
 
         #[structopt(long)]
-        /// Path to SSL private key
-        ssl_key: Option<String>,
+        /// SSL certificate password
+        ssl_password: Option<String>,
     },
     /// Create a template config file
     InitConfig {

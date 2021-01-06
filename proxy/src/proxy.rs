@@ -148,10 +148,10 @@ async fn call_cops(
     };
 
     info!(
-        "Forwarding request {} to COPS at {}{}",
+        "Forwarding request {} to COPS at {}://{}",
         req.request_id, cops_scheme, cops_host
     );
-    let net_req = req.to_network(&cops_host);
+    let net_req = req.to_network(&cops_scheme, &cops_host);
     if cops_scheme == "https" {
         let https = HttpsConnector::new();
         let client = Client::builder().build::<_, hyper::Body>(https);

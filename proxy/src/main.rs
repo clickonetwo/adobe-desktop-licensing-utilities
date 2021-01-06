@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             remote_host,
             ssl,
             ssl_cert,
-            ssl_key,
+            ssl_password: ssl_key,
         } => {
             let mut conf = Settings::from_start(
                 config_file,

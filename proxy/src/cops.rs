@@ -68,10 +68,10 @@ impl Request {
     }
 
     /// Create a network request which submits this COPS request to the given server.
-    pub fn to_network(&self, host: &str) -> hyper::Request<Body> {
+    pub fn to_network(&self, scheme: &str, host: &str) -> hyper::Request<Body> {
         match self.kind {
-            Kind::Activation => self.to_activation(host),
-            Kind::Deactivation => self.to_deactivation(host),
+            Kind::Activation => self.to_activation(scheme, host),
+            Kind::Deactivation => self.to_deactivation(scheme, host),
         }
     }
 
@@ -201,7 +201,7 @@ impl Request {
     }
 
     /// Convert a COPS activation request to its network form.
-    fn to_activation(&self, host: &str) -> hyper::Request<Body> {
+    fn to_activation(&self, scheme: &str, host: &str) -> hyper::Request<Body> {
         let body = serde_json::json!({
             "npdId" : &self.package_id,
             "asnpTemplateId" : &self.asnp_id,
@@ -223,7 +223,7 @@ impl Request {
         });
         let builder = hyper::Request::builder()
             .method("POST")
-            .uri(host)
+            .uri(format!("{}://{}{}", scheme, host, ACTIVATION_ENDPOINT).as_str())
             .header("host", host)
             .header("x-api-key", &self.api_key)
             .header("x-session-id", &self.session_id)
@@ -237,9 +237,10 @@ impl Request {
     }
 
     /// Convert a COPS deactivation request to its network form.
-    fn to_deactivation(&self, host: &str) -> hyper::Request<Body> {
+    fn to_deactivation(&self, scheme: &str, host: &str) -> hyper::Request<Body> {
         let uri = format!(
-            "{}{}?npdId={}&deviceId={}&osUserId={}&enableVdiMarkerExists={}",
+            "{}://{}{}?npdId={}&deviceId={}&osUserId={}&enableVdiMarkerExists={}",
+            scheme,
             host,
             DEACTIVATION_ENDPOINT,
             &self.package_id,
