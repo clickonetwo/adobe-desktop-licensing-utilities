@@ -1,5 +1,5 @@
 [proxy]
-mode = "cache"
+mode = "passthrough"
 host = "127.0.0.1:3030"
 remote_host = "https://lcs-cops.adobe.io"
 ssl = false
