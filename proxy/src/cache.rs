@@ -9,8 +9,7 @@ it.
 use crate::cops::{Kind, Request as CRequest, Response as CResponse};
 use crate::settings::Settings;
 use log::{debug, error, info};
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::Row;
+use sqlx::{Row, sqlite::{SqlitePool, SqlitePoolOptions}};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -95,11 +94,11 @@ impl Cache {
             .expect("Invoke of cache while disabled.");
         let field_list = r#"
             (
-                activation_key, deactivation_key, api_key, request_id, session_id, package_id,
-                asnp_id, device_id, os_user_id, is_vdi, is_domain_user, is_virtual,
-                os_name, os_version, app_id, app_version, ngl_version
+                activation_key, deactivation_key, api_key, request_id, session_id, device_date,
+                package_id, asnp_id, device_id, os_user_id, is_vdi, is_domain_user, is_virtual,
+                os_name, os_version, app_id, app_version, ngl_version, timestamp
             )"#;
-        let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         let i_str = format!(
             "insert or replace into activation_requests {} values {}",
             field_list, value_list
@@ -115,6 +114,7 @@ impl Cache {
             .bind(&req.api_key)
             .bind(&req.request_id)
             .bind(&req.session_id)
+            .bind(&req.device_date)
             .bind(&req.package_id)
             .bind(&req.asnp_id)
             .bind(&req.device_id)
@@ -127,6 +127,7 @@ impl Cache {
             .bind(&req.app_id)
             .bind(&req.app_version)
             .bind(&req.ngl_version)
+            .bind(&req.timestamp)
             .execute(pool)
             .await;
         match result {
@@ -188,26 +189,28 @@ impl Cache {
             .db_pool
             .as_ref()
             .expect("Invoke of cache while disabled.");
-        let field_list = "(activation_key, body, timestamp)";
-        let value_list = "(?, ?, ?)";
+        let field_list = "(activation_key, deactivation_key, body, timestamp)";
+        let value_list = "(?, ?, ?, ?)";
         let i_str = format!(
             "insert or replace into activation_responses {} values {}",
             field_list, value_list
         );
         let a_key = activation_id(req);
+        let d_key = deactivation_id(req);
         debug!(
             "Storing activation response {} with key: {}",
             &req.request_id, &a_key
         );
         let result = sqlx::query(&i_str)
             .bind(&a_key)
+            .bind(&d_key)
             .bind(std::str::from_utf8(&resp.body).unwrap())
             .bind(&req.timestamp)
             .execute(pool)
             .await;
         match result {
-            Ok(done) => debug!("Stored deactivation response has rowid {}", done.last_insert_rowid()),
-            Err(err) => error!("Cache store of deactivation response failed: {:?}", err)
+            Ok(done) => debug!("Stored activation response has rowid {}", done.last_insert_rowid()),
+            Err(err) => error!("Cache store of activation response failed: {:?}", err)
         }
         // when we see a live activation, we remove any stored deactivation requests
         // that are superseded by this later activation, so they won't be later forwarded.
@@ -226,7 +229,8 @@ impl Cache {
             .as_ref()
             .expect("Invoke of cache while disabled.");
         // when we get a live deactivation, we remove all the activation request/response pairs
-        // this response deactivates, so later requests will not receive a cached activation.
+        // this response deactivates, so earlier requests are no longer stored for forwarding
+        // and later requests will not receive a cached response.
         let d_key = deactivation_id(req);
         debug!(
             "Removing activation requests with deactivation key: {}",
@@ -270,23 +274,28 @@ impl Cache {
             .as_ref()
             .expect("Invoke of cache while disabled.");
         let a_key = activation_id(req);
-        let q_str = "select body from activation_responses where activation_key = ?";
+        let q_str = "select body, timestamp from activation_responses where activation_key = ?";
         debug!("Finding activation response with key: {}", &a_key);
         let result = sqlx::query(&q_str).bind(&a_key).fetch_optional(pool).await;
-        if let Ok(Some(row)) = result {
-            let body: String = row.get("body");
-            let timestamp: String = row.get("timestamp");
-            Some(CResponse {
-                kind: req.kind.clone(),
-                request_id: req.request_id.clone(),
-                timestamp,
-                body: body.into_bytes(),
-            })
-        } else {
-            if let Err(err) = result {
-                debug!("Error during fetch of activation response: {:?}", err);
+        match result {
+            Ok(Some(row)) => {
+                let body: String = row.get("body");
+                let timestamp: String = row.get("timestamp");
+                Some(CResponse {
+                    kind: req.kind.clone(),
+                    request_id: req.request_id.clone(),
+                    timestamp,
+                    body: body.into_bytes(),
+                })
             }
-            None
+            Ok(None) => {
+                debug!("No activation response found for key: {}", &a_key);
+                None
+            }
+            Err(err) => {
+                debug!("Error during fetch of activation response: {:?}", err);
+                None
+            }
         }
     }
 
@@ -333,7 +342,9 @@ impl Cache {
         let q_str =
             r#"select * from activation_requests req where not exists
                     (select 1 from activation_responses where
-                        activation_key = req.activation_key)"#;
+                        activation_key = req.activation_key and
+                        timestamp >= req.timestamp
+                    )"#;
         let rows = sqlx::query(q_str).fetch_all(pool).await;
         if let Err(err) = rows {
             debug!("Error during fetch of activation requests: {:?}", err);
@@ -346,7 +357,7 @@ impl Cache {
                 request_id: row.get("request_id"),
                 session_id: row.get("session_id"),
                 package_id: row.get("package_id"),
-                asnp_id: row.get("ansp_id"),
+                asnp_id: row.get("asnp_id"),
                 device_id: row.get("device_id"),
                 device_date: row.get("device_date"),
                 is_vdi: row.get("is_vdi"),
@@ -398,9 +409,9 @@ impl Cache {
 
 fn activation_id(req: &CRequest) -> String {
     let factors: Vec<String> = vec![
-        deactivation_id(req),
         req.app_id.clone(),
         req.ngl_version.clone(),
+        deactivation_id(req),
     ];
     factors.join("|")
 }
@@ -422,13 +433,15 @@ const ACTIVATION_REQUEST_SCHEMA: &str = r#"
         activation_key text not null unique,
         deactivation_key text not null,
         api_key text not null,
+        request_id text not null,
         session_id text not null,
+        device_date text not null,
         package_id text not null,
         asnp_id text not null,
         device_id text not null,
         os_user_id text not null,
-        is_domain_user boolean not null,
         is_vdi boolean not null,
+        is_domain_user boolean not null,
         is_virtual boolean not null,
         os_name text not null,
         os_version text not null,
