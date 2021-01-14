@@ -9,7 +9,10 @@ it.
 use crate::cops::{Kind, Request as CRequest, Response as CResponse};
 use crate::settings::Settings;
 use log::{debug, error, info};
-use sqlx::{Row, sqlite::{SqlitePool, SqlitePoolOptions}};
+use sqlx::{
+    sqlite::{SqlitePool, SqlitePoolOptions},
+    Row,
+};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -80,7 +83,9 @@ impl Cache {
     }
 
     pub async fn store_request(&self, req: &CRequest) {
-        if !self.enabled { return }
+        if !self.enabled {
+            return;
+        }
         match req.kind {
             Kind::Activation => self.store_activation_request(req).await,
             Kind::Deactivation => self.store_deactivation_request(req).await,
@@ -131,8 +136,11 @@ impl Cache {
             .execute(pool)
             .await;
         match result {
-            Ok(done) => debug!("Stored activation request has rowid {}", done.last_insert_rowid()),
-            Err(err) => error!("Cache store of activation request failed: {:?}", err)
+            Ok(done) => debug!(
+                "Stored activation request has rowid {}",
+                done.last_insert_rowid()
+            ),
+            Err(err) => error!("Cache store of activation request failed: {:?}", err),
         }
     }
 
@@ -171,13 +179,18 @@ impl Cache {
             .execute(pool)
             .await;
         match result {
-            Ok(done) => debug!("Stored deactivation request has rowid {}", done.last_insert_rowid()),
-            Err(err) => error!("Cache store of deactivation request failed: {:?}", err)
+            Ok(done) => debug!(
+                "Stored deactivation request has rowid {}",
+                done.last_insert_rowid()
+            ),
+            Err(err) => error!("Cache store of deactivation request failed: {:?}", err),
         }
     }
 
     pub async fn store_response(&self, req: &CRequest, resp: &CResponse) {
-        if !self.enabled { return }
+        if !self.enabled {
+            return;
+        }
         match req.kind {
             Kind::Activation => self.store_activation_response(req, resp).await,
             Kind::Deactivation => self.store_deactivation_response(req, resp).await,
@@ -209,8 +222,11 @@ impl Cache {
             .execute(pool)
             .await;
         match result {
-            Ok(done) => debug!("Stored activation response has rowid {}", done.last_insert_rowid()),
-            Err(err) => error!("Cache store of activation response failed: {:?}", err)
+            Ok(done) => debug!(
+                "Stored activation response has rowid {}",
+                done.last_insert_rowid()
+            ),
+            Err(err) => error!("Cache store of activation response failed: {:?}", err),
         }
         // when we see a live activation, we remove any stored deactivation requests
         // that are superseded by this later activation, so they won't be later forwarded.
@@ -261,7 +277,9 @@ impl Cache {
     }
 
     pub async fn fetch_response(&self, req: &CRequest) -> Option<CResponse> {
-        if !self.enabled { return None }
+        if !self.enabled {
+            return None;
+        }
         match req.kind {
             Kind::Activation => self.fetch_activation_response(req).await,
             Kind::Deactivation => self.fetch_deactivation_response(req).await,
@@ -274,7 +292,8 @@ impl Cache {
             .as_ref()
             .expect("Invoke of cache while disabled.");
         let a_key = activation_id(req);
-        let q_str = "select body, timestamp from activation_responses where activation_key = ?";
+        let q_str =
+            "select body, timestamp from activation_responses where activation_key = ?";
         debug!("Finding activation response with key: {}", &a_key);
         let result = sqlx::query(&q_str).bind(&a_key).fetch_optional(pool).await;
         match result {
@@ -339,8 +358,7 @@ impl Cache {
             .db_pool
             .as_ref()
             .expect("Invoke of cache while disabled.");
-        let q_str =
-            r#"select * from activation_requests req where not exists
+        let q_str = r#"select * from activation_requests req where not exists
                     (select 1 from activation_responses where
                         activation_key = req.activation_key and
                         timestamp >= req.timestamp
@@ -381,8 +399,7 @@ impl Cache {
             .db_pool
             .as_ref()
             .expect("Invoke of cache while disabled.");
-        let q_str =
-            r#"select * from deactivation_requests"#;
+        let q_str = r#"select * from deactivation_requests"#;
         let rows = sqlx::query(q_str).fetch_all(pool).await;
         if let Err(err) = rows {
             debug!("Error during fetch of activation requests: {:?}", err);

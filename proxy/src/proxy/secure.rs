@@ -6,23 +6,23 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
+use super::{ctrl_c_handler, serve_req};
+use crate::cache::Cache;
+use crate::settings::Settings;
 use async_stream::stream;
 use core::task::{Context, Poll};
 use futures_util::stream::{Stream, StreamExt};
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
 use log::{error, info};
-use std::pin::Pin;
-use tokio_native_tls::{native_tls, TlsAcceptor, TlsStream};
-use tokio::net::{TcpListener, TcpStream};
-use crate::cache::Cache;
-use crate::settings::Settings;
-use super::{ctrl_c_handler, serve_req};
-use std::sync::Arc;
+use std::error::Error;
 use std::fs::File;
 use std::io::Read;
+use std::pin::Pin;
+use std::sync::Arc;
 use tokio::io;
-use std::error::Error;
+use tokio::net::{TcpListener, TcpStream};
+use tokio_native_tls::{native_tls, TlsAcceptor, TlsStream};
 
 pub async fn run_server(
     conf: &Settings, cache: Arc<Cache>,
@@ -40,7 +40,9 @@ pub async fn run_server(
     };
     let tcp = TcpListener::bind(&conf.proxy.host).await?;
     let incoming_tls_stream = incoming(tcp, acceptor).boxed();
-    let hyper_acceptor = HyperAcceptor { acceptor: incoming_tls_stream };
+    let hyper_acceptor = HyperAcceptor {
+        acceptor: incoming_tls_stream,
+    };
     let service = make_service_fn(move |_| {
         let conf = conf.clone();
         let cache = Arc::clone(&cache);
@@ -66,11 +68,9 @@ pub async fn run_server(
     Ok(())
 }
 
-
-
 fn incoming(
-    listener: TcpListener, acceptor: TlsAcceptor
-) -> impl Stream<Item=TlsStream<TcpStream>> {
+    listener: TcpListener, acceptor: TlsAcceptor,
+) -> impl Stream<Item = TlsStream<TcpStream>> {
     stream! {
         loop {
             // just swallow errors and wait again if necessary
@@ -88,7 +88,7 @@ fn incoming(
 }
 
 struct HyperAcceptor<'a> {
-    acceptor: Pin<Box<dyn Stream<Item=TlsStream<TcpStream>> + 'a>>,
+    acceptor: Pin<Box<dyn Stream<Item = TlsStream<TcpStream>> + 'a>>,
 }
 
 impl hyper::server::accept::Accept for HyperAcceptor<'_> {
@@ -106,4 +106,3 @@ impl hyper::server::accept::Accept for HyperAcceptor<'_> {
         }
     }
 }
-

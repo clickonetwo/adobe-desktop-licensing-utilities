@@ -94,7 +94,11 @@ impl Settings {
     pub fn validate(&mut self) -> Result<()> {
         self.proxy.mode = self.proxy.mode.to_ascii_lowercase();
         let mode = self.proxy.mode.as_str();
-        if !"cache".starts_with(mode) && !"passthrough".starts_with(mode) && !"store".starts_with(mode) && !"forward".starts_with(mode) {
+        if !"cache".starts_with(mode)
+            && !"passthrough".starts_with(mode)
+            && !"store".starts_with(mode)
+            && !"forward".starts_with(mode)
+        {
             return Err(eyre!("Mode must be cache, passthrough, store, or forward"));
         }
         if let Some(true) = self.proxy.ssl {

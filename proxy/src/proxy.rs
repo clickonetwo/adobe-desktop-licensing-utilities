@@ -70,7 +70,10 @@ async fn serve_req(
                 // the COPS call succeeded,
                 info!("Received success response ({:?}) from COPS", parts.status);
                 debug!("Received success response headers {:?}", parts.headers);
-                debug!("Received success response body {}",  std::str::from_utf8(&body).unwrap());
+                debug!(
+                    "Received success response body {}",
+                    std::str::from_utf8(&body).unwrap()
+                );
                 // cache the response
                 let resp = CResponse::from_network(&req, &body);
                 cache.store_response(&req, &resp).await;
@@ -85,7 +88,10 @@ async fn serve_req(
                 // COPS call failed, and no cache, so tell client
                 info!("Returning failure response ({:?}) from COPS", parts.status);
                 debug!("Received failure response headers {:?}", parts.headers);
-                debug!("Received failure response body {}", std::str::from_utf8(&body).unwrap());
+                debug!(
+                    "Received failure response body {}",
+                    std::str::from_utf8(&body).unwrap()
+                );
                 Ok(HResponse::from_parts(parts, Body::from(body)))
             }
         }
@@ -113,14 +119,17 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
                     cache.store_response(&req, &resp).await;
                 } else {
                     // the COPS call failed
-                    info!("Received failure response ({:?}) from COPS", parts.status );
+                    info!("Received failure response ({:?}) from COPS", parts.status);
                     debug!("Received failure response headers {:?}", parts.headers);
-                    debug!("Received failure response body {}", std::str::from_utf8(&body).unwrap());
+                    debug!(
+                        "Received failure response body {}",
+                        std::str::from_utf8(&body).unwrap()
+                    );
                 }
-            },
+            }
             Err(err) => {
                 error!("No response received from COPS: {:?}", err)
-            },
+            }
         };
     }
 }
