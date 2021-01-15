@@ -55,6 +55,10 @@ pub enum Opt {
         /// Path to optional config file
         config_file: Option<String>,
 
+        #[structopt(short = "C", long)]
+        /// Path to cache file
+        cache_file: Option<String>,
+
         #[structopt(long)]
         /// Whether to clear the cache (dangerous!)
         clear: bool,
