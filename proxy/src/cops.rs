@@ -172,7 +172,8 @@ impl Request {
             ..Default::default()
         };
         req.update_from_headers(parts)?;
-        let pairs: HashMap<String, String> = Url::parse(&parts.uri.to_string())
+        let request_url = format!("http://placeholder{}", &parts.uri.to_string());
+        let pairs: HashMap<String, String> = Url::parse(&request_url)
             .expect("Bad deactivation query string")
             .query_pairs()
             .map(|(k, v)| (k.to_string(), v.to_string()))

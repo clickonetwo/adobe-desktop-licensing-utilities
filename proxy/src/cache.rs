@@ -486,6 +486,7 @@ const DEACTIVATION_REQUEST_SCHEMA: &str = r#"
     create table if not exists deactivation_requests (
         deactivation_key text not null unique,
         api_key text not null,
+        request_id text not null,
         package_id text not null,
         device_id text not null,
         os_user_id text not null,

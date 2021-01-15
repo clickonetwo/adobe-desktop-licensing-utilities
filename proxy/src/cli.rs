@@ -19,7 +19,8 @@ pub enum Opt {
         config_file: Option<String>,
 
         #[structopt(short, long)]
-        /// Mode to run the proxy in
+        /// Mode to run the proxy in, one of passthrough, cache, store, or forward.
+        /// You can use any prefix of these names (minimally p, c, s, or f)
         mode: Option<String>,
 
         #[structopt(long)]
