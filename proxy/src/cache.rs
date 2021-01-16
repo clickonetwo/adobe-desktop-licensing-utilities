@@ -8,13 +8,13 @@ it.
 */
 use crate::cops::{Kind, Request as CRequest, Response as CResponse};
 use crate::settings::Settings;
+use dialoguer::Confirm;
 use log::{debug, error, info};
 use sqlx::{
     sqlite::{SqlitePool, SqlitePoolOptions},
     Row,
 };
 use std::sync::Arc;
-use dialoguer::Confirm;
 
 #[derive(Default)]
 pub struct Cache {
@@ -75,11 +75,13 @@ impl Cache {
             let confirm = match yes {
                 true => true,
                 false => Confirm::new()
-                        .with_prompt("Really clear the cache? This operation cannot be undone.")
-                        .default(false)
-                        .show_default(true)
-                        .interact()
-                        .unwrap(),
+                    .with_prompt(
+                        "Really clear the cache? This operation cannot be undone.",
+                    )
+                    .default(false)
+                    .show_default(true)
+                    .interact()
+                    .unwrap(),
             };
             if confirm {
                 sqlx::query(CLEAR_ALL).execute(pool).await?;

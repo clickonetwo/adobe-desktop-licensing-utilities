@@ -77,7 +77,9 @@ impl Settings {
         s.try_into()
     }
 
-    pub fn from_cache_control(config_file: Option<String>, cache_file: Option<String>) -> Result<Self, ConfigError> {
+    pub fn from_cache_control(
+        config_file: Option<String>, cache_file: Option<String>,
+    ) -> Result<Self, ConfigError> {
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(
             include_str!("res/defaults.toml"),
