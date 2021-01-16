@@ -64,14 +64,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         cli::Opt::CacheControl {
             config_file,
+            cache_file,
             clear,
+            yes,
             export_file,
             import_file,
         } => {
-            let mut conf = Settings::from_cache_control(config_file)?;
+            let mut conf = Settings::from_cache_control(config_file, cache_file)?;
             conf.validate()?;
             let cache = Cache::new_from(&conf).await?;
-            Cache::control(&cache, clear, export_file, import_file).await?;
+            Cache::control(&cache, clear, yes, export_file, import_file).await?;
             debug!("conf: {:?}", conf);
         }
     }

@@ -77,7 +77,9 @@ impl Settings {
         s.try_into()
     }
 
-    pub fn from_cache_control(config_file: Option<String>) -> Result<Self, ConfigError> {
+    pub fn from_cache_control(
+        config_file: Option<String>, cache_file: Option<String>,
+    ) -> Result<Self, ConfigError> {
         let mut s = Config::new();
         s.merge(ConfigFile::from_str(
             include_str!("res/defaults.toml"),
@@ -85,6 +87,9 @@ impl Settings {
         ))?;
         if let Some(filename) = config_file {
             s.merge(ConfigFile::with_name(filename.as_str()))?;
+        }
+        if let Some(cache_file) = cache_file {
+            s.set("cache.cache_file_path", cache_file)?;
         }
         // force enablement of the cache if doing cache control
         s.set("proxy.mode", "cache")?;

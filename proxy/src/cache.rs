@@ -8,6 +8,7 @@ it.
 */
 use crate::cops::{Kind, Request as CRequest, Response as CResponse};
 use crate::settings::Settings;
+use dialoguer::Confirm;
 use log::{debug, error, info};
 use sqlx::{
     sqlite::{SqlitePool, SqlitePoolOptions},
@@ -52,7 +53,7 @@ impl Cache {
     }
 
     pub async fn control(
-        &self, clear: Option<bool>, export_file: Option<String>,
+        &self, clear: bool, yes: bool, export_file: Option<String>,
         import_file: Option<String>,
     ) -> Result<(), sqlx::Error> {
         if !self.enabled {
@@ -70,13 +71,22 @@ impl Cache {
             println!("cache-control: Requesting export of cache to '{}'", path);
             eprintln!("cache-control: Export of cache not yet supported, sorry");
         }
-        if let Some(clear) = clear {
-            if clear {
+        if clear {
+            let confirm = match yes {
+                true => true,
+                false => Confirm::new()
+                    .with_prompt(
+                        "Really clear the cache? This operation cannot be undone.",
+                    )
+                    .default(false)
+                    .show_default(true)
+                    .interact()
+                    .unwrap(),
+            };
+            if confirm {
                 sqlx::query(CLEAR_ALL).execute(pool).await?;
                 println!("cache-control: Cache has been cleared.");
                 info!("Cache at '{}' has been cleared", db_name);
-            } else {
-                eprintln!("cache-control: To clear the cache, use --clear yes");
             }
         }
         Ok(())
