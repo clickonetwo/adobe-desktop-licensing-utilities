@@ -6,134 +6,223 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use config::{Config, ConfigError, File as ConfigFile, FileFormat};
-use eyre::{eyre, Result};
-use serde::Deserialize;
+use crate::cli::FrlProxy;
+use config::{Config, Environment, File as ConfigFile, FileFormat};
+use eyre::{eyre, Report, Result, WrapErr};
+use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 use std::fs::File;
 use std::io::prelude::*;
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proxy {
-    pub mode: String,
+    pub mode: ProxyMode,
     pub host: String,
     pub remote_host: String,
-    pub ssl: Option<bool>,
-    pub ssl_cert: Option<String>,
-    pub ssl_password: Option<String>,
+    pub ssl: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Ssl {
+    pub cert_path: String,
+    pub cert_password: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Logging {
-    pub console_log_level: String,
-    pub log_to_file: bool,
-    pub file_log_level: String,
-    pub file_log_path: String,
+    pub level: LogLevel,
+    pub destination: LogDestination,
+    pub file_path: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Cache {
-    pub cache_file_path: Option<String>,
+    pub db_path: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub proxy: Proxy,
+    pub ssl: Ssl,
     pub logging: Logging,
     pub cache: Cache,
 }
 
 impl Settings {
-    pub fn from_start(
-        config_file: Option<String>, mode: Option<String>, host: Option<String>,
-        remote_host: Option<String>, ssl: Option<bool>, ssl_cert: Option<String>,
-        ssl_key: Option<String>,
-    ) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(ConfigFile::from_str(
-            include_str!("res/defaults.toml"),
-            FileFormat::Toml,
-        ))?;
-        if let Some(filename) = config_file {
-            s.merge(ConfigFile::with_name(filename.as_str()))?;
+    pub fn load_config(args: &FrlProxy) -> Result<Option<Self>> {
+        let path = args.config_file.as_str();
+        if let Ok(_) = std::fs::metadata(path) {
+            let mut s = Config::new();
+            s.merge(ConfigFile::from_str(
+                include_str!("res/defaults.toml"),
+                FileFormat::Toml,
+            ))?;
+            s.merge(ConfigFile::with_name(path).format(FileFormat::Toml))?;
+            s.merge(Environment::with_prefix("frl_proxy"))?;
+            let mut conf: Self = s.try_into()?;
+            match args.debug {
+                1 => conf.logging.level = LogLevel::Debug,
+                2 => conf.logging.level = LogLevel::Trace,
+                _ => {}
+            }
+            if let Some(log_to) = &args.log_to {
+                let destination: LogDestination = log_to
+                    .as_str()
+                    .try_into()
+                    .wrap_err(format!("Not a recognized log destination: {}", log_to))?;
+                conf.logging.destination = destination;
+            }
+            Ok(Some(conf))
+        } else {
+            eprintln!("Creating initial configuration file...");
+            let template = include_str!("res/defaults.toml");
+            let mut file = File::create(path)
+                .wrap_err(format!("Cannot create config file: {}", path))?;
+            file.write_all(template.as_bytes())
+                .wrap_err(format!("Cannot write config file: {}", path))?;
+            Ok(None)
         }
-        if let Some(mode) = mode {
-            s.set("proxy.mode", mode)?;
-        }
-        if let Some(host) = host {
-            s.set("proxy.host", host)?;
-        }
-        if let Some(remote_host) = remote_host {
-            s.set("proxy.remote_host", remote_host)?;
-        }
-        if let Some(ssl) = ssl {
-            s.set("proxy.ssl", ssl)?;
-        }
-        if let Some(ssl_cert) = ssl_cert {
-            s.set("proxy.ssl_cert", ssl_cert)?;
-        }
-        if let Some(ssl_key) = ssl_key {
-            s.set("proxy.ssl_key", ssl_key)?;
-        }
-        s.try_into()
     }
 
-    pub fn from_cache_control(
-        config_file: Option<String>, cache_file: Option<String>,
-    ) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(ConfigFile::from_str(
-            include_str!("res/defaults.toml"),
-            FileFormat::Toml,
-        ))?;
-        if let Some(filename) = config_file {
-            s.merge(ConfigFile::with_name(filename.as_str()))?;
-        }
-        if let Some(cache_file) = cache_file {
-            s.set("cache.cache_file_path", cache_file)?;
-        }
-        // force enablement of the cache if doing cache control
-        s.set("proxy.mode", "cache")?;
-        s.try_into()
+    pub fn update_config(&self, path: &str) -> Result<()> {
+        // update proxy settings
+        // update ssl settings
+        // update cache settings
+        // update log settings
+        let toml = toml::to_string(self)
+            .wrap_err(format!("Cannot serialize configuration: {:?}", self))?;
+        let mut file = File::create(path)
+            .wrap_err(format!("Cannot create config file: {}", path))?;
+        file.write_all(toml.as_bytes())
+            .wrap_err(format!("Cannot write config file: {}", path))?;
+        eprintln!("Wrote config file '{}'", path);
+        Ok(())
     }
 
     pub fn validate(&mut self) -> Result<()> {
-        self.proxy.mode = self.proxy.mode.to_ascii_lowercase();
-        let mode = self.proxy.mode.as_str();
-        if !"cache".starts_with(mode)
-            && !"passthrough".starts_with(mode)
-            && !"store".starts_with(mode)
-            && !"forward".starts_with(mode)
-        {
-            return Err(eyre!("Mode must be cache, passthrough, store, or forward"));
+        if self.proxy.ssl {
+            let path = &self.ssl.cert_path;
+            if path.is_empty() {
+                return Err(eyre!("Certificate path can't be empty when SSL is enabled"));
+            }
+            std::fs::metadata(path)
+                .wrap_err(format!("Invalid certificate path: {}", path))?;
         }
-        if let Some(true) = self.proxy.ssl {
-            if self.proxy.ssl_cert.is_none() || self.proxy.ssl_password.is_none() {
-                return Err(eyre!(
-                    "ssl_cert and ssl_key must be specified if SSL is enabled"
-                ));
-            } else if self.proxy.ssl_cert.as_ref().unwrap().is_empty() {
-                return Err(eyre!("ssl_cert pathname cannot be an empty string"));
-            } else if self.proxy.ssl_password.as_ref().unwrap().is_empty() {
-                return Err(eyre!("ssl_key pathname cannot be an empty string"));
+        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
+        {
+            if self.cache.db_path.is_empty() {
+                return Err(eyre!("Database path can't be empty when cache is enabled"));
             }
         }
-        if self.proxy.mode.starts_with('p') {
-            // don't need a cache file, so fall through to next check
-        } else if self.cache.cache_file_path.is_none() {
-            return Err(eyre!(
-                "cache_file_path must be specified if the cache is enabled"
-            ));
-        } else if self.cache.cache_file_path.as_ref().unwrap().is_empty() {
-            return Err(eyre!("The cache_file_path cannot be an empty string"));
+        if let LogDestination::File = self.logging.destination {
+            if self.logging.file_path.is_empty() {
+                return Err(eyre!("File path must be specified when logging to a file"));
+            }
         }
         Ok(())
     }
 }
 
-pub fn config_template(filename: String) -> std::io::Result<()> {
-    let template = include_str!("res/template.toml");
-    let mut file = File::create(&filename)?;
-    file.write_all(template.as_bytes())?;
-    println!("Created config file '{}'", filename);
-    Ok(())
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyMode {
+    Cache,
+    Store,
+    Forward,
+    Passthrough,
+}
+
+impl Default for ProxyMode {
+    fn default() -> Self {
+        ProxyMode::Cache
+    }
+}
+
+impl TryFrom<&str> for ProxyMode {
+    type Error = Report;
+
+    fn try_from(s: &str) -> Result<Self> {
+        let sl = s.to_ascii_lowercase();
+        if "cache".starts_with(&sl) {
+            Ok(ProxyMode::Cache)
+        } else if "store".starts_with(&sl) {
+            Ok(ProxyMode::Store)
+        } else if "forward".starts_with(&sl) {
+            Ok(ProxyMode::Store)
+        } else if "passthrough".starts_with(&sl) {
+            Ok(ProxyMode::Store)
+        } else {
+            Err(eyre!("proxy mode '{}' must be a prefix of cache, store, forward or passthrough", s))
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogDestination {
+    #[serde(alias = "c")]
+    Console,
+    #[serde(alias = "f")]
+    File,
+}
+
+impl Default for LogDestination {
+    fn default() -> Self {
+        LogDestination::Console
+    }
+}
+
+impl TryFrom<&str> for LogDestination {
+    type Error = Report;
+
+    fn try_from(s: &str) -> Result<Self> {
+        let sl = s.to_ascii_lowercase();
+        if "console".starts_with(&sl) {
+            Ok(LogDestination::Console)
+        } else if "file".starts_with(&sl) {
+            Ok(LogDestination::File)
+        } else {
+            Err(eyre!("log destination '{}' must be a prefix of console or file", s))
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl Default for LogLevel {
+    fn default() -> Self {
+        LogLevel::Info
+    }
+}
+
+impl TryFrom<&str> for LogLevel {
+    type Error = Report;
+
+    fn try_from(s: &str) -> Result<Self> {
+        let sl = s.to_ascii_lowercase();
+        if "off".starts_with(&sl) {
+            Ok(LogLevel::Off)
+        } else if "error".starts_with(&sl) {
+            Ok(LogLevel::Error)
+        } else if "warn".starts_with(&sl) {
+            Ok(LogLevel::Warn)
+        } else if "info".starts_with(&sl) {
+            Ok(LogLevel::Info)
+        } else if "debug".starts_with(&sl) {
+            Ok(LogLevel::Debug)
+        } else if "trace".starts_with(&sl) {
+            Ok(LogLevel::Trace)
+        } else {
+            Err(eyre!("log level '{}' must be a prefix of off, error, warn, info, debug, or trace", s))
+        }
+    }
 }

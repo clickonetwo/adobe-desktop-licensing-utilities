@@ -15,67 +15,61 @@ mod logging;
 mod proxy;
 mod settings;
 
+use crate::cli::Command;
+use crate::settings::ProxyMode;
 use cache::Cache;
-use cli::Opt;
+use cli::FrlProxy;
+use log::debug;
 use proxy::{plain, secure};
 use settings::Settings;
-
-use log::debug;
+use std::convert::TryInto;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     openssl_probe::init_ssl_cert_env_vars();
-    let opt = Opt::from_args();
+    let args: FrlProxy = FrlProxy::from_args();
 
-    match opt {
-        cli::Opt::Start {
-            config_file,
-            mode,
-            host,
-            remote_host,
-            ssl,
-            ssl_cert,
-            ssl_password: ssl_key,
-        } => {
-            let mut conf = Settings::from_start(
-                config_file,
-                mode,
-                host,
-                remote_host,
-                ssl,
-                ssl_cert,
-                ssl_key,
-            )?;
-            conf.validate()?;
-            logging::init(&conf)?;
-            let cache = Cache::new_from(&conf).await?;
-            debug!("conf: {:?}", conf);
-            if conf.proxy.mode.starts_with('f') {
-                proxy::forward_stored_requests(&conf, cache).await;
-            } else if let Some(true) = conf.proxy.ssl {
-                secure::run_server(&conf, cache).await?;
-            } else {
-                plain::run_server(&conf, cache).await?;
+    // make sure we have a config file.  if not, make one
+    if let Some(mut conf) = Settings::load_config(&args)? {
+        match args.cmd {
+            cli::Command::Start { mode, ssl } => {
+                if let Some(mode) = mode {
+                    conf.proxy.mode = mode.as_str().try_into()?;
+                };
+                if let Some(ssl) = ssl {
+                    conf.proxy.ssl = ssl;
+                }
+                conf.validate()?;
+                logging::init(&conf)?;
+                debug!("conf: {:?}", conf);
+                let cache = Cache::from(&conf, true).await?;
+                if let ProxyMode::Forward = conf.proxy.mode {
+                    proxy::forward_stored_requests(&conf, cache).await;
+                } else if conf.proxy.ssl {
+                    secure::run_server(&conf, cache).await?;
+                } else {
+                    plain::run_server(&conf, cache).await?;
+                }
+            }
+            cli::Command::Configure => {
+                conf.update_config(&args.config_file)?;
+            }
+            Command::Clear { yes } => {
+                let cache = Cache::from(&conf, false).await?;
+                cache.clear(yes).await?;
+            }
+            Command::Import { import_path } => {
+                let cache = Cache::from(&conf, true).await?;
+                cache.import(&import_path).await?;
+            }
+            Command::Export { export_path } => {
+                let cache = Cache::from(&conf, true).await?;
+                cache.export(&export_path).await?;
             }
         }
-        cli::Opt::InitConfig { out_file } => {
-            settings::config_template(out_file)?;
-            std::process::exit(0);
-        }
-        cli::Opt::CacheControl {
-            config_file,
-            cache_file,
-            clear,
-            yes,
-            export_file,
-            import_file,
-        } => {
-            let mut conf = Settings::from_cache_control(config_file, cache_file)?;
-            conf.validate()?;
-            let cache = Cache::new_from(&conf).await?;
-            Cache::control(&cache, clear, yes, export_file, import_file).await?;
-            debug!("conf: {:?}", conf);
-        }
+    } else {
+        let conf = Settings::load_config(&args)?.unwrap();
+        conf.update_config(&args.config_file)?;
     }
     Ok(())
 }

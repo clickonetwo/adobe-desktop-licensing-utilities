@@ -28,21 +28,19 @@ pub async fn run_server(
     conf: &Settings, cache: Arc<Cache>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let acceptor = {
-        let path = conf.proxy.ssl_cert.as_ref().unwrap();
-        let password = conf.proxy.ssl_password.as_ref().unwrap();
+        let path = &conf.ssl.cert_path;
+        let password = &conf.ssl.cert_password;
         let mut file = File::open(path).unwrap();
         let mut identity = vec![];
         file.read_to_end(&mut identity).unwrap();
-        let identity = native_tls::Identity::from_pkcs12(&identity, password).unwrap();
+        let identity = native_tls::Identity::from_pkcs12(&identity, password)?;
         let sync_acceptor = native_tls::TlsAcceptor::new(identity).unwrap();
         let async_acceptor: TlsAcceptor = sync_acceptor.into();
         async_acceptor
     };
     let tcp = TcpListener::bind(&conf.proxy.host).await?;
     let incoming_tls_stream = incoming(tcp, acceptor).boxed();
-    let hyper_acceptor = HyperAcceptor {
-        acceptor: incoming_tls_stream,
-    };
+    let hyper_acceptor = HyperAcceptor { acceptor: incoming_tls_stream };
     let service = make_service_fn(move |_| {
         let conf = conf.clone();
         let cache = Arc::clone(&cache);

@@ -1,13 +1,17 @@
 [proxy]
-mode = "passthrough"
-host = "127.0.0.1:3030"
+mode = "cache"
+host = "127.0.0.1:8443"
 remote_host = "https://lcs-cops.adobe.io"
-ssl = false
+ssl = true
+
+[ssl]
+cert_path = "frl-proxy.pkcs"
+cert_password = "for security, override with environment variable 'FRL_PROXY_SSL.CERT_PASSWORD'"
 
 [logging]
-console_log_level = "info"
-log_to_file = false
-file_log_level = "info"
-file_log_path = "frl-proxy.log"
+level = "info"
+destination = "console"
+file_path = "frl-proxy.log"
 
 [cache]
+db_path = "frl-proxy.cache"

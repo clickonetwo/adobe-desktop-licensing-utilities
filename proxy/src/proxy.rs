@@ -9,9 +9,9 @@ it.
 pub mod plain;
 pub mod secure;
 
-// use futures::TryStreamExt;
 use crate::cache::Cache;
 use crate::cops::{agent, BadRequest, Request as CRequest, Response as CResponse};
+use crate::settings::ProxyMode;
 use hyper::{Body, Client, Request as HRequest, Response as HResponse, Uri};
 use hyper_tls::HttpsConnector;
 use log::{debug, error, info};
@@ -44,10 +44,7 @@ async fn serve_req(
     info!("Received request for {:?}", parts.uri);
     debug!("Received request method: {:?}", parts.method);
     debug!("Received request headers: {:?}", parts.headers);
-    debug!(
-        "Received request body: {}",
-        std::str::from_utf8(&body).unwrap()
-    );
+    debug!("Received request body: {}", std::str::from_utf8(&body).unwrap());
 
     // Analyze and handle the request
     match CRequest::from_network(&parts, &body) {
@@ -55,7 +52,7 @@ async fn serve_req(
         Ok(req) => {
             info!("Received request id: {}", &req.request_id);
             cache.store_request(&req).await;
-            let net_resp = if conf.proxy.mode.starts_with('s') {
+            let net_resp = if let ProxyMode::Store = conf.proxy.mode {
                 debug!("Store mode - not contacting COPS");
                 proxy_offline_response()
             } else {

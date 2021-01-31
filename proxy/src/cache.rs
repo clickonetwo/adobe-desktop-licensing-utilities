@@ -7,8 +7,9 @@ accordance with the terms of the Adobe license agreement accompanying
 it.
 */
 use crate::cops::{Kind, Request as CRequest, Response as CResponse};
-use crate::settings::Settings;
+use crate::settings::{ProxyMode, Settings};
 use dialoguer::Confirm;
+use eyre::{eyre, Result, WrapErr};
 use log::{debug, error, info};
 use sqlx::{
     sqlite::{SqlitePool, SqlitePoolOptions},
@@ -19,77 +20,66 @@ use std::sync::Arc;
 #[derive(Default)]
 pub struct Cache {
     enabled: bool,
-    db_name: Option<String>,
     db_pool: Option<SqlitePool>,
 }
 
 impl Cache {
-    pub async fn new_from(conf: &Settings) -> Result<Arc<Cache>, sqlx::Error> {
-        if conf.proxy.mode.starts_with('p') {
+    pub async fn from(conf: &Settings, can_create: bool) -> Result<Arc<Cache>> {
+        if let ProxyMode::Passthrough = conf.proxy.mode {
             return Ok(Arc::new(Cache::default()));
         }
-        // make sure the database exists
-        let db_name = conf.cache.cache_file_path.as_ref().unwrap().to_string();
-        let db_url = format!("file:{}?mode=rwc", db_name);
+        let db_name = &conf.cache.db_path;
+        let mode = if can_create {
+            "rwc"
+        } else {
+            std::fs::metadata(db_name)
+                .wrap_err(format!("Can't access cache db: {}", db_name))?;
+            "rw"
+        };
+        let db_url = format!("file:{}?mode={}", db_name, mode);
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(db_url.as_str())
-            .await?;
-        sqlx::query(ACTIVATION_REQUEST_SCHEMA)
-            .execute(&pool)
-            .await?;
-        sqlx::query(DEACTIVATION_REQUEST_SCHEMA)
-            .execute(&pool)
-            .await?;
-        sqlx::query(ACTIVATION_RESPONSE_SCHEMA)
-            .execute(&pool)
-            .await?;
-        info!("Valid cache enabled at '{}'", &db_name);
-        Ok(Arc::new(Cache {
-            enabled: true,
-            db_name: Some(db_name),
-            db_pool: Some(pool),
-        }))
+            .await
+            .map_err(|e| eyre!(e))
+            .wrap_err(format!("Can't connect to cache db: {}", db_name))?;
+        sqlx::query(ACTIVATION_REQUEST_SCHEMA).execute(&pool).await?;
+        sqlx::query(DEACTIVATION_REQUEST_SCHEMA).execute(&pool).await?;
+        sqlx::query(ACTIVATION_RESPONSE_SCHEMA).execute(&pool).await?;
+        info!("Valid cache database: {}", &db_name);
+        Ok(Arc::new(Cache { enabled: true, db_pool: Some(pool) }))
     }
 
-    pub async fn control(
-        &self, clear: bool, yes: bool, export_file: Option<String>,
-        import_file: Option<String>,
-    ) -> Result<(), sqlx::Error> {
-        if !self.enabled {
-            eprintln!("cache-control: Cache is not enabled");
-            std::process::exit(1);
-        }
-        println!("cache-control: Cache is valid.");
-        let db_name = self.db_name.as_ref().unwrap().to_string();
+    pub async fn clear(&self, yes: bool) -> Result<()> {
         let pool = self.db_pool.as_ref().unwrap();
-        if let Some(path) = import_file {
-            println!("cache-control: Requesting import of cache from '{}'", path);
-            eprintln!("cache-control: Import of cache not yet supported, sorry");
-        }
-        if let Some(path) = export_file {
-            println!("cache-control: Requesting export of cache to '{}'", path);
-            eprintln!("cache-control: Export of cache not yet supported, sorry");
-        }
-        if clear {
-            let confirm = match yes {
-                true => true,
-                false => Confirm::new()
-                    .with_prompt(
-                        "Really clear the cache? This operation cannot be undone.",
-                    )
-                    .default(false)
-                    .show_default(true)
-                    .interact()
-                    .unwrap(),
-            };
-            if confirm {
-                sqlx::query(CLEAR_ALL).execute(pool).await?;
-                println!("cache-control: Cache has been cleared.");
-                info!("Cache at '{}' has been cleared", db_name);
-            }
+        let confirm = match yes {
+            true => true,
+            false => Confirm::new()
+                .with_prompt("Really clear the cache? This operation cannot be undone.")
+                .default(false)
+                .show_default(true)
+                .interact()?,
+        };
+        if confirm {
+            sqlx::query(CLEAR_ALL)
+                .execute(pool)
+                .await
+                .wrap_err("Failed to clear cache")?;
+            info!("Cache has been cleared");
         }
         Ok(())
+    }
+
+    pub async fn import(&self, path: &str) -> Result<()> {
+        std::fs::metadata(path).wrap_err(format!("Cannot import: {}", path))?;
+        todo!()
+    }
+
+    pub async fn export(&self, path: &str) -> Result<()> {
+        if std::fs::metadata(path).is_ok() {
+            return Err(eyre!("Cannot export to an existing file: {}", path));
+        }
+        todo!()
     }
 
     pub async fn store_request(&self, req: &CRequest) {
@@ -103,10 +93,7 @@ impl Cache {
     }
 
     async fn store_activation_request(&self, req: &CRequest) {
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let field_list = r#"
             (
                 activation_key, deactivation_key, api_key, request_id, session_id, device_date,
@@ -119,10 +106,7 @@ impl Cache {
             field_list, value_list
         );
         let a_key = activation_id(req);
-        debug!(
-            "Storing activation request {} with key: {}",
-            &req.request_id, &a_key
-        );
+        debug!("Storing activation request {} with key: {}", &req.request_id, &a_key);
         let result = sqlx::query(&i_str)
             .bind(&a_key)
             .bind(deactivation_id(req))
@@ -146,19 +130,15 @@ impl Cache {
             .execute(pool)
             .await;
         match result {
-            Ok(done) => debug!(
-                "Stored activation request has rowid {}",
-                done.last_insert_rowid()
-            ),
+            Ok(done) => {
+                debug!("Stored activation request has rowid {}", done.last_insert_rowid())
+            }
             Err(err) => error!("Cache store of activation request failed: {:?}", err),
         }
     }
 
     async fn store_deactivation_request(&self, req: &CRequest) {
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let field_list = r#"
             (
                 deactivation_key, api_key, request_id, package_id,
@@ -171,10 +151,7 @@ impl Cache {
             field_list, value_list
         );
         let d_key = deactivation_id(req);
-        debug!(
-            "Storing deactivation request {} with key: {}",
-            &req.request_id, &d_key
-        );
+        debug!("Storing deactivation request {} with key: {}", &req.request_id, &d_key);
         let result = sqlx::query(&i_str)
             .bind(&d_key)
             .bind(&req.api_key)
@@ -208,10 +185,7 @@ impl Cache {
     }
 
     async fn store_activation_response(&self, req: &CRequest, resp: &CResponse) {
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let field_list = "(activation_key, deactivation_key, body, timestamp)";
         let value_list = "(?, ?, ?, ?)";
         let i_str = format!(
@@ -220,10 +194,7 @@ impl Cache {
         );
         let a_key = activation_id(req);
         let d_key = deactivation_id(req);
-        debug!(
-            "Storing activation response {} with key: {}",
-            &req.request_id, &a_key
-        );
+        debug!("Storing activation response {} with key: {}", &req.request_id, &a_key);
         let result = sqlx::query(&i_str)
             .bind(&a_key)
             .bind(&d_key)
@@ -250,27 +221,18 @@ impl Cache {
     }
 
     async fn store_deactivation_response(&self, req: &CRequest, _resp: &CResponse) {
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         // when we get a live deactivation, we remove all the activation request/response pairs
         // this response deactivates, so earlier requests are no longer stored for forwarding
         // and later requests will not receive a cached response.
         let d_key = deactivation_id(req);
-        debug!(
-            "Removing activation requests with deactivation key: {}",
-            d_key
-        );
+        debug!("Removing activation requests with deactivation key: {}", d_key);
         let d_str = "delete from activation_requests where deactivation_key = ?";
         let result = sqlx::query(d_str).bind(&d_key).execute(pool).await;
         if let Err(err) = result {
             error!("Cache delete of activation requests failed: {:?}", err);
         }
-        debug!(
-            "Removing activation responses with deactivation key: {}",
-            d_key
-        );
+        debug!("Removing activation responses with deactivation key: {}", d_key);
         let d_str = "delete from activation_responses where deactivation_key = ?";
         let result = sqlx::query(d_str).bind(&d_key).execute(pool).await;
         if let Err(err) = result {
@@ -297,10 +259,7 @@ impl Cache {
     }
 
     async fn fetch_activation_response(&self, req: &CRequest) -> Option<CResponse> {
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let a_key = activation_id(req);
         let q_str =
             "select body, timestamp from activation_responses where activation_key = ?";
@@ -329,10 +288,7 @@ impl Cache {
     }
 
     async fn fetch_deactivation_response(&self, req: &CRequest) -> Option<CResponse> {
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let a_key = activation_id(req);
         let q_str = "select body from activation_responses where activation_key = ?";
         debug!("Finding deactivation response with key: {}", &a_key);
@@ -364,10 +320,7 @@ impl Cache {
 
     async fn fetch_stored_activations(&self) -> Vec<CRequest> {
         let mut result: Vec<CRequest> = Vec::new();
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let q_str = r#"select * from activation_requests req where not exists
                     (select 1 from activation_responses where
                         activation_key = req.activation_key and
@@ -405,10 +358,7 @@ impl Cache {
 
     async fn fetch_stored_deactivations(&self) -> Vec<CRequest> {
         let mut result: Vec<CRequest> = Vec::new();
-        let pool = self
-            .db_pool
-            .as_ref()
-            .expect("Invoke of cache while disabled.");
+        let pool = self.db_pool.as_ref().expect("Invoke of cache while disabled.");
         let q_str = r#"select * from deactivation_requests"#;
         let rows = sqlx::query(q_str).fetch_all(pool).await;
         if let Err(err) = rows {
@@ -435,22 +385,15 @@ impl Cache {
 }
 
 fn activation_id(req: &CRequest) -> String {
-    let factors: Vec<String> = vec![
-        req.app_id.clone(),
-        req.ngl_version.clone(),
-        deactivation_id(req),
-    ];
+    let factors: Vec<String> =
+        vec![req.app_id.clone(), req.ngl_version.clone(), deactivation_id(req)];
     factors.join("|")
 }
 
 fn deactivation_id(req: &CRequest) -> String {
     let factors: Vec<&str> = vec![
         req.package_id.as_str(),
-        if req.is_vdi {
-            req.os_user_id.as_str()
-        } else {
-            req.device_id.as_str()
-        },
+        if req.is_vdi { req.os_user_id.as_str() } else { req.device_id.as_str() },
     ];
     factors.join("|")
 }
