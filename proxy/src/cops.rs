@@ -257,9 +257,7 @@ impl Request {
             .header("x-request-id", &self.request_id)
             .header("accept", "application/json")
             .header("user-agent", agent());
-        builder
-            .body(Body::empty())
-            .expect("Error building deactivation request body")
+        builder.body(Body::empty()).expect("Error building deactivation request body")
     }
 
     /// update a request with info from network headers
@@ -352,9 +350,7 @@ pub struct BadRequest {
 
 impl BadRequest {
     pub fn from(why: &str) -> BadRequest {
-        BadRequest {
-            reason: why.to_string(),
-        }
+        BadRequest { reason: why.to_string() }
     }
 }
 
