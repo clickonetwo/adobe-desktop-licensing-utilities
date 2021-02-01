@@ -8,6 +8,7 @@ it.
 */
 use crate::cli::FrlProxy;
 use config::{Config, Environment, File as ConfigFile, FileFormat};
+use dialoguer::{Confirm, Input, Password, Select};
 use eyre::{eyre, Report, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -84,11 +85,184 @@ impl Settings {
         }
     }
 
-    pub fn update_config(&self, path: &str) -> Result<()> {
-        // update proxy settings
+    pub fn update_config_file(&mut self, path: &str) -> Result<()> {
+        // update proxy settings including cache db
+        eprintln!("The proxy has four modes: cache, store, forward, and passthrough.");
+        eprintln!(
+            "Read the documentation to understand which is right for each situation."
+        );
+        let choices = vec!["cache", "store", "forward", "passthrough"];
+        let default = match self.proxy.mode {
+            ProxyMode::Cache => 0,
+            ProxyMode::Store => 1,
+            ProxyMode::Forward => 2,
+            ProxyMode::Passthrough => 3,
+        };
+        let choice = Select::new()
+            .items(&choices)
+            .default(default)
+            .with_prompt("Proxy mode")
+            .interact()?;
+        let choice: ProxyMode = choices[choice].try_into().unwrap();
+        self.proxy.mode = choice;
+        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
+        {
+            eprintln!("The proxy uses a SQLite database to keep track of requests and responses.");
+            eprintln!(
+                "The proxy will create this database if one does not already exist."
+            );
+            let choice: String = Input::new()
+                .allow_empty(false)
+                .with_prompt("Name of (or path to) your database file")
+                .with_initial_text(&self.cache.db_path)
+                .interact_text()?;
+            self.cache.db_path = choice;
+        }
+        eprintln!(
+            "The host and port of the proxy must match the one in your license package."
+        );
+        let choice: String = Input::new()
+            .with_prompt("Host (and optional :port) to listen on")
+            .with_initial_text(&self.proxy.host)
+            .interact_text()?;
+        self.proxy.host = choice;
+        eprintln!("Your proxy server must contact one of two Adobe licensing servers.");
+        eprintln!("Use the variable IP server unless your firewall doesn't permit it.");
+        let choices = vec![
+            "Variable IP server (lcs-cops.adobe.io)",
+            "Fixed IP server (lcs-cops-proxy.adobe.com)",
+        ];
+        let default = if self.proxy.remote_host == "https://lcs-cops-proxy.adobe.com" {
+            1
+        } else {
+            0
+        };
+        let choice = Select::new()
+            .items(&choices)
+            .default(default)
+            .with_prompt("Adobe licensing server")
+            .interact()?;
+        self.proxy.remote_host = if choice == 0usize {
+            String::from("https://lcs-cops.adobe.io")
+        } else {
+            String::from("https://lcs-cops-proxy.adobe.com")
+        };
+        eprintln!("MacOS applications can only connect to the proxy via SSL.");
+        eprintln!("Windows applications can use SSL, but they don't require it.");
+        let choice = Confirm::new()
+            .default(self.proxy.ssl)
+            .show_default(true)
+            .wait_for_newline(false)
+            .with_prompt("Use SSL?")
+            .interact()?;
+        self.proxy.ssl = choice;
         // update ssl settings
-        // update cache settings
+        if self.proxy.ssl {
+            eprintln!(
+                "The proxy requires a certificate store in PKCS format to use SSL."
+            );
+            eprintln!(
+                "Read the documentation to learn how to obtain and prepare this file."
+            );
+            let mut need_cert = true;
+            let mut choice = self.ssl.cert_path.clone();
+            while need_cert {
+                choice = Input::new()
+                    .with_prompt("Name of (or path to) your cert file")
+                    .with_initial_text(choice)
+                    .interact_text()?;
+                if std::fs::metadata(&choice).is_ok() {
+                    self.ssl.cert_path = choice.clone();
+                    need_cert = false;
+                } else {
+                    eprintln!("There is no certificate at that path, try again.");
+                }
+            }
+            eprintln!("Usually, for security, PKCS files are encrypted with a password.");
+            eprintln!(
+                "Your proxy will require that password in order to function properly."
+            );
+            eprintln!(
+                "You have the choice of storing your password in your config file or"
+            );
+            eprintln!(
+                "in the value of an environment variable (FRL_PROXY_SSL.CERT_PASSWORD)."
+            );
+            let prompt = if self.ssl.cert_password.is_empty() {
+                "Do you want to store a password in your configuration file?"
+            } else {
+                "Do you want to update the password in your configuration file?"
+            };
+            let choice =
+                Confirm::new().wait_for_newline(false).with_prompt(prompt).interact()?;
+            if choice {
+                let choice = Password::new()
+                    .with_prompt("Enter password")
+                    .with_confirmation("Confirm password", "Passwords don't match")
+                    .allow_empty_password(true)
+                    .interact()?;
+                self.ssl.cert_password = choice;
+            }
+        }
         // update log settings
+        let choice = Confirm::new()
+            .wait_for_newline(false)
+            .with_prompt(
+                "Do you want your proxy server to log information about its operation?",
+            )
+            .interact()?;
+        if choice {
+            eprintln!("The proxy can log to the console (standard output) or to a file on disk.");
+            let choices = vec!["console", "disk file"];
+            let choice = Select::new()
+                .items(&choices)
+                .default(1)
+                .with_prompt("Log destination")
+                .interact()?;
+            self.logging.destination =
+                if choice == 0 { LogDestination::Console } else { LogDestination::File };
+            if choice == 1 {
+                let choice: String = Input::new()
+                    .allow_empty(false)
+                    .with_prompt("Name of (or path to) your log file")
+                    .with_initial_text(&self.logging.file_path)
+                    .interact_text()?;
+                self.logging.file_path = choice;
+            }
+            let mut choice =
+                if let LogLevel::Info = self.logging.level { false } else { true };
+            if !choice {
+                eprintln!("The proxy will log errors, warnings and summary information.");
+                choice = Confirm::new()
+                    .wait_for_newline(false)
+                    .with_prompt("Do you want to adjust the level of logged information?")
+                    .interact()?;
+            }
+            if choice {
+                eprintln!(
+                    "Read the documentation to find out more about logging levels."
+                );
+                let choices = vec!["error", "warn", "info", "debug", "trace"];
+                let default = match self.logging.level {
+                    LogLevel::Error => 0,
+                    LogLevel::Warn => 1,
+                    LogLevel::Info | LogLevel::Off => 2,
+                    LogLevel::Debug => 3,
+                    LogLevel::Trace => 4,
+                };
+                let choice = Select::new()
+                    .items(&choices)
+                    .default(default)
+                    .with_prompt("Log level")
+                    .interact()?;
+                let choice: LogLevel = choices[choice].try_into().unwrap();
+                self.logging.level = choice;
+            }
+        } else {
+            self.logging.level = LogLevel::Off;
+            self.logging.destination = LogDestination::Console;
+        }
+        // save the configuration
         let toml = toml::to_string(self)
             .wrap_err(format!("Cannot serialize configuration: {:?}", self))?;
         let mut file = File::create(path)

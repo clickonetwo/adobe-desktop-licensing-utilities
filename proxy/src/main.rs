@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }
             }
             cli::Command::Configure => {
-                conf.update_config(&args.config_file)?;
+                conf.update_config_file(&args.config_file)?;
             }
             Command::Clear { yes } => {
                 let cache = Cache::from(&conf, false).await?;
@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     } else {
         let conf = Settings::load_config(&args)?.unwrap();
-        conf.update_config(&args.config_file)?;
+        conf.clone().update_config_file(&args.config_file)?;
     }
     Ok(())
 }
