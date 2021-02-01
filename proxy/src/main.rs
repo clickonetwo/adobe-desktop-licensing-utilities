@@ -68,8 +68,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
         }
     } else {
-        let conf = Settings::load_config(&args)?.unwrap();
-        conf.clone().update_config_file(&args.config_file)?;
+        let mut conf = Settings::load_config(&args)?.unwrap();
+        conf.update_config_file(&args.config_file)?;
     }
     Ok(())
 }

@@ -52,7 +52,7 @@ pub struct Settings {
 impl Settings {
     pub fn load_config(args: &FrlProxy) -> Result<Option<Self>> {
         let path = args.config_file.as_str();
-        if let Ok(_) = std::fs::metadata(path) {
+        if std::fs::metadata(path).is_ok() {
             let mut s = Config::new();
             s.merge(ConfigFile::from_str(
                 include_str!("res/defaults.toml"),
@@ -229,8 +229,7 @@ impl Settings {
                     .interact_text()?;
                 self.logging.file_path = choice;
             }
-            let mut choice =
-                if let LogLevel::Info = self.logging.level { false } else { true };
+            let mut choice = !matches!(self.logging.level, LogLevel::Info);
             if !choice {
                 eprintln!("The proxy will log errors, warnings and summary information.");
                 choice = Confirm::new()
@@ -322,9 +321,9 @@ impl TryFrom<&str> for ProxyMode {
         } else if "store".starts_with(&sl) {
             Ok(ProxyMode::Store)
         } else if "forward".starts_with(&sl) {
-            Ok(ProxyMode::Store)
+            Ok(ProxyMode::Forward)
         } else if "passthrough".starts_with(&sl) {
-            Ok(ProxyMode::Store)
+            Ok(ProxyMode::Passthrough)
         } else {
             Err(eyre!("proxy mode '{}' must be a prefix of cache, store, forward or passthrough", s))
         }

@@ -34,7 +34,7 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
         file.read_to_end(&mut identity)
             .wrap_err(format!("Can't read SSL cert data from file: {}", path))?;
         let identity = native_tls::Identity::from_pkcs12(&identity, password)
-            .wrap_err(format!("Can't decrypt SSL cert data - incorrect password?"))?;
+            .wrap_err("Can't decrypt SSL cert data - incorrect password?")?;
         let sync_acceptor = native_tls::TlsAcceptor::new(identity)
             .wrap_err("Can't create TLS socket listener - is the port free?")?;
         let async_acceptor: TlsAcceptor = sync_acceptor.into();
