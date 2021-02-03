@@ -42,28 +42,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 conf.validate()?;
                 logging::init(&conf)?;
                 debug!("conf: {:?}", conf);
-                let cache = Cache::from(&conf, true).await?;
                 if let ProxyMode::Forward = conf.proxy.mode {
+                    let cache = Cache::from(&conf, false).await?;
                     proxy::forward_stored_requests(&conf, cache).await;
-                } else if conf.proxy.ssl {
-                    secure::run_server(&conf, cache).await?;
                 } else {
-                    plain::run_server(&conf, cache).await?;
+                    let cache = Cache::from(&conf, true).await?;
+                    if conf.proxy.ssl {
+                        secure::run_server(&conf, cache).await?;
+                    } else {
+                        plain::run_server(&conf, cache).await?;
+                    }
                 }
             }
             cli::Command::Configure => {
+                conf.validate()?;
+                // do not log configuration changes, because
+                // logging might interfere with the interactions
+                // and there really isn't anything to log.
                 conf.update_config_file(&args.config_file)?;
             }
             Command::Clear { yes } => {
-                let cache = Cache::from(&conf, false).await?;
+                conf.proxy.mode = ProxyMode::Cache;
+                conf.validate()?;
+                logging::init(&conf)?;
+                let cache = Cache::from(&conf, true).await?;
                 cache.clear(yes).await?;
             }
             Command::Import { import_path } => {
+                conf.proxy.mode = ProxyMode::Cache;
+                conf.validate()?;
+                logging::init(&conf)?;
                 let cache = Cache::from(&conf, true).await?;
                 cache.import(&import_path).await?;
             }
             Command::Export { export_path } => {
-                let cache = Cache::from(&conf, true).await?;
+                conf.proxy.mode = ProxyMode::Cache;
+                conf.validate()?;
+                logging::init(&conf)?;
+                let cache = Cache::from(&conf, false).await?;
                 cache.export(&export_path).await?;
             }
         }
