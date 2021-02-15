@@ -16,7 +16,7 @@ mod proxy;
 mod settings;
 
 use crate::cli::Command;
-use crate::settings::ProxyMode;
+use crate::settings::{LogDestination, ProxyMode};
 use cache::Cache;
 use cli::FrlProxy;
 use log::debug;
@@ -63,6 +63,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             Command::Clear { yes } => {
                 conf.proxy.mode = ProxyMode::Cache;
+                // log to file, because this command is interactive
+                conf.logging.destination = LogDestination::File;
                 conf.validate()?;
                 logging::init(&conf)?;
                 let cache = Cache::from(&conf, true).await?;
@@ -70,6 +72,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             Command::Import { import_path } => {
                 conf.proxy.mode = ProxyMode::Cache;
+                // log to file, because this command is interactive
+                conf.logging.destination = LogDestination::File;
                 conf.validate()?;
                 logging::init(&conf)?;
                 let cache = Cache::from(&conf, true).await?;
@@ -77,6 +81,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             Command::Export { export_path } => {
                 conf.proxy.mode = ProxyMode::Cache;
+                // log to file, because this command is interactive
+                conf.logging.destination = LogDestination::File;
                 conf.validate()?;
                 logging::init(&conf)?;
                 let cache = Cache::from(&conf, false).await?;

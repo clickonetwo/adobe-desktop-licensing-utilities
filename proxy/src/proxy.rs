@@ -74,6 +74,7 @@ async fn serve_req(
                 // cache the response
                 let resp = CResponse::from_network(&req, &body);
                 cache.store_response(&req, &resp).await;
+                cache.process_response(&req).await;
                 // return the response
                 Ok(HResponse::from_parts(parts, Body::from(body)))
             } else if let Some(resp) = cache.fetch_response(&req).await {
@@ -96,7 +97,7 @@ async fn serve_req(
 }
 
 pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
-    let requests = cache.fetch_stored_requests().await;
+    let requests = cache.fetch_forwarding_requests().await;
     for req in requests.iter() {
         info!("Forwarding stored {} request {}", req.kind, &req.request_id);
         match call_cops(&conf, &req).await {
