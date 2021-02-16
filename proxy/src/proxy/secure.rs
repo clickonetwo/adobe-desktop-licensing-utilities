@@ -64,7 +64,7 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
 
     // Run the server, keep going until an error occurs.
     info!("Starting to serve on https://{}", conf.proxy.host);
-    graceful.await?;
+    graceful.await.wrap_err("Unexpected server shutdown")?;
     Ok(())
 }
 

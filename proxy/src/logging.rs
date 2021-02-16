@@ -7,11 +7,12 @@ accordance with the terms of the Adobe license agreement accompanying
 it.
 */
 use crate::settings::{LogDestination, LogLevel, Settings};
-use fern::{log_file, Dispatch, InitError};
+use eyre::{Result, WrapErr};
+use fern::{log_file, Dispatch};
 use log::LevelFilter;
 use std::io;
 
-pub fn init(conf: &Settings) -> Result<(), InitError> {
+pub fn init(conf: &Settings) -> Result<()> {
     let mut base_config = Dispatch::new().format(|out, message, record| {
         out.finish(format_args!(
             "{}[{}][{}] {}",
@@ -33,7 +34,7 @@ pub fn init(conf: &Settings) -> Result<(), InitError> {
             )
         }
     }
-    base_config.apply()?;
+    base_config.apply().wrap_err("Cannot initialize logging subsystem")?;
     Ok(())
 }
 

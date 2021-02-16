@@ -19,13 +19,15 @@ use crate::cli::Command;
 use crate::settings::{LogDestination, ProxyMode};
 use cache::Cache;
 use cli::FrlProxy;
+use eyre::{Result, WrapErr};
 use log::debug;
 use proxy::{plain, secure};
 use settings::Settings;
 use std::convert::TryInto;
+use std::sync::Arc;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<()> {
     openssl_probe::init_ssl_cert_env_vars();
     let args: FrlProxy = FrlProxy::from_args();
 
@@ -44,14 +46,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 debug!("conf: {:?}", conf);
                 if let ProxyMode::Forward = conf.proxy.mode {
                     let cache = Cache::from(&conf, false).await?;
-                    proxy::forward_stored_requests(&conf, cache).await;
+                    proxy::forward_stored_requests(&conf, Arc::clone(&cache)).await;
+                    cache.close().await;
                 } else {
                     let cache = Cache::from(&conf, true).await?;
                     if conf.proxy.ssl {
-                        secure::run_server(&conf, cache).await?;
+                        secure::run_server(&conf, Arc::clone(&cache)).await?;
                     } else {
-                        plain::run_server(&conf, cache).await?;
+                        plain::run_server(&conf, Arc::clone(&cache)).await?;
                     }
+                    cache.close().await;
                 }
             }
             cli::Command::Configure => {
@@ -68,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 conf.validate()?;
                 logging::init(&conf)?;
                 let cache = Cache::from(&conf, true).await?;
-                cache.clear(yes).await?;
+                cache.clear(yes).await.wrap_err("Failed to clear cache")?;
             }
             Command::Import { import_path } => {
                 conf.proxy.mode = ProxyMode::Cache;
@@ -77,7 +81,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 conf.validate()?;
                 logging::init(&conf)?;
                 let cache = Cache::from(&conf, true).await?;
-                cache.import(&import_path).await?;
+                cache
+                    .import(&import_path)
+                    .await
+                    .wrap_err(format!("Failed to import from {}", &import_path))?;
             }
             Command::Export { export_path } => {
                 conf.proxy.mode = ProxyMode::Cache;
@@ -86,12 +93,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 conf.validate()?;
                 logging::init(&conf)?;
                 let cache = Cache::from(&conf, false).await?;
-                cache.export(&export_path).await?;
+                cache
+                    .export(&export_path)
+                    .await
+                    .wrap_err(format!("Failed to export to {}", &export_path))?;
             }
         }
     } else {
         let mut conf = Settings::load_config(&args)?.unwrap();
-        conf.update_config_file(&args.config_file)?;
+        conf.update_config_file(&args.config_file)
+            .wrap_err("Failed to update configuration file")?;
     }
     Ok(())
 }

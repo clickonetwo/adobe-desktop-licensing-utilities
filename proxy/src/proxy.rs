@@ -74,7 +74,6 @@ async fn serve_req(
                 // cache the response
                 let resp = CResponse::from_network(&req, &body);
                 cache.store_response(&req, &resp).await;
-                cache.process_response(&req).await;
                 // return the response
                 Ok(HResponse::from_parts(parts, Body::from(body)))
             } else if let Some(resp) = cache.fetch_response(&req).await {
