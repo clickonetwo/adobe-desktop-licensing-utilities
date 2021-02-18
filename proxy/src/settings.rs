@@ -88,9 +88,7 @@ impl Settings {
     pub fn update_config_file(&mut self, path: &str) -> Result<()> {
         // update proxy settings including cache db
         eprintln!("The proxy has four modes: cache, store, forward, and passthrough.");
-        eprintln!(
-            "Read the documentation to understand which is right for each situation."
-        );
+        eprintln!("Read the user guide to understand which is right for each situation.");
         let choices = vec!["cache", "store", "forward", "passthrough"];
         let default = match self.proxy.mode {
             ProxyMode::Cache => 0,
@@ -162,7 +160,7 @@ impl Settings {
                 "The proxy requires a certificate store in PKCS format to use SSL."
             );
             eprintln!(
-                "Read the documentation to learn how to obtain and prepare this file."
+                "Read the user guide to learn how to obtain and prepare this file."
             );
             let mut need_cert = true;
             let mut choice = self.ssl.cert_path.clone();
@@ -238,9 +236,7 @@ impl Settings {
                     .interact()?;
             }
             if choice {
-                eprintln!(
-                    "Read the documentation to find out more about logging levels."
-                );
+                eprintln!("Read the user guide to find out more about logging levels.");
                 let choices = vec!["error", "warn", "info", "debug", "trace"];
                 let default = match self.logging.level {
                     LogLevel::Error => 0,
