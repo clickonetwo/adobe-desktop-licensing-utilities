@@ -34,7 +34,8 @@ impl Cache {
         let mode = if can_create {
             "rwc"
         } else {
-            std::fs::metadata(db_name)?;
+            std::fs::metadata(db_name)
+                .wrap_err(format!("Can't open cache db: {}", db_name))?;
             "rw"
         };
         let pool = db_init(db_name, mode)
@@ -81,7 +82,7 @@ impl Cache {
     pub async fn import(&self, path: &str) -> Result<()> {
         std::fs::metadata(path)?;
         // first read the forwarded pairs
-        let in_pool = db_init(path, "ro").await?;
+        let in_pool = db_init(path, "rw").await?;
         let pairs = fetch_forwarded_pairs(&in_pool).await?;
         in_pool.close().await;
         // now add them to the cache
