@@ -19,6 +19,8 @@ use std::io::prelude::*;
 pub struct Proxy {
     pub mode: ProxyMode,
     pub host: String,
+    pub port: String,
+    pub ssl_port: String,
     pub remote_host: String,
     pub ssl: bool,
 }
@@ -120,10 +122,15 @@ impl Settings {
             "The host and port of the proxy must match the one in your license package."
         );
         let choice: String = Input::new()
-            .with_prompt("Host (and optional :port) to listen on")
+            .with_prompt("Host IP to listen on")
             .with_initial_text(&self.proxy.host)
             .interact_text()?;
         self.proxy.host = choice;
+        let choice: String = Input::new()
+            .with_prompt("Host port for http (non-ssl) mode")
+            .with_initial_text(&self.proxy.port)
+            .interact_text()?;
+        self.proxy.port = choice;
         eprintln!("Your proxy server must contact one of two Adobe licensing servers.");
         eprintln!("Use the variable IP server unless your firewall doesn't permit it.");
         let choices = vec![
@@ -156,6 +163,11 @@ impl Settings {
         self.proxy.ssl = choice;
         // update ssl settings
         if self.proxy.ssl {
+            let choice: String = Input::new()
+                .with_prompt("Host port for https mode")
+                .with_initial_text(&self.proxy.ssl_port)
+                .interact_text()?;
+            self.proxy.ssl_port = choice;
             eprintln!(
                 "The proxy requires a certificate store in PKCS format to use SSL."
             );
@@ -286,6 +298,9 @@ impl Settings {
             }
             std::fs::metadata(path)
                 .wrap_err(format!("Invalid certificate path: {}", path))?;
+        }
+        if self.proxy.host.contains(":") {
+            return Err(eyre!("Host must not contain a port (use the 'port' and 'ssl_port' config options)"));
         }
         if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
         {
