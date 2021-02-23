@@ -299,7 +299,7 @@ impl Settings {
             std::fs::metadata(path)
                 .wrap_err(format!("Invalid certificate path: {}", path))?;
         }
-        if self.proxy.host.contains(":") {
+        if self.proxy.host.contains(':') {
             return Err(eyre!("Host must not contain a port (use the 'port' and 'ssl_port' config options)"));
         }
         if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
