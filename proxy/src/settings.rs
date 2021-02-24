@@ -191,8 +191,11 @@ impl Settings {
             } else {
                 "Do you want to update the password in your configuration file?"
             };
-            let choice =
-                Confirm::new().wait_for_newline(false).with_prompt(prompt).interact()?;
+            let choice = Confirm::new()
+                .default(false)
+                .wait_for_newline(false)
+                .with_prompt(prompt)
+                .interact()?;
             if choice {
                 let choice = Password::new()
                     .with_prompt("Enter password")
@@ -203,11 +206,15 @@ impl Settings {
             }
         }
         // update log settings
+        let prompt = if let LogLevel::Off = self.logging.level {
+            "Do you want your proxy server to log information about its operation?"
+        } else {
+            "Do you want to customize your proxy server's logging configuration?"
+        };
         let choice = Confirm::new()
+            .default(false)
             .wait_for_newline(false)
-            .with_prompt(
-                "Do you want your proxy server to log information about its operation?",
-            )
+            .with_prompt(prompt)
             .interact()?;
         if choice {
             eprintln!("The proxy can log to the console (standard output) or to a file on disk.");
@@ -231,19 +238,22 @@ impl Settings {
             if !choice {
                 eprintln!("The proxy will log errors, warnings and summary information.");
                 choice = Confirm::new()
+                    .default(false)
                     .wait_for_newline(false)
                     .with_prompt("Do you want to adjust the level of logged information?")
                     .interact()?;
             }
             if choice {
                 eprintln!("Read the user guide to find out more about logging levels.");
-                let choices = vec!["error", "warn", "info", "debug", "trace"];
+                let choices =
+                    vec!["no logging", "error", "warn", "info", "debug", "trace"];
                 let default = match self.logging.level {
-                    LogLevel::Error => 0,
-                    LogLevel::Warn => 1,
-                    LogLevel::Info | LogLevel::Off => 2,
-                    LogLevel::Debug => 3,
-                    LogLevel::Trace => 4,
+                    LogLevel::Off => 0,
+                    LogLevel::Error => 1,
+                    LogLevel::Warn => 2,
+                    LogLevel::Info => 3,
+                    LogLevel::Debug => 4,
+                    LogLevel::Trace => 5,
                 };
                 let choice = Select::new()
                     .items(&choices)

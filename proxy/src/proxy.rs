@@ -97,6 +97,12 @@ async fn serve_req(
 
 pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
     let requests = cache.fetch_forwarding_requests().await;
+    if requests.is_empty() {
+        eprintln!("No requests to forward.");
+        return;
+    }
+    eprintln!("Starting to forward {} request(s)...", requests.len());
+    let (mut successes, mut failures) = (0u64, 0u64);
     for req in requests.iter() {
         info!("Forwarding stored {} request {}", req.kind, &req.request_id);
         match call_cops(&conf, &req).await {
@@ -114,6 +120,7 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
                     // cache the response
                     let resp = CResponse::from_network(&req, &body);
                     cache.store_response(&req, &resp).await;
+                    successes += 1;
                 } else {
                     // the COPS call failed
                     info!("Received failure response ({:?}) from COPS", parts.status);
@@ -122,6 +129,7 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
                         "Received failure response body {}",
                         std::str::from_utf8(&body).unwrap()
                     );
+                    failures += 1;
                 }
             }
             Err(err) => {
@@ -129,6 +137,10 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
             }
         };
     }
+    eprintln!(
+        "Received {} success response(s) and {} failure response(s).",
+        successes, failures
+    );
 }
 
 async fn call_cops(

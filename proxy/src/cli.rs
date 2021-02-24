@@ -11,7 +11,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(about = "A caching, store/forward, reverse proxy for Adobe FRL licensing")]
 pub struct FrlProxy {
-    #[structopt(short, long, default_value = "frl-proxy.conf")]
+    #[structopt(short, long, default_value = "proxy-conf.toml")]
     /// Path to config file.
     pub config_file: String,
 

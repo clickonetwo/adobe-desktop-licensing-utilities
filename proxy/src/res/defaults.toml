@@ -5,13 +5,13 @@ remote_host = "https://lcs-cops.adobe.io"
 ssl = true
 
 [ssl]
-cert_path = "frl-proxy.pkcs"
+cert_path = "proxy-cert.pfx"
 cert_password = ""
 
 [logging]
 level = "info"
-destination = "console"
-file_path = "frl-proxy.log"
+destination = "file"
+file_path = "proxy-log.log"
 
 [cache]
-db_path = "frl-proxy.cache"
+db_path = "proxy-cache.sqlite"
