@@ -11,11 +11,11 @@ use crate::cache::Cache;
 use crate::settings::Settings;
 use async_stream::stream;
 use core::task::{Context, Poll};
+use eyre::{Result, WrapErr};
 use futures_util::stream::{Stream, StreamExt};
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
 use log::{error, info};
-use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::pin::Pin;
@@ -24,25 +24,25 @@ use tokio::io;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_native_tls::{native_tls, TlsAcceptor, TlsStream};
 
-pub async fn run_server(
-    conf: &Settings, cache: Arc<Cache>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
     let acceptor = {
-        let path = conf.proxy.ssl_cert.as_ref().unwrap();
-        let password = conf.proxy.ssl_password.as_ref().unwrap();
-        let mut file = File::open(path).unwrap();
+        let path = &conf.ssl.cert_path;
+        let password = &conf.ssl.cert_password;
+        let mut file = File::open(path)
+            .wrap_err(format!("Can't open SSL certificate file: {}", path))?;
         let mut identity = vec![];
-        file.read_to_end(&mut identity).unwrap();
-        let identity = native_tls::Identity::from_pkcs12(&identity, password).unwrap();
-        let sync_acceptor = native_tls::TlsAcceptor::new(identity).unwrap();
+        file.read_to_end(&mut identity)
+            .wrap_err(format!("Can't read SSL cert data from file: {}", path))?;
+        let identity = native_tls::Identity::from_pkcs12(&identity, password)
+            .wrap_err("Can't decrypt SSL cert data - incorrect password?")?;
+        let sync_acceptor = native_tls::TlsAcceptor::new(identity)
+            .wrap_err("Can't create TLS socket listener - is the port free?")?;
         let async_acceptor: TlsAcceptor = sync_acceptor.into();
         async_acceptor
     };
     let tcp = TcpListener::bind(&conf.proxy.host).await?;
     let incoming_tls_stream = incoming(tcp, acceptor).boxed();
-    let hyper_acceptor = HyperAcceptor {
-        acceptor: incoming_tls_stream,
-    };
+    let hyper_acceptor = HyperAcceptor { acceptor: incoming_tls_stream };
     let service = make_service_fn(move |_| {
         let conf = conf.clone();
         let cache = Arc::clone(&cache);
@@ -64,7 +64,7 @@ pub async fn run_server(
 
     // Run the server, keep going until an error occurs.
     info!("Starting to serve on https://{}", conf.proxy.host);
-    graceful.await?;
+    graceful.await.wrap_err("Unexpected server shutdown")?;
     Ok(())
 }
 

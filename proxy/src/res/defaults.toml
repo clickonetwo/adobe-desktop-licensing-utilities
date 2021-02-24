@@ -1,13 +1,17 @@
 [proxy]
-mode = "passthrough"
-host = "127.0.0.1:3030"
+mode = "cache"
+host = "0.0.0.0:8443"
 remote_host = "https://lcs-cops.adobe.io"
-ssl = false
+ssl = true
+
+[ssl]
+cert_path = "proxy-cert.pfx"
+cert_password = ""
 
 [logging]
-console_log_level = "info"
-log_to_file = false
-file_log_level = "info"
-file_log_path = "frl-proxy.log"
+level = "info"
+destination = "file"
+file_path = "proxy-log.log"
 
 [cache]
+db_path = "proxy-cache.sqlite"

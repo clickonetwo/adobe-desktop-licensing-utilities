@@ -6,10 +6,10 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use eyre::Result;
+use eyre::{Result, WrapErr};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
-use log::{error, info};
+use log::info;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -39,9 +39,8 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
         rx.await.ok();
     });
 
-    if let Err(e) = graceful.await {
-        error!("server error: {}", e);
-    }
-
+    // Run the server, keep going until an error occurs.
+    info!("Starting to serve on https://{}", conf.proxy.host);
+    graceful.await.wrap_err("Unexpected server shutdown")?;
     Ok(())
 }

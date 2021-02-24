@@ -6,81 +6,53 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use std::str::ParseBoolError;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
+#[structopt(about = "A caching, store/forward, reverse proxy for Adobe FRL licensing")]
+pub struct FrlProxy {
+    #[structopt(short, long, default_value = "proxy-conf.toml")]
+    /// Path to config file.
+    pub config_file: String,
+
+    #[structopt(short, parse(from_occurrences))]
+    /// Specify once to force log level to debug.
+    /// Specify twice to force log level to trace.
+    pub debug: u8,
+
+    #[structopt(short, long)]
+    /// Override configured log destination: 'console' or 'file'.
+    /// You can use just the first letter, so '-l c' and '-l f' work.
+    pub log_to: Option<String>,
+
+    #[structopt(subcommand)]
+    pub cmd: Command,
+}
+
+#[derive(Debug, StructOpt)]
 /// FRL Proxy
-pub enum Opt {
+pub enum Command {
     /// Start the proxy server
     Start {
-        #[structopt(short, long)]
-        /// Path to optional config file
-        config_file: Option<String>,
-
         #[structopt(short, long)]
         /// Mode to run the proxy in, one of passthrough, cache, store, or forward.
         /// You can use any prefix of these names (minimally p, c, s, or f)
         mode: Option<String>,
 
-        #[structopt(long)]
-        /// Proxy hostname
-        host: Option<String>,
-
-        #[structopt(long)]
-        /// Remote (licensing server) hostname
-        remote_host: Option<String>,
-
-        #[structopt(long, parse(try_from_str = parse_bool))]
+        #[structopt(long, parse(try_from_str))]
         /// Enable SSL? (true or false)
         ssl: Option<bool>,
-
-        #[structopt(long)]
-        /// Path to SSL certificate (pkcs12 format)
-        ssl_cert: Option<String>,
-
-        #[structopt(long)]
-        /// SSL certificate password
-        ssl_password: Option<String>,
     },
-    /// Create a template config file
-    InitConfig {
-        #[structopt(short, long, default_value = "config.toml")]
-        /// path to config filename
-        out_file: String,
-    },
-    /// Manage the cache file
-    CacheControl {
+    /// Interactively create the config file
+    Configure,
+    /// Clear the cache (requires confirmation)
+    Clear {
         #[structopt(short, long)]
-        /// Path to optional config file
-        config_file: Option<String>,
-
-        #[structopt(short = "C", long)]
-        /// Path to cache file
-        cache_file: Option<String>,
-
-        #[structopt(long)]
-        /// Whether to clear the cache (dangerous!)
-        clear: bool,
-
-        #[structopt(short)]
-        /// Bypass confirmation prompts
+        /// Bypass confirmation prompt
         yes: bool,
-
-        #[structopt(short, long)]
-        /// Export cache to a file (not yet implemented)
-        export_file: Option<String>,
-
-        #[structopt(short, long)]
-        /// Import cache from a file (not yet implemented)
-        import_file: Option<String>,
     },
-}
-
-fn parse_bool(arg: &str) -> Result<bool, ParseBoolError> {
-    match arg.to_ascii_lowercase().as_str() {
-        "1" | "yes" => Ok(true),
-        "0" | "no" => Ok(false),
-        arg => arg.parse(),
-    }
+    /// Import stored responses from a forwarder
+    Import { import_path: String },
+    /// Export stored requests for a forwarder
+    Export { export_path: String },
 }
