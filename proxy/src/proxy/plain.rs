@@ -18,7 +18,8 @@ use crate::cache::Cache;
 use crate::settings::Settings;
 
 pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
-    let addr: SocketAddr = conf.proxy.host.parse()?;
+    let full_host = format!("{}:{}", conf.proxy.host, conf.proxy.port);
+    let addr: SocketAddr = full_host.parse()?;
     info!("Listening on http://{}", addr);
     let make_svc = make_service_fn(move |_| {
         let conf = conf.clone();
@@ -40,7 +41,7 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
     });
 
     // Run the server, keep going until an error occurs.
-    info!("Starting to serve on https://{}", conf.proxy.host);
+    info!("Starting to serve on http://{}", full_host);
     graceful.await.wrap_err("Unexpected server shutdown")?;
     Ok(())
 }

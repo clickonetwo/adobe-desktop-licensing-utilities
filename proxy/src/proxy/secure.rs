@@ -40,7 +40,8 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
         let async_acceptor: TlsAcceptor = sync_acceptor.into();
         async_acceptor
     };
-    let tcp = TcpListener::bind(&conf.proxy.host).await?;
+    let full_host = format!("{}:{}", conf.proxy.host, conf.proxy.ssl_port);
+    let tcp = TcpListener::bind(&full_host).await?;
     let incoming_tls_stream = incoming(tcp, acceptor).boxed();
     let hyper_acceptor = HyperAcceptor { acceptor: incoming_tls_stream };
     let service = make_service_fn(move |_| {
@@ -63,7 +64,7 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
     });
 
     // Run the server, keep going until an error occurs.
-    info!("Starting to serve on https://{}", conf.proxy.host);
+    info!("Starting to serve on https://{}", full_host);
     graceful.await.wrap_err("Unexpected server shutdown")?;
     Ok(())
 }
