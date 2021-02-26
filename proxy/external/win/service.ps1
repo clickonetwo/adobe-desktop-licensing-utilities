@@ -25,12 +25,12 @@ $serviceName = "FRL Online Proxy";
 
 switch ($cmd) {
     start {
-        $cfg = "$PSScriptRoot\config.toml"
+        $cfg = "$PSScriptRoot\proxy-conf.toml"
         if (![System.IO.File]::Exists($cfg)) {
             echo "Config file required";
             exit 1;
         }
-        ./bin/nssm install $serviceName "$PSScriptRoot\frl-proxy.exe" "start --config-file $cfg";
+        ./bin/nssm install $serviceName "$PSScriptRoot\frl-proxy.exe" "--config-file $cfg start";
         ./bin/nssm start $serviceName;
     }
     stop {
