@@ -12,12 +12,17 @@ pub mod secure;
 use crate::cache::Cache;
 use crate::cops::{agent, BadRequest, Request as CRequest, Response as CResponse};
 use crate::settings::ProxyMode;
-use hyper::{Body, Client, Request as HRequest, Response as HResponse, Uri};
+use crate::settings::Settings;
+
+use eyre::{Report, Result, WrapErr};
+use headers::Authorization;
+use hyper::{
+    client::HttpConnector, Body, Client, Request as HRequest, Response as HResponse, Uri,
+};
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
 use log::{debug, error, info};
 use std::sync::{Arc, Mutex};
-
-use crate::settings::Settings;
 
 fn ctrl_c_handler<F>(f: F)
 where
@@ -38,7 +43,7 @@ where
 
 async fn serve_req(
     req: HRequest<Body>, conf: Settings, cache: Arc<Cache>,
-) -> Result<HResponse<Body>, hyper::Error> {
+) -> Result<HResponse<Body>> {
     let (parts, body) = req.into_parts();
     let body = hyper::body::to_bytes(body).await?;
     info!("Received request for {:?}", parts.uri);
@@ -143,9 +148,7 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
     );
 }
 
-async fn call_cops(
-    conf: &Settings, req: &CRequest,
-) -> Result<HResponse<Body>, hyper::Error> {
+async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
     let cops_uri =
         conf.proxy.remote_host.parse::<Uri>().unwrap_or_else(|_| {
             panic!("failed to parse uri: {}", conf.proxy.remote_host)
@@ -169,13 +172,42 @@ async fn call_cops(
         "Forwarding request {} to COPS at {}://{}",
         req.request_id, cops_scheme, cops_host
     );
-    let net_req = req.to_network(&cops_scheme, &cops_host);
-    if cops_scheme == "https" {
-        let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, hyper::Body>(https);
-        client.request(net_req).await
+    let mut net_req = req.to_network(&cops_scheme, &cops_host);
+    if conf.network.use_proxy {
+        // proxy
+        let proxy_url =
+            format!("http://{}:{}", conf.network.proxy_host, conf.network.proxy_port);
+        info!("Connecting via proxy: {}", proxy_url);
+        let proxy = {
+            let proxy_uri =
+                proxy_url.parse().wrap_err("Cannot parse upstream proxy URL")?;
+            let mut proxy = Proxy::new(Intercept::All, proxy_uri);
+            if conf.network.use_basic_auth {
+                proxy.set_authorization(Authorization::basic(
+                    &conf.network.proxy_username,
+                    &conf.network.proxy_password,
+                ));
+            }
+            let connector = HttpConnector::new();
+            ProxyConnector::from_proxy(connector, proxy)
+                .wrap_err("Failed to create proxy connector")?
+        };
+        // add any needed proxy headers (authorization, typically) to ther request
+        if let Some(headers) = proxy.http_headers(&net_req.uri()) {
+            net_req.headers_mut().extend(headers.clone().into_iter());
+        }
+        let client = Client::builder().build(proxy);
+        client.request(net_req).await.wrap_err("Failed to reach licensing server")
     } else {
-        Client::new().request(net_req).await
+        // no proxy
+        if cops_scheme == "https" {
+            let https = HttpsConnector::new();
+            let client = Client::builder().build::<_, hyper::Body>(https);
+            client.request(net_req).await.wrap_err("Failed to reach licensing server")
+        } else {
+            let client = Client::new();
+            client.request(net_req).await.wrap_err("Failed to reach licensing server")
+        }
     }
 }
 
@@ -190,7 +222,7 @@ fn bad_request_response(err: &BadRequest) -> HResponse<Body> {
         .unwrap()
 }
 
-fn cops_failure_response(err: hyper::Error) -> HResponse<Body> {
+fn cops_failure_response(err: Report) -> HResponse<Body> {
     let msg = format!("Failed to get a response from COPS: {:?}", err);
     error!("{}", msg);
     let body = serde_json::json!({"statusCode": 502, "message": msg});
