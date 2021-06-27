@@ -14,15 +14,15 @@ use crate::cops::{agent, BadRequest, Request as CRequest, Response as CResponse}
 use crate::settings::ProxyMode;
 use crate::settings::Settings;
 
-use eyre::{Report, Result, WrapErr};
+use eyre::{eyre, Report, Result, WrapErr};
 use headers::Authorization;
-use hyper::{
-    client::HttpConnector, Body, Client, Request as HRequest, Response as HResponse, Uri,
-};
+use hyper::client::HttpConnector;
+use hyper::{Body, Client, Request as HRequest, Response as HResponse, Uri};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
 use log::{debug, error, info};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 fn ctrl_c_handler<F>(f: F)
 where
@@ -89,9 +89,9 @@ async fn serve_req(
             } else {
                 // COPS call failed, and no cache, so tell client
                 info!("Returning failure response ({:?}) from COPS", parts.status);
-                debug!("Received failure response headers {:?}", parts.headers);
+                debug!("Returning failure response headers {:?}", parts.headers);
                 debug!(
-                    "Received failure response body {}",
+                    "Returning failure response body {}",
                     std::str::from_utf8(&body).unwrap()
                 );
                 Ok(HResponse::from_parts(parts, Body::from(body)))
@@ -138,7 +138,7 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
                 }
             }
             Err(err) => {
-                error!("No response received from COPS: {:?}", err)
+                error!("No response received from COPS: {}", err)
             }
         };
     }
@@ -173,10 +173,12 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
         req.request_id, cops_scheme, cops_host
     );
     let mut net_req = req.to_network(&cops_scheme, &cops_host);
-    if conf.network.use_proxy {
+    let request = if conf.network.use_proxy {
         // proxy
-        let proxy_url =
-            format!("http://{}:{}", conf.network.proxy_host, conf.network.proxy_port);
+        let proxy_url = format!(
+            "{}://{}:{}",
+            "http", conf.network.proxy_host, conf.network.proxy_port
+        );
         info!("Connecting via proxy: {}", proxy_url);
         let proxy = {
             let proxy_uri =
@@ -192,21 +194,33 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
             ProxyConnector::from_proxy(connector, proxy)
                 .wrap_err("Failed to create proxy connector")?
         };
-        // add any needed proxy headers (authorization, typically) to ther request
+        // add any needed proxy headers (authorization, typically) to the request
         if let Some(headers) = proxy.http_headers(&net_req.uri()) {
             net_req.headers_mut().extend(headers.clone().into_iter());
         }
         let client = Client::builder().build(proxy);
-        client.request(net_req).await.wrap_err("Failed to reach licensing server")
+        client.request(net_req)
     } else {
         // no proxy
         if cops_scheme == "https" {
             let https = HttpsConnector::new();
             let client = Client::builder().build::<_, hyper::Body>(https);
-            client.request(net_req).await.wrap_err("Failed to reach licensing server")
+            client.request(net_req)
         } else {
             let client = Client::new();
-            client.request(net_req).await.wrap_err("Failed to reach licensing server")
+            client.request(net_req)
+        }
+    };
+    let timeout = 59000u64; // just under 60 seconds, which is typical client timeout
+    #[cfg(debug_assertions)]
+    let timeout = match std::env::var("FRL_PROXY_TIMEOUT") {
+        Ok(s) => s.parse::<u64>().unwrap(),
+        Err(_) => timeout,
+    };
+    match tokio::time::timeout(Duration::from_millis(timeout), request).await {
+        Ok(response) => response.wrap_err("Network error"),
+        Err(_) => {
+            Err(eyre!("Timeout - no response received in {} milliseconds", timeout))
         }
     }
 }
@@ -223,7 +237,7 @@ fn bad_request_response(err: &BadRequest) -> HResponse<Body> {
 }
 
 fn cops_failure_response(err: Report) -> HResponse<Body> {
-    let msg = format!("Failed to get a response from COPS: {:?}", err);
+    let msg = format!("Failed to get a response from COPS: {}", err);
     error!("{}", msg);
     let body = serde_json::json!({"statusCode": 502, "message": msg});
     HResponse::builder()
