@@ -6,7 +6,7 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use eyre::{Result, WrapErr};
+use eyre::{Report, Result, WrapErr};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
 use log::info;
@@ -25,7 +25,7 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
         let conf = conf.clone();
         let cache = Arc::clone(&cache);
         async move {
-            Ok::<_, hyper::Error>(service_fn(move |_req| {
+            Ok::<_, Report>(service_fn(move |_req| {
                 let conf = conf.clone();
                 let cache = Arc::clone(&cache);
                 async move { serve_req(_req, conf, cache).await }

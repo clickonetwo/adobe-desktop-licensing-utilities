@@ -11,7 +11,7 @@ use crate::cache::Cache;
 use crate::settings::Settings;
 use async_stream::stream;
 use core::task::{Context, Poll};
-use eyre::{Result, WrapErr};
+use eyre::{Report, Result, WrapErr};
 use futures_util::stream::{Stream, StreamExt};
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
@@ -48,7 +48,7 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
         let conf = conf.clone();
         let cache = Arc::clone(&cache);
         async move {
-            Ok::<_, hyper::Error>(service_fn(move |_req| {
+            Ok::<_, Report>(service_fn(move |_req| {
                 let conf = conf.clone();
                 let cache = Arc::clone(&cache);
                 async move { serve_req(_req, conf, cache).await }

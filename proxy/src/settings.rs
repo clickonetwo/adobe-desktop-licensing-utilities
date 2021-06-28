@@ -44,11 +44,22 @@ pub struct Cache {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Network {
+    pub use_proxy: bool,
+    pub proxy_host: String,
+    pub proxy_port: String,
+    pub use_basic_auth: bool,
+    pub proxy_username: String,
+    pub proxy_password: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub proxy: Proxy,
     pub ssl: Ssl,
     pub logging: Logging,
     pub cache: Cache,
+    pub network: Network,
 }
 
 impl Settings {
@@ -217,6 +228,45 @@ impl Settings {
                 self.ssl.cert_password = choice;
             }
         }
+        // update network settings
+        let prompt = "Does your network require this proxy to use an upstream proxy?";
+        let choice = Confirm::new()
+            .default(self.network.use_proxy)
+            .wait_for_newline(false)
+            .with_prompt(prompt)
+            .interact()?;
+        self.network.use_proxy = choice;
+        if choice {
+            let choice: String = Input::new()
+                .with_prompt("Proxy host")
+                .with_initial_text(&self.network.proxy_host)
+                .interact_text()?;
+            self.network.proxy_host = choice;
+            let choice: String = Input::new()
+                .with_prompt("Proxy port")
+                .with_initial_text(&self.network.proxy_port)
+                .interact_text()?;
+            self.network.proxy_port = choice;
+            let prompt = "Does your upstream proxy require (basic) authentication?";
+            let choice = Confirm::new()
+                .default(self.network.use_basic_auth)
+                .wait_for_newline(false)
+                .with_prompt(prompt)
+                .interact()?;
+            self.network.use_basic_auth = choice;
+            if choice {
+                let choice: String = Input::new()
+                    .with_prompt("Proxy username")
+                    .with_initial_text(&self.network.proxy_username)
+                    .interact_text()?;
+                self.network.proxy_username = choice;
+                let choice: String = Input::new()
+                    .with_prompt("Proxy password")
+                    .with_initial_text(&self.network.proxy_password)
+                    .interact_text()?;
+                self.network.proxy_password = choice;
+            }
+        }
         // update log settings
         let prompt = if let LogLevel::Off = self.logging.level {
             "Do you want your proxy server to log information about its operation?"
@@ -306,6 +356,17 @@ impl Settings {
         {
             if self.cache.db_path.is_empty() {
                 return Err(eyre!("Database path can't be empty when cache is enabled"));
+            }
+        }
+        if self.network.use_proxy {
+            if self.network.proxy_host.is_empty() {
+                return Err(eyre!("Proxy host can't be empty"));
+            }
+            if self.network.proxy_port.is_empty() {
+                return Err(eyre!("Proxy port can't be empty"));
+            }
+            if self.network.use_basic_auth && self.network.proxy_username.is_empty() {
+                return Err(eyre!("Proxy username can't be empty"));
             }
         }
         if let LogDestination::File = self.logging.destination {
