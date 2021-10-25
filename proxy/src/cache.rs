@@ -353,10 +353,10 @@ async fn store_deactivation_response(
         // Remove any pending deactivation requests & responses as they have been completed.
         debug!("Removing deactivation requests with key: {}", d_key);
         let d_str = "delete from deactivation_requests where deactivation_key = ?";
-        sqlx::query(&d_str).bind(&d_key).execute(&mut tx).await?;
+        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
         debug!("Removing deactivation responses with key: {}", d_key);
         let d_str = "delete from deactivation_responses where deactivation_key = ?";
-        sqlx::query(&d_str).bind(&d_key).execute(&mut tx).await?;
+        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
     }
     tx.commit().await?;
     Ok(())
@@ -369,7 +369,7 @@ async fn fetch_activation_response(
     let q_str =
         "select body, timestamp from activation_responses where activation_key = ?";
     debug!("Finding activation response with key: {}", &a_key);
-    let result = sqlx::query(&q_str).bind(&a_key).fetch_optional(pool).await?;
+    let result = sqlx::query(q_str).bind(&a_key).fetch_optional(pool).await?;
     match result {
         Some(row) => {
             let body: String = row.get("body");
@@ -394,7 +394,7 @@ async fn fetch_deactivation_response(
     let a_key = activation_id(req);
     let q_str = "select body from activation_responses where activation_key = ?";
     debug!("Finding deactivation response with key: {}", &a_key);
-    let result = sqlx::query(&q_str).bind(&a_key).fetch_optional(pool).await?;
+    let result = sqlx::query(q_str).bind(&a_key).fetch_optional(pool).await?;
     match result {
         Some(row) => {
             let body: String = row.get("body");

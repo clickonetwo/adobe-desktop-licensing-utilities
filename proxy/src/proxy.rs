@@ -110,7 +110,7 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
     let (mut successes, mut failures) = (0u64, 0u64);
     for req in requests.iter() {
         info!("Forwarding stored {} request {}", req.kind, &req.request_id);
-        match call_cops(&conf, &req).await {
+        match call_cops(conf, req).await {
             Ok(net_resp) => {
                 let (parts, body) = net_resp.into_parts();
                 let body = hyper::body::to_bytes(body).await.unwrap();
@@ -123,8 +123,8 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
                         std::str::from_utf8(&body).unwrap()
                     );
                     // cache the response
-                    let resp = CResponse::from_network(&req, &body);
-                    cache.store_response(&req, &resp).await;
+                    let resp = CResponse::from_network(req, &body);
+                    cache.store_response(req, &resp).await;
                     successes += 1;
                 } else {
                     // the COPS call failed
@@ -172,7 +172,7 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
         "Forwarding request {} to COPS at {}://{}",
         req.request_id, cops_scheme, cops_host
     );
-    let mut net_req = req.to_network(&cops_scheme, &cops_host);
+    let mut net_req = req.to_network(cops_scheme, &cops_host);
     let request = if conf.network.use_proxy {
         // proxy
         let proxy_url = format!(
@@ -195,7 +195,7 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
                 .wrap_err("Failed to create proxy connector")?
         };
         // add any needed proxy headers (authorization, typically) to the request
-        if let Some(headers) = proxy.http_headers(&net_req.uri()) {
+        if let Some(headers) = proxy.http_headers(net_req.uri()) {
             net_req.headers_mut().extend(headers.clone().into_iter());
         }
         let client = Client::builder().build(proxy);
