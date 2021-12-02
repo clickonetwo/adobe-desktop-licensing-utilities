@@ -17,7 +17,7 @@ use crate::settings::Settings;
 use eyre::{eyre, Report, Result, WrapErr};
 use headers::Authorization;
 use hyper::client::HttpConnector;
-use hyper::{Body, Client, Request as HRequest, Response as HResponse, Uri};
+use hyper::{Body, Client, Method, Request as HRequest, Response as HResponse, Uri};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
 use log::{debug, error, info};
@@ -46,10 +46,11 @@ async fn serve_req(
 ) -> Result<HResponse<Body>> {
     let (parts, body) = req.into_parts();
     let body = hyper::body::to_bytes(body).await?;
-    info!("Received request for {:?}", parts.uri);
-    debug!("Received request method: {:?}", parts.method);
+    info!("Received {:?} request for {:?}", parts.method, parts.uri);
     debug!("Received request headers: {:?}", parts.headers);
-    debug!("Received request body: {}", std::str::from_utf8(&body).unwrap());
+    if parts.method.ne(&Method::GET) {
+        debug!("Received request body: {}", std::str::from_utf8(&body).unwrap());
+    }
 
     // Analyze and handle the request
     match CRequest::from_network(&parts, &body) {
@@ -238,8 +239,9 @@ fn bad_request_response(err: &BadRequest) -> HResponse<Body> {
 }
 
 fn status_request_response(err: &BadRequest) -> HResponse<Body> {
-    info!("Returning status: {}", err.reason);
-    let body = serde_json::json!({"statusCode": 200, "message": err.reason});
+    let version = env!("CARGO_PKG_VERSION");
+    info!("Returning status: proxyVersion: {}, message: {}", version, err.reason);
+    let body = serde_json::json!({"statusCode": 200, "proxyVersion": version, "message": err.reason});
     HResponse::builder()
         .status(200)
         .header("content-type", "application/json;charset=UTF-8")
