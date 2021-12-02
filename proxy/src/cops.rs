@@ -60,6 +60,13 @@ impl Request {
                     Err(BadRequest::from("Deactivation method must be DELETE"))
                 }
             }
+            STATUS_ENDPOINT => {
+                if parts.method == Method::GET {
+                    Err(BadRequest::for_status("Proxy is running"))
+                } else {
+                    Err(BadRequest::from("Status method must be GET"))
+                }
+            }
             path => {
                 let message = format!("Unknown endpoint path: {}", path);
                 Err(BadRequest::from(&message))
@@ -321,6 +328,7 @@ impl Response {
 
 const ACTIVATION_ENDPOINT: &str = "/asnp/frl_connected/values/v2";
 const DEACTIVATION_ENDPOINT: &str = "/asnp/frl_connected/v1";
+const STATUS_ENDPOINT: &str = "/status";
 
 #[derive(Debug, Clone)]
 pub enum Kind {
@@ -346,11 +354,15 @@ impl Default for Kind {
 #[derive(Debug, Clone)]
 pub struct BadRequest {
     pub reason: String,
+    pub for_status: bool,
 }
 
 impl BadRequest {
     pub fn from(why: &str) -> BadRequest {
-        BadRequest { reason: why.to_string() }
+        BadRequest { reason: why.to_string(), for_status: false }
+    }
+    pub fn for_status(status: &str) -> BadRequest {
+        BadRequest { reason: status.to_string(), for_status: true }
     }
 }
 

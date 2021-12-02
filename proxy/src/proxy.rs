@@ -53,6 +53,7 @@ async fn serve_req(
 
     // Analyze and handle the request
     match CRequest::from_network(&parts, &body) {
+        Err(err) if err.for_status => Ok(status_request_response(&err)),
         Err(err) => Ok(bad_request_response(&err)),
         Ok(req) => {
             info!("Received request id: {}", &req.request_id);
@@ -230,6 +231,17 @@ fn bad_request_response(err: &BadRequest) -> HResponse<Body> {
     let body = serde_json::json!({"statusCode": 400, "message": err.reason});
     HResponse::builder()
         .status(400)
+        .header("content-type", "application/json;charset=UTF-8")
+        .header("server", agent())
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+fn status_request_response(err: &BadRequest) -> HResponse<Body> {
+    info!("Returning status: {}", err.reason);
+    let body = serde_json::json!({"statusCode": 200, "message": err.reason});
+    HResponse::builder()
+        .status(200)
         .header("content-type", "application/json;charset=UTF-8")
         .header("server", agent())
         .body(Body::from(body.to_string()))
