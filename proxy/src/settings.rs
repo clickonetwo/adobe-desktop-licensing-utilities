@@ -12,6 +12,7 @@ use dialoguer::{Confirm, Input, Password, Select};
 use eyre::{eyre, Report, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
+use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -25,10 +26,19 @@ pub struct Proxy {
     pub ssl: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Ssl {
     pub cert_path: String,
     pub cert_password: String,
+}
+
+impl Debug for Ssl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ssl")
+            .field("cert_path", &self.cert_path)
+            .field("password", &String::from("[OBSCURED]"))
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,7 +53,7 @@ pub struct Cache {
     pub db_path: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Network {
     pub use_proxy: bool,
     pub proxy_host: String,
@@ -51,6 +61,19 @@ pub struct Network {
     pub use_basic_auth: bool,
     pub proxy_username: String,
     pub proxy_password: String,
+}
+
+impl Debug for Network {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Network")
+            .field("use_proxy", &self.use_proxy)
+            .field("proxy_host", &self.proxy_host)
+            .field("proxy_port", &self.proxy_port)
+            .field("use_proxy", &self.use_proxy)
+            .field("proxy_username", &self.proxy_username)
+            .field("proxy_password", &String::from("[OBSCURED]"))
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
