@@ -1,6 +1,6 @@
 # MIT License
 
-# Copyright (c) 2020 Adobe, Inc.
+# Copyright (c) 2020-2022 Adobe, Inc.
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,10 @@
 
 $cmd = $args[0];
 $serviceName = "FRL Online Proxy";
+$nssm = Join-Path (Join-Path $PSScriptRoot bin) nssm.exe
+if (![System.IO.File]::Exists($nssm)) {
+    echo "You must place this script next to the proxy executable and bin folder"
+}
 
 switch ($cmd) {
     start {
@@ -37,20 +41,20 @@ switch ($cmd) {
         }
         $stdout = "$PSScriptRoot\proxy-service-stdout.log"
         $stderr = "$PSScriptRoot\proxy-service-stderr.log"
-        ./bin/nssm install $serviceName $proxy start;
-        ./bin/nssm set $serviceName AppStdout $stdout
-        ./bin/nssm set $serviceName AppStderr $stderr
-        ./bin/nssm start $serviceName;
+        & $nssm install $serviceName $proxy start;
+        & $nssm set $serviceName AppStdout $stdout
+        & $nssm set $serviceName AppStderr $stderr
+        & $nssm start $serviceName;
     }
     stop {
-        ./bin/nssm stop $serviceName;
+        & $nssm stop $serviceName;
     }
     restart {
-        ./bin/nssm restart $serviceName;
+        & $nssm restart $serviceName;
     }
     remove {
-        ./bin/nssm stop $serviceName;
-        ./bin/nssm remove $serviceName confirm;
+        & $nssm stop $serviceName;
+        & $nssm remove $serviceName confirm;
     }
     Default {
         echo "Command (start, stop, restart, remove) is required.";
