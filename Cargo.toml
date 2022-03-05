@@ -19,6 +19,3 @@ visdom = "0.4.0"
 zip = "0.5.11"
 sha2 = "0.9.5"
 num-traits = "0.2.14"
-
-[dev-dependencies]
-assert-json-diff = "2.0.1"

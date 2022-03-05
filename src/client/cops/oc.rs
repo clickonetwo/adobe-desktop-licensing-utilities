@@ -181,11 +181,7 @@ mod tests {
     use crate::client::cops::oc::PreconditioningData;
     use crate::client::types::{FileInfo, OperatingConfig as ManualOperatingConfig};
 
-    extern crate assert_json_diff;
     extern crate serde_json; // 1.0.69
-
-    use assert_json_diff::assert_json_include;
-    use serde_json::json;
 
     #[test]
     fn test_online_oc() {
