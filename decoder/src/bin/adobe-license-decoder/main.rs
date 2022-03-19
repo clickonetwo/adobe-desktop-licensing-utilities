@@ -8,20 +8,15 @@ it.
 */
 mod cli;
 
-use adobe_license_toolbox::client::descriptions::{describe_directory, describe_file};
-use adobe_license_toolbox::client::types::FileInfo;
 use cli::{Opt, DEFAULT_CONFIG_DIR};
-use eyre::Result;
+use decoder::describe_configuration;
+use frl_config::Configuration;
 use structopt::StructOpt;
 
-fn main() -> Result<()> {
+fn main() {
     let opt: Opt = Opt::from_args();
-    if let Ok(info) = FileInfo::from_path(&opt.path) {
-        if info.is_directory {
-            describe_directory(&info, opt.verbose)?;
-        } else {
-            describe_file(&info, opt.verbose)?;
-        }
+    if let Ok(config) = Configuration::from_path(&opt.path) {
+        describe_configuration(&config, opt.verbose);
     } else {
         if opt.path.eq_ignore_ascii_case(DEFAULT_CONFIG_DIR) {
             eprintln!("Error: There are no licenses installed on this computer")
@@ -30,5 +25,4 @@ fn main() -> Result<()> {
         }
         std::process::exit(1);
     };
-    Ok(())
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2020-2022 Adobe
+Copyright 2022 Adobe
 All Rights Reserved.
 
 NOTICE: Adobe permits you to use, modify, and distribute this file in
@@ -8,9 +8,9 @@ it.
 */
 use self::DeploymentMode::*;
 use self::Precedence::*;
-use crate::utilities::*;
 use chrono::{DateTime, Local};
 use eyre::{eyre, Result, WrapErr};
+use frl_base::*;
 use std::io::Read;
 
 pub struct OperatingConfig {
@@ -339,14 +339,14 @@ mod tests {
         } else {
             panic!("Failed to create file info from 'src' directory.");
         }
-        if let Ok(fi) = FileInfo::from_path("src/lib.rs") {
+        if let Ok(fi) = FileInfo::from_path("src/libraries.rs") {
             assert!(!fi.is_directory);
             assert!(fi.extension.eq_ignore_ascii_case("rs"));
-            assert!(fi.name.eq_ignore_ascii_case("lib"));
+            assert!(fi.name.eq_ignore_ascii_case("libraries"));
         } else {
             panic!("Failed to create file info from 'src/main.rs' file");
         }
-        if let Ok(_) = FileInfo::from_path("no-such-directory") {
+        if FileInfo::from_path("no-such-directory").is_ok() {
             panic!("Created file info for non-existent path");
         }
     }

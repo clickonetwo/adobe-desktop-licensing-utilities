@@ -7,6 +7,4 @@ accordance with the terms of the Adobe license agreement accompanying
 it.
 */
 
-pub mod client;
-pub mod server;
-pub mod utilities;
+pub mod types;

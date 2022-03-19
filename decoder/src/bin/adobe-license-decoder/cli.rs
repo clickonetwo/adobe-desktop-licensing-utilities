@@ -37,7 +37,6 @@ pub struct Opt {
 #[cfg(test)]
 mod tests {
     use super::DEFAULT_CONFIG_DIR;
-    use adobe_license_toolbox::client::types::FileInfo;
 
     #[test]
     fn test_os() {
@@ -48,7 +47,7 @@ mod tests {
         );
         let app_support_path = config_path.trim_end_matches("/Adobe/OperatingConfigs");
         assert!(
-            FileInfo::from_path(app_support_path).is_ok(),
+            std::path::Path::new(app_support_path).is_dir(),
             "Application Support path is not present"
         );
     }

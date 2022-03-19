@@ -1,0 +1,17 @@
+[package]
+name = "decoder"
+version = "0.1.0"
+edition = "2021"
+default-run = "adobe-license-decoder"
+
+[[bin]]
+name = "adobe-license-decoder"
+
+[dependencies]
+chrono = "0.4.19"
+eyre = "0.6.7"
+frl-base = { path = "../frl-base" }
+frl-config = { path = "../frl-config" }
+glob = "0.3.0"
+shellexpand = "2.1.0"
+structopt = "0.3.26"
