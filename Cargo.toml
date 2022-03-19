@@ -1,7 +1,7 @@
 [workspace]
 members = [
+    "adlu-base",
+    "adlu-config",
     "decoder",
-    "frl-base",
-    "frl-config",
-#    "legacy",
+    "proxy",
 ]

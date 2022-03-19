@@ -9,7 +9,7 @@ it.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use frl_base::{get_saved_credential, u64encode};
+use adlu_base::{get_saved_credential, u64encode};
 
 use super::admin::{ActivationType, OcFileSpec};
 use super::SignatureSpecifier;
@@ -18,11 +18,11 @@ use super::SignatureSpecifier;
 #[serde(rename_all = "camelCase")]
 pub struct CachedOnlineLicense {
     // pub adobe_time: String,  // it's spelled "AdobeTime" and we don't care
-    #[serde(deserialize_with = "frl_base::template_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::template_json::deserialize")]
     pub asnp: CachedOnlineAsnp,
     pub creation_timestamp: i64,
     pub creator_id: String,
-    #[serde(deserialize_with = "frl_base::template_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::template_json::deserialize")]
     pub cust_asnp: CachedOnlineCustAsnp,
 }
 
@@ -30,7 +30,7 @@ pub struct CachedOnlineLicense {
 #[serde(rename_all = "camelCase")]
 pub struct CachedOnlineAsnp {
     pub asnp_spec_version: String,
-    #[serde(deserialize_with = "frl_base::base64_encoded_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::base64_encoded_json::deserialize")]
     pub payload: CachedOnlineAsnpPayload,
     pub signatures: Vec<SignatureSpecifier>,
 }
@@ -39,7 +39,7 @@ pub struct CachedOnlineAsnp {
 #[serde(rename_all = "camelCase")]
 pub struct CachedOnlineAsnpPayload {
     pub app_profile: String,
-    #[serde(deserialize_with = "frl_base::template_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::template_json::deserialize")]
     pub legacy_profile: LegacyProfile,
     pub user_profile: String,
     pub frl_profile: String,
@@ -60,7 +60,7 @@ pub struct LegacyProfile {
 #[serde(rename_all = "camelCase")]
 pub struct CachedOnlineCustAsnp {
     pub asnp_spec_version: String,
-    #[serde(deserialize_with = "frl_base::base64_encoded_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::base64_encoded_json::deserialize")]
     pub payload: CachedOnlineCustAsnpPayload,
     pub signatures: Vec<SignatureSpecifier>,
 }

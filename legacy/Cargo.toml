@@ -8,7 +8,7 @@ edition = "2018"
 base64 = "0.13.0"
 chrono = "0.4.19"
 eyre = "0.6.5"
-frl-base = { path = "../frl-base" }
+adlu-base = { path = "../adlu-base" }
 glob = "0.3.0"
 keyring = "1"
 num-traits = "0.2.14"

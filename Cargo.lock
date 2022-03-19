@@ -9,6 +9,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "adlu-base"
+version = "1.0.0"
+dependencies = [
+ "base64",
+ "chrono",
+ "eyre",
+ "keyring",
+ "serde",
+ "serde_json",
+ "sha2 0.10.2",
+]
+
+[[package]]
+name = "adlu-config"
+version = "0.1.0"
+dependencies = [
+ "adlu-base",
+ "chrono",
+ "eyre",
+ "glob",
+ "if_chain",
+ "legacy",
+ "serde",
+ "serde_json",
+ "visdom 0.5.1",
+ "zip",
+]
+
+[[package]]
 name = "aes"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -295,10 +324,10 @@ dependencies = [
 name = "decoder"
 version = "0.1.0"
 dependencies = [
+ "adlu-base",
+ "adlu-config",
  "chrono",
  "eyre",
- "frl-base",
- "frl-config",
  "glob",
  "shellexpand",
  "structopt",
@@ -405,35 +434,6 @@ dependencies = [
  "crc32fast",
  "libc",
  "miniz_oxide",
-]
-
-[[package]]
-name = "frl-base"
-version = "1.0.0"
-dependencies = [
- "base64",
- "chrono",
- "eyre",
- "keyring",
- "serde",
- "serde_json",
- "sha2 0.10.2",
-]
-
-[[package]]
-name = "frl-config"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "eyre",
- "frl-base",
- "glob",
- "if_chain",
- "legacy",
- "serde",
- "serde_json",
- "visdom 0.5.1",
- "zip",
 ]
 
 [[package]]
@@ -663,10 +663,10 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 name = "legacy"
 version = "1.5.0"
 dependencies = [
+ "adlu-base",
  "base64",
  "chrono",
  "eyre",
- "frl-base",
  "glob",
  "keyring",
  "num-traits",
@@ -915,6 +915,10 @@ checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid",
 ]
+
+[[package]]
+name = "proxy"
+version = "0.1.0"
 
 [[package]]
 name = "quote"

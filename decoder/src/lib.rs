@@ -6,8 +6,8 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use frl_base::date_from_epoch_millis;
-use frl_config::{ActivationType, Configuration, OcFileSpec, PreconditioningData};
+use adlu_base::date_from_epoch_millis;
+use adlu_config::{ActivationType, Configuration, OcFileSpec, PreconditioningData};
 
 pub fn describe_configuration(config: &Configuration, verbose: i32) {
     match config {

@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SignatureSpecifier {
-    #[serde(deserialize_with = "frl_base::base64_encoded_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::base64_encoded_json::deserialize")]
     pub header: SignatureHeaderData,
     pub signature: String,
 }

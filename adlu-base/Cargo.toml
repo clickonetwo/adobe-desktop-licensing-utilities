@@ -1,5 +1,5 @@
 [package]
-name = "frl-base"
+name = "adlu-base"
 authors = ["Daniel Brotsky <dev@clickonetwo.io>"]
 version = "1.0.0"
 edition = "2021"

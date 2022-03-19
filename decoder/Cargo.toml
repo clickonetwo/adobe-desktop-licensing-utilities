@@ -10,8 +10,8 @@ name = "adobe-license-decoder"
 [dependencies]
 chrono = "0.4.19"
 eyre = "0.6.7"
-frl-base = { path = "../frl-base" }
-frl-config = { path = "../frl-config" }
+adlu-base = { path = "../adlu-base" }
+adlu-config = { path = "../adlu-config" }
 glob = "0.3.0"
 shellexpand = "2.1.0"
 structopt = "0.3.26"

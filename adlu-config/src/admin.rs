@@ -8,8 +8,8 @@ it.
 */
 use super::user::get_cached_expiry;
 use super::SignatureSpecifier;
+use adlu_base::u64decode;
 use eyre::{eyre, Result, WrapErr};
-use frl_base::u64decode;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::Path;
@@ -163,7 +163,7 @@ pub struct OcFileSpec {
     pub extension: String,
     #[serde(skip)]
     pub mod_date: Option<String>, // local mod date when deserialized from file
-    #[serde(deserialize_with = "frl_base::base64_encoded_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::base64_encoded_json::deserialize")]
     pub content: OperatingConfig,
 }
 
@@ -277,7 +277,7 @@ impl OcFileSpec {
             .and_then(|asnp| asnp.adobe_cert_signed_values.as_ref())
         {
             let timestamp = adobe_values.values.license_expiry_timestamp.as_str();
-            frl_base::date_from_epoch_millis(timestamp).unwrap_or_else(|_| {
+            adlu_base::date_from_epoch_millis(timestamp).unwrap_or_else(|_| {
                 panic!("Invalid license data (bad timestamp: {})", timestamp)
             })
         } else {
@@ -318,7 +318,7 @@ pub struct CertFileSpec {
 pub struct OperatingConfig {
     pub oc_spec_version: String,
     pub signatures: Vec<SignatureSpecifier>,
-    #[serde(deserialize_with = "frl_base::base64_encoded_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::base64_encoded_json::deserialize")]
     pub payload: OcPayload,
 }
 
@@ -371,7 +371,7 @@ pub struct AdobeSignedValues {
 #[serde(rename_all = "camelCase")]
 pub struct CustomerSignedValues {
     pub signatures: CustomerSignatures,
-    #[serde(deserialize_with = "frl_base::base64_encoded_json::deserialize")]
+    #[serde(deserialize_with = "adlu_base::base64_encoded_json::deserialize")]
     pub values: CustomerValues,
 }
 

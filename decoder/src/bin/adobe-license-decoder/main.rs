@@ -8,9 +8,9 @@ it.
 */
 mod cli;
 
+use adlu_config::Configuration;
 use cli::{Opt, DEFAULT_CONFIG_DIR};
 use decoder::describe_configuration;
-use frl_config::Configuration;
 use structopt::StructOpt;
 
 fn main() {
