@@ -146,7 +146,7 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
         let entry = keyring::Entry::new_with_target(&service, &service, "App Info");
         match entry.get_password() {
             Ok(val) => result.push_str(val.trim()),
-            Err(keyring::Error::NoStorageAccess(err)) => {
+            Err(keyring::Error::NoStorageAccess(_)) => {
                 eprintln!("Credential store could not be accessed.  Is it unlocked?");
                 break;
             }
