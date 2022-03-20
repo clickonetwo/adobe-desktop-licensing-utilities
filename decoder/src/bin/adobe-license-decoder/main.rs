@@ -9,12 +9,12 @@ it.
 mod cli;
 
 use adlu_config::Configuration;
+use clap::Parser;
 use cli::{Opt, DEFAULT_CONFIG_DIR};
 use decoder::describe_configuration;
-use structopt::StructOpt;
 
 fn main() {
-    let opt: Opt = Opt::from_args();
+    let opt: Opt = Opt::parse();
     if let Ok(config) = Configuration::from_path(&opt.path) {
         describe_configuration(&config, opt.verbose);
     } else {

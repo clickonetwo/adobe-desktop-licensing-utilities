@@ -6,7 +6,7 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use structopt::StructOpt;
+use clap::Parser;
 
 pub const DEFAULT_CONFIG_DIR: &str = if cfg!(target_os = "macos") {
     "/Library/Application Support/Adobe/OperatingConfigs"
@@ -16,7 +16,7 @@ pub const DEFAULT_CONFIG_DIR: &str = if cfg!(target_os = "macos") {
     "This module can only run on MacOS or Windows"
 };
 
-#[derive(Debug, StructOpt)]
+#[derive(Parser, Debug)]
 /// Adobe License Decoder
 ///
 /// Decodes all the installed license files on the current machine.
@@ -26,11 +26,11 @@ pub struct Opt {
     /// Output additional data about each package (e.g., census codes).
     /// Specify this option more than once (-vv) to look in the credential
     /// store for any locally-cached application licenses.
-    #[structopt(short, long, parse(from_occurrences))]
+    #[clap(short, long, parse(from_occurrences))]
     pub verbose: i32,
 
     /// path to directory or file to decode
-    #[structopt(default_value = DEFAULT_CONFIG_DIR)]
+    #[clap(default_value = DEFAULT_CONFIG_DIR)]
     pub path: String,
 }
 

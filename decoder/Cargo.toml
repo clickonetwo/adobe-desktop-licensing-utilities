@@ -1,6 +1,7 @@
 [package]
 name = "decoder"
-version = "0.1.0"
+version = "2.0.0"
+authors = ["Andrew Dorton <adorton@adobe.com>", "Daniel Brotsky <dan@clickonetwo.io>"]
 edition = "2021"
 default-run = "adobe-license-decoder"
 
@@ -8,10 +9,10 @@ default-run = "adobe-license-decoder"
 name = "adobe-license-decoder"
 
 [dependencies]
-chrono = "0.4.19"
-eyre = "0.6.7"
 adlu-base = { path = "../adlu-base" }
 adlu-config = { path = "../adlu-config" }
+chrono = "0.4.19"
+clap = { version = "3.1.6", features = ["derive"] }
+eyre = "0.6.7"
 glob = "0.3.0"
 shellexpand = "2.1.0"
-structopt = "0.3.26"

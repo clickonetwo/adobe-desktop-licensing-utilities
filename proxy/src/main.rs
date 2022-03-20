@@ -6,7 +6,7 @@ NOTICE: Adobe permits you to use, modify, and distribute this file in
 accordance with the terms of the Adobe license agreement accompanying
 it.
 */
-use structopt::StructOpt;
+use clap::Parser;
 
 mod cache;
 mod cli;
@@ -29,7 +29,7 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<()> {
     openssl_probe::init_ssl_cert_env_vars();
-    let args: FrlProxy = FrlProxy::from_args();
+    let args: FrlProxy = FrlProxy::parse();
 
     // make sure we have a config file.  if not, make one
     if let Some(mut conf) = Settings::load_config(&args)? {
