@@ -67,9 +67,7 @@ pub mod base64_encoded_json {
         let base64_string = String::deserialize(deserializer)?;
         // println!("base64 string starts: {:?}", &base64_string);
         let json_bytes = base64::decode_config(&base64_string, base64::URL_SAFE_NO_PAD)
-            .map_err(|e| {
-            serde::de::Error::custom(&format!("Illegal base64: {:?}", e))
-        })?;
+            .map_err(|e| serde::de::Error::custom(&format!("Illegal base64: {:?}", e)))?;
         // println!("JSON bytes start: {:?}", &json_bytes);
         serde_json::from_reader(json_bytes.as_slice()).map_err(|e| {
             println!(
@@ -107,9 +105,8 @@ pub mod template_json {
         T: DeserializeOwned,
     {
         let json_string = String::deserialize(deserializer)?;
-        serde_json::from_str(&json_string).map_err(|e| {
-            serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e))
-        })
+        serde_json::from_str(&json_string)
+            .map_err(|e| serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e)))
     }
 }
 
@@ -122,8 +119,8 @@ pub fn date_from_epoch_millis(timestamp: &str) -> Result<String> {
 }
 
 pub fn json_from_file(path: &str) -> Result<JsonMap> {
-    let file = std::fs::File::open(std::path::Path::new(path))
-        .wrap_err("Can't read license file")?;
+    let file =
+        std::fs::File::open(std::path::Path::new(path)).wrap_err("Can't read license file")?;
     serde_json::from_reader(&file).wrap_err("Can't parse license data")
 }
 

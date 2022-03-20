@@ -89,8 +89,7 @@ impl Request {
             ..Default::default()
         };
         req.update_from_headers(parts)?;
-        let map: HashMap<String, Value> =
-            serde_json::from_slice(body).unwrap_or_default();
+        let map: HashMap<String, Value> = serde_json::from_slice(body).unwrap_or_default();
         if map.is_empty() {
             return Err(BadRequest::from("Malformed activation request body"));
         }
@@ -264,7 +263,9 @@ impl Request {
             .header("x-request-id", &self.request_id)
             .header("accept", "application/json")
             .header("user-agent", agent());
-        builder.body(Body::empty()).expect("Error building deactivation request body")
+        builder
+            .body(Body::empty())
+            .expect("Error building deactivation request body")
     }
 
     /// update a request with info from network headers
@@ -359,10 +360,16 @@ pub struct BadRequest {
 
 impl BadRequest {
     pub fn from(why: &str) -> BadRequest {
-        BadRequest { reason: why.to_string(), for_status: false }
+        BadRequest {
+            reason: why.to_string(),
+            for_status: false,
+        }
     }
     pub fn for_status(status: &str) -> BadRequest {
-        BadRequest { reason: status.to_string(), for_status: true }
+        BadRequest {
+            reason: status.to_string(),
+            for_status: true,
+        }
     }
 }
 

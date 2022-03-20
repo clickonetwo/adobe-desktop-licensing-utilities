@@ -28,8 +28,8 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
     let acceptor = {
         let path = &conf.ssl.cert_path;
         let password = &conf.ssl.cert_password;
-        let mut file = File::open(path)
-            .wrap_err(format!("Can't open SSL certificate file: {}", path))?;
+        let mut file =
+            File::open(path).wrap_err(format!("Can't open SSL certificate file: {}", path))?;
         let mut identity = vec![];
         file.read_to_end(&mut identity)
             .wrap_err(format!("Can't read SSL cert data from file: {}", path))?;
@@ -43,7 +43,9 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
     let full_host = format!("{}:{}", conf.proxy.host, conf.proxy.ssl_port);
     let tcp = TcpListener::bind(&full_host).await?;
     let incoming_tls_stream = incoming(tcp, acceptor).boxed();
-    let hyper_acceptor = HyperAcceptor { acceptor: incoming_tls_stream };
+    let hyper_acceptor = HyperAcceptor {
+        acceptor: incoming_tls_stream,
+    };
     let service = make_service_fn(move |_| {
         let conf = conf.clone();
         let cache = Arc::clone(&cache);
@@ -70,7 +72,8 @@ pub async fn run_server(conf: &Settings, cache: Arc<Cache>) -> Result<()> {
 }
 
 fn incoming(
-    listener: TcpListener, acceptor: TlsAcceptor,
+    listener: TcpListener,
+    acceptor: TlsAcceptor,
 ) -> impl Stream<Item = TlsStream<TcpStream>> {
     stream! {
         loop {
@@ -97,7 +100,8 @@ impl hyper::server::accept::Accept for HyperAcceptor<'_> {
     type Error = io::Error;
 
     fn poll_accept(
-        mut self: Pin<&mut Self>, cx: &mut Context,
+        mut self: Pin<&mut Self>,
+        cx: &mut Context,
     ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
         let result = Pin::new(&mut self.acceptor).poll_next(cx);
         match result {

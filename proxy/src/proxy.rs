@@ -42,14 +42,19 @@ where
 }
 
 async fn serve_req(
-    req: HRequest<Body>, conf: Settings, cache: Arc<Cache>,
+    req: HRequest<Body>,
+    conf: Settings,
+    cache: Arc<Cache>,
 ) -> Result<HResponse<Body>> {
     let (parts, body) = req.into_parts();
     let body = hyper::body::to_bytes(body).await?;
     info!("Received {:?} request for {:?}", parts.method, parts.uri);
     debug!("Received request headers: {:?}", parts.headers);
     if parts.method.ne(&Method::GET) {
-        debug!("Received request body: {}", std::str::from_utf8(&body).unwrap());
+        debug!(
+            "Received request body: {}",
+            std::str::from_utf8(&body).unwrap()
+        );
     }
 
     // Analyze and handle the request
@@ -151,10 +156,11 @@ pub async fn forward_stored_requests(conf: &Settings, cache: Arc<Cache>) {
 }
 
 async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
-    let cops_uri =
-        conf.proxy.remote_host.parse::<Uri>().unwrap_or_else(|_| {
-            panic!("failed to parse uri: {}", conf.proxy.remote_host)
-        });
+    let cops_uri = conf
+        .proxy
+        .remote_host
+        .parse::<Uri>()
+        .unwrap_or_else(|_| panic!("failed to parse uri: {}", conf.proxy.remote_host));
 
     // if no scheme is specified for remote_host, assume http
     let cops_scheme = match cops_uri.scheme_str() {
@@ -183,8 +189,9 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
         );
         info!("Connecting via proxy: {}", proxy_url);
         let proxy = {
-            let proxy_uri =
-                proxy_url.parse().wrap_err("Cannot parse upstream proxy URL")?;
+            let proxy_uri = proxy_url
+                .parse()
+                .wrap_err("Cannot parse upstream proxy URL")?;
             let mut proxy = Proxy::new(Intercept::All, proxy_uri);
             if conf.network.use_basic_auth {
                 proxy.set_authorization(Authorization::basic(
@@ -221,9 +228,10 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
     };
     match tokio::time::timeout(Duration::from_millis(timeout), request).await {
         Ok(response) => response.wrap_err("Network error"),
-        Err(_) => {
-            Err(eyre!("Timeout - no response received in {} milliseconds", timeout))
-        }
+        Err(_) => Err(eyre!(
+            "Timeout - no response received in {} milliseconds",
+            timeout
+        )),
     }
 }
 
@@ -240,8 +248,12 @@ fn bad_request_response(err: &BadRequest) -> HResponse<Body> {
 
 fn status_request_response(err: &BadRequest) -> HResponse<Body> {
     let version = env!("CARGO_PKG_VERSION");
-    info!("Returning status: proxyVersion: {}, message: {}", version, err.reason);
-    let body = serde_json::json!({"statusCode": 200, "proxyVersion": version, "message": err.reason});
+    info!(
+        "Returning status: proxyVersion: {}, message: {}",
+        version, err.reason
+    );
+    let body =
+        serde_json::json!({"statusCode": 200, "proxyVersion": version, "message": err.reason});
     HResponse::builder()
         .status(200)
         .header("content-type", "application/json;charset=UTF-8")

@@ -113,8 +113,8 @@ impl Settings {
         } else {
             eprintln!("Creating initial configuration file...");
             let template = include_str!("res/defaults.toml");
-            let mut file = File::create(path)
-                .wrap_err(format!("Cannot create config file: {}", path))?;
+            let mut file =
+                File::create(path).wrap_err(format!("Cannot create config file: {}", path))?;
             file.write_all(template.as_bytes())
                 .wrap_err(format!("Cannot write config file: {}", path))?;
             Ok(None)
@@ -139,12 +139,9 @@ impl Settings {
             .interact()?;
         let choice: ProxyMode = choices[choice].try_into().unwrap();
         self.proxy.mode = choice;
-        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
-        {
+        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode {
             eprintln!("The proxy uses a SQLite database to keep track of requests and responses.");
-            eprintln!(
-                "The proxy will create this database if one does not already exist."
-            );
+            eprintln!("The proxy will create this database if one does not already exist.");
             let choice: String = Input::new()
                 .allow_empty(false)
                 .with_prompt("Name of (or path to) your database file")
@@ -152,9 +149,7 @@ impl Settings {
                 .interact_text()?;
             self.cache.db_path = choice;
         }
-        eprintln!(
-            "The host and port of the proxy must match the one in your license package."
-        );
+        eprintln!("The host and port of the proxy must match the one in your license package.");
         let choice: String = Input::new()
             .with_prompt("Host IP to listen on")
             .with_initial_text(&self.proxy.host)
@@ -202,12 +197,8 @@ impl Settings {
                 .with_initial_text(&self.proxy.ssl_port)
                 .interact_text()?;
             self.proxy.ssl_port = choice;
-            eprintln!(
-                "The proxy requires a certificate store in PKCS format to use SSL."
-            );
-            eprintln!(
-                "Read the user guide to learn how to obtain and prepare this file."
-            );
+            eprintln!("The proxy requires a certificate store in PKCS format to use SSL.");
+            eprintln!("Read the user guide to learn how to obtain and prepare this file.");
             let mut need_cert = true;
             let mut choice = self.ssl.cert_path.clone();
             while need_cert {
@@ -223,15 +214,9 @@ impl Settings {
                 }
             }
             eprintln!("Usually, for security, PKCS files are encrypted with a password.");
-            eprintln!(
-                "Your proxy will require that password in order to function properly."
-            );
-            eprintln!(
-                "You have the choice of storing your password in your config file or"
-            );
-            eprintln!(
-                "in the value of an environment variable (FRL_PROXY_SSL.CERT_PASSWORD)."
-            );
+            eprintln!("Your proxy will require that password in order to function properly.");
+            eprintln!("You have the choice of storing your password in your config file or");
+            eprintln!("in the value of an environment variable (FRL_PROXY_SSL.CERT_PASSWORD).");
             let prompt = if self.ssl.cert_password.is_empty() {
                 "Do you want to store a password in your configuration file?"
             } else {
@@ -309,8 +294,11 @@ impl Settings {
                 .default(1)
                 .with_prompt("Log destination")
                 .interact()?;
-            self.logging.destination =
-                if choice == 0 { LogDestination::Console } else { LogDestination::File };
+            self.logging.destination = if choice == 0 {
+                LogDestination::Console
+            } else {
+                LogDestination::File
+            };
             if choice == 1 {
                 let choice: String = Input::new()
                     .allow_empty(false)
@@ -330,8 +318,7 @@ impl Settings {
             }
             if choice {
                 eprintln!("Read the user guide to find out more about logging levels.");
-                let choices =
-                    vec!["no logging", "error", "warn", "info", "debug", "trace"];
+                let choices = vec!["no logging", "error", "warn", "info", "debug", "trace"];
                 let default = match self.logging.level {
                     LogLevel::Off => 0,
                     LogLevel::Error => 1,
@@ -355,8 +342,8 @@ impl Settings {
         // save the configuration
         let toml = toml::to_string(self)
             .wrap_err(format!("Cannot serialize configuration: {:?}", self))?;
-        let mut file = File::create(path)
-            .wrap_err(format!("Cannot create config file: {}", path))?;
+        let mut file =
+            File::create(path).wrap_err(format!("Cannot create config file: {}", path))?;
         file.write_all(toml.as_bytes())
             .wrap_err(format!("Cannot write config file: {}", path))?;
         eprintln!("Wrote config file '{}'", path);
@@ -369,14 +356,14 @@ impl Settings {
             if path.is_empty() {
                 return Err(eyre!("Certificate path can't be empty when SSL is enabled"));
             }
-            std::fs::metadata(path)
-                .wrap_err(format!("Invalid certificate path: {}", path))?;
+            std::fs::metadata(path).wrap_err(format!("Invalid certificate path: {}", path))?;
         }
         if self.proxy.host.contains(':') {
-            return Err(eyre!("Host must not contain a port (use the 'port' and 'ssl_port' config options)"));
+            return Err(eyre!(
+                "Host must not contain a port (use the 'port' and 'ssl_port' config options)"
+            ));
         }
-        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
-        {
+        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode {
             if self.cache.db_path.is_empty() {
                 return Err(eyre!("Database path can't be empty when cache is enabled"));
             }
@@ -430,7 +417,10 @@ impl TryFrom<&str> for ProxyMode {
         } else if "passthrough".starts_with(&sl) {
             Ok(ProxyMode::Passthrough)
         } else {
-            Err(eyre!("proxy mode '{}' must be a prefix of cache, store, forward or passthrough", s))
+            Err(eyre!(
+                "proxy mode '{}' must be a prefix of cache, store, forward or passthrough",
+                s
+            ))
         }
     }
 }
@@ -460,7 +450,10 @@ impl TryFrom<&str> for LogDestination {
         } else if "file".starts_with(&sl) {
             Ok(LogDestination::File)
         } else {
-            Err(eyre!("log destination '{}' must be a prefix of console or file", s))
+            Err(eyre!(
+                "log destination '{}' must be a prefix of console or file",
+                s
+            ))
         }
     }
 }
@@ -500,7 +493,10 @@ impl TryFrom<&str> for LogLevel {
         } else if "trace".starts_with(&sl) {
             Ok(LogLevel::Trace)
         } else {
-            Err(eyre!("log level '{}' must be a prefix of off, error, warn, info, debug, or trace", s))
+            Err(eyre!(
+                "log level '{}' must be a prefix of off, error, warn, info, debug, or trace",
+                s
+            ))
         }
     }
 }

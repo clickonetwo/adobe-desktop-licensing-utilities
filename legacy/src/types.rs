@@ -102,8 +102,7 @@ impl OperatingConfig {
                     .as_str()
                     .ok_or_else(err)?;
                 let values = json_from_base64(values)?;
-                let codes: Vec<String> =
-                    serde_json::from_value(values["challengeCodes"].clone())?;
+                let codes: Vec<String> = serde_json::from_value(values["challengeCodes"].clone())?;
                 let code0 = codes.get(0).ok_or_else(err)?;
                 if code0.len() > 18 {
                     FrlOffline
@@ -114,12 +113,7 @@ impl OperatingConfig {
                             if code.len() != 18 {
                                 "invalid-census-code".to_string()
                             } else {
-                                format!(
-                                    "{}-{}-{}",
-                                    &code[0..6],
-                                    &code[6..12],
-                                    &code[12..18]
-                                )
+                                format!("{}-{}-{}", &code[0..6], &code[6..12], &code[12..18])
                             }
                         })
                         .collect();
@@ -128,8 +122,8 @@ impl OperatingConfig {
             }
             s => Unknown(s.to_string()),
         };
-        if let Some(expiry_timestamp) = payload["asnpData"]["adobeCertSignedValues"]
-            ["values"]["licenseExpiryTimestamp"]
+        if let Some(expiry_timestamp) = payload["asnpData"]["adobeCertSignedValues"]["values"]
+            ["licenseExpiryTimestamp"]
             .as_str()
         {
             self.expiry_date = date_from_epoch_millis(expiry_timestamp)?;
@@ -140,8 +134,7 @@ impl OperatingConfig {
     }
 
     fn from_preconditioning_json(data: &JsonMap) -> Result<Vec<OperatingConfig>> {
-        let oc_vec: Vec<JsonMap> =
-            serde_json::from_value(data["operatingConfigs"].clone())?;
+        let oc_vec: Vec<JsonMap> = serde_json::from_value(data["operatingConfigs"].clone())?;
         let mut result: Vec<OperatingConfig> = Vec::new();
         for oc_data in oc_vec {
             result.push(OperatingConfig::from_preconditioning_data(&oc_data)?)
@@ -178,8 +171,8 @@ impl OperatingConfig {
             .wrap_err("Cannot parse ccp file")?;
         let data_node = doc.find("Preconditioning");
         let data = data_node.text();
-        let data: JsonMap = serde_json::from_str(data)
-            .wrap_err("Can't parse preconditioning data in ccp file")?;
+        let data: JsonMap =
+            serde_json::from_str(data).wrap_err("Can't parse preconditioning data in ccp file")?;
         OperatingConfig::from_preconditioning_json(&data)
     }
 

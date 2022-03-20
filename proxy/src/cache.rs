@@ -34,8 +34,7 @@ impl Cache {
         let mode = if can_create {
             "rwc"
         } else {
-            std::fs::metadata(db_name)
-                .wrap_err(format!("Can't open cache db: {}", db_name))?;
+            std::fs::metadata(db_name).wrap_err(format!("Can't open cache db: {}", db_name))?;
             "rw"
         };
         let pool = db_init(db_name, mode)
@@ -91,12 +90,10 @@ impl Cache {
         for (req, resp) in pairs.iter() {
             match req.kind {
                 Kind::Activation => {
-                    store_activation_response(ProxyMode::Cache, out_pool, req, resp)
-                        .await?;
+                    store_activation_response(ProxyMode::Cache, out_pool, req, resp).await?;
                 }
                 Kind::Deactivation => {
-                    store_deactivation_response(ProxyMode::Cache, out_pool, req, resp)
-                        .await?;
+                    store_deactivation_response(ProxyMode::Cache, out_pool, req, resp).await?;
                 }
             }
         }
@@ -139,7 +136,10 @@ impl Cache {
             Kind::Activation => store_activation_request(pool, req).await,
             Kind::Deactivation => store_deactivation_request(pool, req).await,
         } {
-            error!("Cache of {} request {} failed: {:?}", req.kind, req.request_id, err);
+            error!(
+                "Cache of {} request {} failed: {:?}",
+                req.kind, req.request_id, err
+            );
         }
     }
 
@@ -151,11 +151,12 @@ impl Cache {
         let mode = self.mode.clone();
         if let Err(err) = match req.kind {
             Kind::Activation => store_activation_response(mode, pool, req, resp).await,
-            Kind::Deactivation => {
-                store_deactivation_response(mode, pool, req, resp).await
-            }
+            Kind::Deactivation => store_deactivation_response(mode, pool, req, resp).await,
         } {
-            error!("Cache of {} response {} failed: {:?}", req.kind, req.request_id, err);
+            error!(
+                "Cache of {} response {} failed: {:?}",
+                req.kind, req.request_id, err
+            );
         }
     }
 
@@ -200,11 +201,22 @@ async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
     if env::var("FRL_PROXY_ENABLE_STATEMENT_LOGGING").is_err() {
         options.disable_statement_logging();
     }
-    let pool = SqlitePoolOptions::new().max_connections(5).connect_with(options).await?;
-    sqlx::query(ACTIVATION_REQUEST_SCHEMA).execute(&pool).await?;
-    sqlx::query(DEACTIVATION_REQUEST_SCHEMA).execute(&pool).await?;
-    sqlx::query(ACTIVATION_RESPONSE_SCHEMA).execute(&pool).await?;
-    sqlx::query(DEACTIVATION_RESPONSE_SCHEMA).execute(&pool).await?;
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(options)
+        .await?;
+    sqlx::query(ACTIVATION_REQUEST_SCHEMA)
+        .execute(&pool)
+        .await?;
+    sqlx::query(DEACTIVATION_REQUEST_SCHEMA)
+        .execute(&pool)
+        .await?;
+    sqlx::query(ACTIVATION_RESPONSE_SCHEMA)
+        .execute(&pool)
+        .await?;
+    sqlx::query(DEACTIVATION_RESPONSE_SCHEMA)
+        .execute(&pool)
+        .await?;
     Ok(pool)
 }
 
@@ -221,7 +233,10 @@ async fn store_activation_request(pool: &SqlitePool, req: &CRequest) -> Result<(
         field_list, value_list
     );
     let a_key = activation_id(req);
-    debug!("Storing activation request {} with key: {}", &req.request_id, &a_key);
+    debug!(
+        "Storing activation request {} with key: {}",
+        &req.request_id, &a_key
+    );
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
         .bind(&a_key)
@@ -246,7 +261,10 @@ async fn store_activation_request(pool: &SqlitePool, req: &CRequest) -> Result<(
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
-    debug!("Stored activation request has rowid {}", result.last_insert_rowid());
+    debug!(
+        "Stored activation request has rowid {}",
+        result.last_insert_rowid()
+    );
     Ok(())
 }
 
@@ -263,7 +281,10 @@ async fn store_deactivation_request(pool: &SqlitePool, req: &CRequest) -> Result
         field_list, value_list
     );
     let d_key = deactivation_id(req);
-    debug!("Storing deactivation request {} with key: {}", &req.request_id, &d_key);
+    debug!(
+        "Storing deactivation request {} with key: {}",
+        &req.request_id, &d_key
+    );
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
         .bind(&d_key)
@@ -279,12 +300,18 @@ async fn store_deactivation_request(pool: &SqlitePool, req: &CRequest) -> Result
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
-    debug!("Stored deactivation request has rowid {}", result.last_insert_rowid());
+    debug!(
+        "Stored deactivation request has rowid {}",
+        result.last_insert_rowid()
+    );
     Ok(())
 }
 
 async fn store_activation_response(
-    mode: ProxyMode, pool: &SqlitePool, req: &CRequest, resp: &CResponse,
+    mode: ProxyMode,
+    pool: &SqlitePool,
+    req: &CRequest,
+    resp: &CResponse,
 ) -> Result<()> {
     let field_list = "(activation_key, deactivation_key, body, timestamp)";
     let value_list = "(?, ?, ?, ?)";
@@ -295,7 +322,10 @@ async fn store_activation_response(
     let a_key = activation_id(req);
     let d_key = deactivation_id(req);
     let mut tx = pool.begin().await?;
-    debug!("Storing activation response {} with key: {}", &req.request_id, &a_key);
+    debug!(
+        "Storing activation response {} with key: {}",
+        &req.request_id, &a_key
+    );
     let result = sqlx::query(&i_str)
         .bind(&a_key)
         .bind(&d_key)
@@ -303,7 +333,10 @@ async fn store_activation_response(
         .bind(&req.timestamp)
         .execute(&mut tx)
         .await?;
-    debug!("Stored activation response has rowid {}", result.last_insert_rowid());
+    debug!(
+        "Stored activation response has rowid {}",
+        result.last_insert_rowid()
+    );
     if let ProxyMode::Forward = mode {
         // if we are forwarding, then we just remember the response
     } else {
@@ -321,7 +354,10 @@ async fn store_activation_response(
 }
 
 async fn store_deactivation_response(
-    mode: ProxyMode, pool: &SqlitePool, req: &CRequest, resp: &CResponse,
+    mode: ProxyMode,
+    pool: &SqlitePool,
+    req: &CRequest,
+    resp: &CResponse,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
     if let ProxyMode::Forward = mode {
@@ -333,21 +369,33 @@ async fn store_deactivation_response(
             field_list, value_list
         );
         let d_key = deactivation_id(req);
-        debug!("Storing deactivation response {} with key: {}", &req.request_id, &d_key);
+        debug!(
+            "Storing deactivation response {} with key: {}",
+            &req.request_id, &d_key
+        );
         let result = sqlx::query(&i_str)
             .bind(&d_key)
             .bind(std::str::from_utf8(&resp.body).unwrap())
             .bind(&req.timestamp)
             .execute(&mut tx)
             .await?;
-        debug!("Stored deactivation response has rowid {}", result.last_insert_rowid());
+        debug!(
+            "Stored deactivation response has rowid {}",
+            result.last_insert_rowid()
+        );
     } else {
         // when we are live, we remove all activation requests/responses as they are now invalid
         let d_key = deactivation_id(req);
-        debug!("Removing activation requests with deactivation key: {}", d_key);
+        debug!(
+            "Removing activation requests with deactivation key: {}",
+            d_key
+        );
         let d_str = "delete from activation_requests where deactivation_key = ?";
         sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-        debug!("Removing activation responses with deactivation key: {}", d_key);
+        debug!(
+            "Removing activation responses with deactivation key: {}",
+            d_key
+        );
         let d_str = "delete from activation_responses where deactivation_key = ?";
         sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
         // Remove any pending deactivation requests & responses as they have been completed.
@@ -362,12 +410,9 @@ async fn store_deactivation_response(
     Ok(())
 }
 
-async fn fetch_activation_response(
-    pool: &SqlitePool, req: &CRequest,
-) -> Result<Option<CResponse>> {
+async fn fetch_activation_response(pool: &SqlitePool, req: &CRequest) -> Result<Option<CResponse>> {
     let a_key = activation_id(req);
-    let q_str =
-        "select body, timestamp from activation_responses where activation_key = ?";
+    let q_str = "select body, timestamp from activation_responses where activation_key = ?";
     debug!("Finding activation response with key: {}", &a_key);
     let result = sqlx::query(q_str).bind(&a_key).fetch_optional(pool).await?;
     match result {
@@ -389,7 +434,8 @@ async fn fetch_activation_response(
 }
 
 async fn fetch_deactivation_response(
-    pool: &SqlitePool, req: &CRequest,
+    pool: &SqlitePool,
+    req: &CRequest,
 ) -> Result<Option<CResponse>> {
     let a_key = activation_id(req);
     let q_str = "select body from activation_responses where activation_key = ?";
@@ -453,9 +499,7 @@ async fn fetch_forwarded_pairs(pool: &SqlitePool) -> Result<Vec<(CRequest, CResp
     Ok(activations)
 }
 
-async fn fetch_forwarded_activations(
-    pool: &SqlitePool,
-) -> Result<Vec<(CRequest, CResponse)>> {
+async fn fetch_forwarded_activations(pool: &SqlitePool) -> Result<Vec<(CRequest, CResponse)>> {
     let mut result: Vec<(CRequest, CResponse)> = Vec::new();
     let q_str = r#"
         select req.*, resp.body from activation_requests req 
@@ -463,14 +507,15 @@ async fn fetch_forwarded_activations(
             on req.activation_key = resp.activation_key"#;
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows.iter() {
-        result.push((request_from_activation_row(row), response_from_activation_row(row)))
+        result.push((
+            request_from_activation_row(row),
+            response_from_activation_row(row),
+        ))
     }
     Ok(result)
 }
 
-async fn fetch_forwarded_deactivations(
-    pool: &SqlitePool,
-) -> Result<Vec<(CRequest, CResponse)>> {
+async fn fetch_forwarded_deactivations(pool: &SqlitePool) -> Result<Vec<(CRequest, CResponse)>> {
     let mut result: Vec<(CRequest, CResponse)> = Vec::new();
     let q_str = r#"
         select req.*, resp.body from deactivation_requests req 
@@ -487,15 +532,22 @@ async fn fetch_forwarded_deactivations(
 }
 
 fn activation_id(req: &CRequest) -> String {
-    let factors: Vec<String> =
-        vec![req.app_id.clone(), req.ngl_version.clone(), deactivation_id(req)];
+    let factors: Vec<String> = vec![
+        req.app_id.clone(),
+        req.ngl_version.clone(),
+        deactivation_id(req),
+    ];
     factors.join("|")
 }
 
 fn deactivation_id(req: &CRequest) -> String {
     let factors: Vec<&str> = vec![
         req.package_id.as_str(),
-        if req.is_vdi { req.os_user_id.as_str() } else { req.device_id.as_str() },
+        if req.is_vdi {
+            req.os_user_id.as_str()
+        } else {
+            req.device_id.as_str()
+        },
     ];
     factors.join("|")
 }

@@ -95,8 +95,7 @@ pub fn get_cached_expiry(oc_spec: &OcFileSpec) -> Option<String> {
     if let Ok(json) = get_saved_credential(&note_key) {
         if let Ok(license) = serde_json::from_str::<CachedOnlineLicense>(&json) {
             if npd_id.eq(&license.cust_asnp.payload.npd_id) {
-                let timestamp =
-                    license.asnp.payload.legacy_profile.effective_end_timestamp;
+                let timestamp = license.asnp.payload.legacy_profile.effective_end_timestamp;
                 return Some(timestamp.to_string());
             }
         }
