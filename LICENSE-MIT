@@ -1,6 +1,16 @@
+Many of the files in this repository are derived from files
+in Adobe Open Source projects (see the COPYRIGHT.md file for
+details).  The use of those materials in this work is permitted
+by the MIT license under which they were released, the source of
+which is reproduced here.
+
+PLEASE NOTE: This license is included because its reproduction is
+required as part this derived work.  However, all the material in this derived
+work is licensed under the GNU Affero Public License (see LICENSE-AGPL).
+
 MIT License
 
-Copyright 2020 Adobe.  All rights reserved.
+Copyright 2022 Adobe.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
