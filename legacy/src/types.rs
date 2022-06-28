@@ -342,7 +342,7 @@ mod tests {
         } else {
             panic!("Failed to create file info from 'src' directory.");
         }
-        if let Ok(fi) = FileInfo::from_path("src/lib.rs") {
+        if let Ok(fi) = FileInfo::from_path("src/description.rs") {
             assert!(!fi.is_directory);
             assert!(fi.extension.eq_ignore_ascii_case("rs"));
             assert!(fi.name.eq_ignore_ascii_case("lib"));

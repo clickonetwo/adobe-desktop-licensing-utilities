@@ -2,6 +2,6 @@
 members = [
     "adlu-base",
     "adlu-config",
-    "decoder",
-    "proxy",
+    "adlu-decoder",
+    "adlu-proxy",
 ]

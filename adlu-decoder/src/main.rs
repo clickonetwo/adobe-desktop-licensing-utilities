@@ -17,11 +17,12 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 mod cli;
+mod description;
 
 use adlu_config::Configuration;
 use clap::Parser;
 use cli::{Opt, DEFAULT_CONFIG_DIR};
-use decoder::describe_configuration;
+use description::describe_configuration;
 
 fn main() {
     let opt: Opt = Opt::parse();

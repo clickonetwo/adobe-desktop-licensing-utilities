@@ -192,12 +192,12 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
     );
     let mut net_req = req.to_network(cops_scheme, &cops_host);
     let request = if conf.network.use_proxy {
-        // proxy
+        // use upstream proxy
         let proxy_url = format!(
             "{}://{}:{}",
             "http", conf.network.proxy_host, conf.network.proxy_port
         );
-        info!("Connecting via proxy: {}", proxy_url);
+        info!("Connecting via upstream proxy: {}", proxy_url);
         let proxy = {
             let proxy_uri = proxy_url
                 .parse()
@@ -211,7 +211,7 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
             }
             let connector = HttpConnector::new();
             ProxyConnector::from_proxy(connector, proxy)
-                .wrap_err("Failed to create proxy connector")?
+                .wrap_err("Failed to create upstream proxy connector")?
         };
         // add any needed proxy headers (authorization, typically) to the request
         if let Some(headers) = proxy.http_headers(net_req.uri()) {
@@ -220,7 +220,7 @@ async fn call_cops(conf: &Settings, req: &CRequest) -> Result<HResponse<Body>> {
         let client = Client::builder().build(proxy);
         client.request(net_req)
     } else {
-        // no proxy
+        // direct connection to COPS
         if cops_scheme == "https" {
             let https = HttpsConnector::new();
             let client = Client::builder().build::<_, hyper::Body>(https);

@@ -132,7 +132,7 @@ impl Settings {
     }
 
     pub fn update_config_file(&mut self, path: &str) -> Result<()> {
-        // update proxy settings including cache db
+        // update configuration file by interviewing user
         eprintln!("The proxy has four modes: cache, store, forward, and passthrough.");
         eprintln!("Read the user guide to understand which is right for each situation.");
         let choices = vec!["cache", "store", "forward", "passthrough"];

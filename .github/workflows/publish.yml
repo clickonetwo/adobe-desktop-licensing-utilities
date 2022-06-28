@@ -14,16 +14,16 @@ jobs:
         include:
           - arch: x86_64-pc-windows-msvc
             os: windows-latest
-            executable_name: adobe-license-decoder.exe
-            posted_name: adobe-license-decoder.windows_x86_64.exe
+            executable_name: adlu-decoder.exe
+            posted_name: adlu-decoder.windows_x86_64.exe
           - arch: x86_64-apple-darwin
             os: macos-latest
-            executable_name: adobe-license-decoder
-            posted_name: adobe-license-decoder.mac_x86_64
+            executable_name: adlu-decoder
+            posted_name: adlu-decoder.mac_x86_64
           - arch: aarch64-apple-darwin
             os: macos-latest
-            executable_name: adobe-license-decoder
-            posted_name: adobe-license-decoder.mac_arm64
+            executable_name: adlu-decoder
+            posted_name: adlu-decoder.mac_arm64
 
     steps:
       - name: upgrade XCode

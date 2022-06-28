@@ -1,12 +1,12 @@
 [package]
-name = "decoder"
+name = "adlu-decoder"
 version = "2.0.0"
-authors = ["Andrew Dorton <adorton@adobe.com>", "Daniel Brotsky <dan@clickonetwo.io>"]
+authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 edition = "2021"
-default-run = "adobe-license-decoder"
+default-run = "adlu-decoder"
 
 [[bin]]
-name = "adobe-license-decoder"
+name = "adlu-decoder"
 
 [dependencies]
 adlu-base = { path = "../adlu-base" }

@@ -1,23 +1,21 @@
 # Adobe Device License Utilities
 
-[![Rust CI (stable)](https://github.com/adobe/adobe-device-licensing-utilities/workflows/Rust%20CI%20(stable)/badge.svg)](https://github.com/adobe/adobe-license-decoder.rs/actions?query=workflow%3A%22Rust+CI+%28stable%29%22)
+[![Rust CI (stable)](https://github.com/adobe/adobe-device-licensing-utilities/workflows/Rust%20CI%20(stable)/badge.svg)](https://github.com/adobe/adobe-device-licensing-utilities/actions?query=workflow%3A%22Rust+CI+%28stable%29%22)
 
 Adobe provides two forms of device-based licensing: Feature Restricted Licensing (FRL) and Shared Device Licensing (SDL).  This project provides two utilities which can help administrators manage the deployment and use of their device-based licenses:
 
 - The `license-decoder` is a command-line tool for discovering and managing the "operating configuration" files that control device licensing (both FRL and SDL).
 - The `frl-proxy` is a webservice that facilitates the use of FRL licensing in LAN environments that are either intermittently connected to or fully isolated from the internet.
 
-## Attribution
-
-
+Each of these utilities has their own project.  See the README files in each of their projects for more info.
 
 ## Support
 
-These utilities are developed and maintained by [Daniel Brotsky](maito:dan@clickonetwo.io).  If you encounter bugs, have questions, or have feature requests, please file an issue against this project.  If your support needs are more involved, or if you are looking for custom feature development, maintenance contracts are available from [ClickOneTwo Consulting LLC](clickonetwo.io).
+These utilities are developed and maintained by [Daniel Brotsky](mailto:dan@clickonetwo.io).  If you encounter bugs, have questions, or have feature requests, please file an issue against this project.  If your support needs are more involved, or if you are looking for custom feature development, maintenance contracts are available from [ClickOneTwo Consulting LLC](https://clickonetwo.io).
 
 ## Contributing
 
-Contributions are welcomed! Read the [Contributing Guide](./.github/CONTRIBUTING.md) for more information.
+Contributions are very welcome.  If you have a PR to submit, please be sure to open a bug first explaining the issue that you would like to fix.
 
 ## License and Attribution
 
