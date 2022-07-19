@@ -17,6 +17,11 @@
 # released.  That license is reproduced here in the LICENSE-MIT file.
 #
 if [ "$1" == "ubuntu" ]; then
+  tgt=x86_64-unknown-linux-gnu
+  cc=/opt/homebrew/bin/x86_64-unknown-linux-gnu-cc
+  ar=/opt/homebrew/bin/x86_64-unknown-linux-gnu-ar
+  env TARGET_CC=$cc TARGET_AR=$ar cargo build --workspace --target=$tgt --features cross-compile
+elif [ "$1" == "linux" ]; then
   tgt=x86_64-unknown-linux-musl
   cc=/opt/homebrew/bin/x86_64-unknown-linux-musl-cc
   ar=/opt/homebrew/bin/x86_64-unknown-linux-musl-ar

@@ -7,9 +7,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        arch: [x86_64-unknown-linux-musl, x86_64-apple-darwin, aarch64-apple-darwin, x86_64-pc-windows-msvc]
+        arch: [x86_64-unknown-linux-gnu, x86_64-apple-darwin, aarch64-apple-darwin, x86_64-pc-windows-msvc]
         include:
-          - arch: x86_64-unknown-linux-musl
+          - arch: x86_64-unknown-linux-gnu
             os: ubuntu-latest
           - arch: x86_64-pc-windows-msvc
             os: windows-latest
@@ -69,7 +69,7 @@ jobs:
 
       - name: Build release adlu-decoder (mac only for now, until windows libngl is built)
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.arch != 'x86_64-unknown-linux-musl' }}
+        if: ${{ matrix.arch != 'x86_64-unknown-linux-gnu' }}
         with:
           command: build
           args: --target ${{ matrix.arch }} --package adlu-decoder --release --locked
