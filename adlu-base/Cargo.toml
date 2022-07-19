@@ -5,6 +5,9 @@ license = "AGPLv3"
 version = "1.0.0-alpha.1"
 edition = "2021"
 
+[features]
+cross-compile = ["openssl/vendored", "openssl/v111"]
+
 [dependencies]
 base64 = "0.13"
 bytes = "1"
@@ -13,7 +16,7 @@ ctrlc = { version = "3.1", features = ["termination"] }
 eyre = "0.6"
 keyring = "1"
 log = "0.4"
-openssl = "0.10"
+openssl = { varsion = "0.10", features = [] }
 serde = "1"
 serde_json = "1"
 sha2 = "0.10"

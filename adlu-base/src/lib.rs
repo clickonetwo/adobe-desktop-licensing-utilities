@@ -19,7 +19,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 use std::collections::HashMap;
 
 use chrono::prelude::*;
-use eyre::{eyre, Result, WrapErr};
+use eyre::{Result, WrapErr};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
@@ -212,9 +212,9 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
         Ok(s) => Ok(s),
         Err(keyring::Error::NoStorageAccess(err)) => {
             eprintln!("Credential store could not be accessed.  Is it unlocked?");
-            Err(eyre!(err))
+            Err(eyre::eyre!(err))
         }
-        Err(err) => Err(eyre!(err)),
+        Err(err) => Err(eyre::eyre!(err)),
     }
 }
 
@@ -234,7 +234,7 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
         }
     }
     if result.is_empty() {
-        Err(eyre!("No credential data found"))
+        Err(eyre::eyre!("No credential data found"))
     } else {
         Ok(result)
     }
@@ -243,6 +243,7 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_get_device_id() {
         let id = super::get_adobe_device_id();
         println!("The test machine's Adobe device ID is '{}'", id);
