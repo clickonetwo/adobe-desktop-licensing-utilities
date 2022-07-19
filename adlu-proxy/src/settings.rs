@@ -17,11 +17,13 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use std::convert::{TryFrom, TryInto};
+use std::ffi::OsStr;
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
 
+use adlu_base::{load_pem_files, load_pfx_file, CertificateData};
 use config::{Config, Environment, File as ConfigFile, FileFormat};
 use dialoguer::{Confirm, Input, Password, Select};
 use eyre::{eyre, Report, Result, WrapErr};
@@ -35,15 +37,11 @@ pub struct ProxyConfiguration {
     pub settings: Settings,
     pub cache: crate::Cache,
     pub client: reqwest::Client,
-    pub bind_addr: std::net::SocketAddr,
     pub adobe_server: String,
 }
 
 impl ProxyConfiguration {
-    pub fn new(settings: &Settings, cache: &crate::Cache) -> Self {
-        let bad_config = "Proxy Configuration failure (please report a bug)";
-        let cops_uri: http::Uri = settings.proxy.remote_host.parse().expect(bad_config);
-        let cops_host = cops_uri.host().expect(bad_config);
+    pub fn new(settings: &Settings, cache: &crate::Cache) -> Result<Self> {
         let mut builder = reqwest::Client::builder();
         builder = builder.timeout(std::time::Duration::new(59, 0));
         if settings.network.use_proxy {
@@ -51,7 +49,8 @@ impl ProxyConfiguration {
                 "{}://{}:{}",
                 "http", settings.network.proxy_host, settings.network.proxy_port
             );
-            let mut proxy = reqwest::Proxy::https(&proxy_host).expect(bad_config);
+            let mut proxy = reqwest::Proxy::https(&proxy_host)
+                .wrap_err("Invalid proxy configuration")?;
             if settings.network.use_basic_auth {
                 proxy = proxy.basic_auth(
                     &settings.network.proxy_username,
@@ -60,24 +59,46 @@ impl ProxyConfiguration {
             }
             builder = builder.proxy(proxy)
         }
-        let addr = if settings.proxy.ssl {
-            format!("{}:{}", settings.proxy.host, settings.proxy.port)
-        } else {
-            format!("{}:{}", settings.proxy.host, settings.proxy.ssl_port)
-        };
-        let bind_addr: std::net::SocketAddr =
-            addr.parse().expect("Invalid proxy bind address (please report a bug)");
-        ProxyConfiguration {
+        let client = builder.build().wrap_err("Can't initialize network")?;
+        let adobe_uri: http::Uri =
+            settings.proxy.remote_host.parse().wrap_err("Invalid Adobe endpoint")?;
+        Ok(ProxyConfiguration {
             settings: settings.clone(),
             cache: cache.clone(),
-            client: builder.build().expect(bad_config),
-            bind_addr,
-            adobe_server: if let Some(port) = cops_uri.port() {
-                format!("https://{}:{}", cops_host, port.as_str())
-            } else {
-                format!("https://{}", cops_host)
-            },
+            client,
+            adobe_server: adobe_uri.to_string(),
+        })
+    }
+
+    pub fn bind_addr(&self) -> Result<std::net::SocketAddr> {
+        let proxy_addr = if self.settings.proxy.ssl {
+            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.ssl_port)
+        } else {
+            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.port)
+        };
+        proxy_addr.parse().wrap_err("Invalid proxy host/port configuration")
+    }
+
+    pub fn cert_data(&self) -> Result<CertificateData> {
+        if self.settings.proxy.ssl {
+            load_cert_data(&self.settings).wrap_err("SSL configuration failure")
+        } else {
+            Err(eyre!("SSL is not enabled"))
         }
+    }
+}
+
+fn load_cert_data(settings: &Settings) -> Result<CertificateData> {
+    if settings.ssl.use_pfx {
+        load_pfx_file(&settings.ssl.cert_path, &settings.ssl.password)
+            .wrap_err("Failed to load PKCS12 data:")
+    } else {
+        let key_pass = match settings.ssl.password.as_str() {
+            "" => None,
+            p => Some(p),
+        };
+        load_pem_files(&settings.ssl.key_path, &settings.ssl.cert_path, key_pass)
+            .wrap_err("Failed to load certificate and key files")
     }
 }
 
@@ -93,8 +114,11 @@ pub struct Proxy {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Ssl {
+    pub use_pfx: bool,
+    pub pfx_path: String,
     pub cert_path: String,
-    pub cert_password: String,
+    pub key_path: String,
+    pub password: String,
 }
 
 impl Debug for Ssl {
@@ -111,6 +135,8 @@ pub struct Logging {
     pub level: LogLevel,
     pub destination: LogDestination,
     pub file_path: String,
+    pub rotate_size_kb: u64,
+    pub rotate_count: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -188,7 +214,7 @@ impl SettingsRef {
             .build()
             .expect("Can't build default configuration (please report a bug)")
             .try_deserialize()
-            .expect("Can't create default configuration (please report a bug");
+            .expect("Can't create default configuration (please report a bug)");
         conf
     }
 
@@ -228,17 +254,25 @@ impl SettingsRef {
                 settings.logging.destination = LogDestination::File;
             }
             Command::Configure => {
-                // no logging, because it might interfere with interviews
-                settings.logging.level = LogLevel::Off;
+                // don't touch the settings, so they can be configured
             }
         }
-        settings.validate()?;
         Ok(settings)
     }
 
     /// Update configuration settings by interviewing user
     /// No logging on this path, because it might interfere with the interview
     pub fn update_config(&mut self) -> Result<()> {
+        self.update_base_config()?;
+        self.update_adobe_config()?;
+        self.update_database_config()?;
+        self.update_ssl_config()?;
+        self.update_upstream_config()?;
+        self.update_logging_config()?;
+        Ok(())
+    }
+
+    fn update_base_config(&mut self) -> Result<()> {
         // update configuration file by interviewing user
         eprintln!("The proxy has four modes: cache, store, forward, and passthrough.");
         eprintln!("Read the user guide to understand which is right for each situation.");
@@ -256,6 +290,24 @@ impl SettingsRef {
             .interact()?;
         let choice: ProxyMode = choices[choice].try_into().unwrap();
         self.proxy.mode = choice;
+        eprintln!("You must specify a numeric IPv4 address for the proxy to listen on.");
+        eprintln!("Use 0.0.0.0 to have the proxy listen on all available addresses.");
+        let choice: String = Input::new()
+            .with_prompt("Numeric IPv4 address")
+            .with_initial_text(&self.proxy.host)
+            .validate_with(host_validator)
+            .interact_text()?;
+        self.proxy.host = choice;
+        let choice: String = Input::new()
+            .with_prompt("Host port for http (non-ssl) mode")
+            .with_initial_text(&self.proxy.port)
+            .validate_with(port_validator)
+            .interact_text()?;
+        self.proxy.port = choice;
+        Ok(())
+    }
+
+    fn update_database_config(&mut self) -> Result<()> {
         if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
         {
             eprintln!("The proxy uses a SQLite database to keep track of requests and responses.");
@@ -269,19 +321,10 @@ impl SettingsRef {
                 .interact_text()?;
             self.cache.db_path = choice;
         }
-        eprintln!(
-            "The host and port of the proxy must match the one in your license package."
-        );
-        let choice: String = Input::new()
-            .with_prompt("Host IP to listen on")
-            .with_initial_text(&self.proxy.host)
-            .interact_text()?;
-        self.proxy.host = choice;
-        let choice: String = Input::new()
-            .with_prompt("Host port for http (non-ssl) mode")
-            .with_initial_text(&self.proxy.port)
-            .interact_text()?;
-        self.proxy.port = choice;
+        Ok(())
+    }
+
+    fn update_adobe_config(&mut self) -> Result<()> {
         eprintln!("Your proxy server must contact one of two Adobe licensing servers.");
         eprintln!("Use the variable IP server unless your firewall doesn't permit it.");
         let choices = vec![
@@ -303,6 +346,10 @@ impl SettingsRef {
         } else {
             String::from("https://lcs-cops-proxy.adobe.com")
         };
+        Ok(())
+    }
+
+    fn update_ssl_config(&mut self) -> Result<()> {
         eprintln!("MacOS applications can only connect to the proxy via SSL.");
         eprintln!("Windows applications can use SSL, but they don't require it.");
         let choice = Confirm::new()
@@ -317,39 +364,36 @@ impl SettingsRef {
             let choice: String = Input::new()
                 .with_prompt("Host port for https mode")
                 .with_initial_text(&self.proxy.ssl_port)
+                .validate_with(port_validator)
                 .interact_text()?;
             self.proxy.ssl_port = choice;
-            eprintln!(
-                "The proxy requires a certificate store in PKCS format to use SSL."
-            );
-            eprintln!(
-                "Read the user guide to learn how to obtain and prepare this file."
-            );
-            let mut need_cert = true;
-            let mut choice = self.ssl.cert_path.clone();
-            while need_cert {
-                choice = Input::new()
-                    .with_prompt("Name of (or path to) your cert file")
-                    .with_initial_text(choice)
-                    .interact_text()?;
-                if std::fs::metadata(&choice).is_ok() {
-                    self.ssl.cert_path = choice.clone();
-                    need_cert = false;
-                } else {
-                    eprintln!("There is no certificate at that path, try again.");
-                }
+            eprintln!("The proxy requires a certificate and matching key.");
+            eprintln!("You can either use separate certificate and key files, or");
+            eprintln!("you can use a combined PKCS12 (aka PFX) file that has both.");
+            eprintln!("The user guide has information or preparing these files.");
+            let choices = [
+                "Use a single PKCS12/PFX file (in DER format)",
+                "Use separate cert and key files (in PEM format)",
+            ];
+            let choice = Select::new()
+                .items(&choices)
+                .default(if self.ssl.use_pfx { 0 } else { 1 })
+                .with_prompt("How will you supply your certificate and key")
+                .interact()?;
+            if choice == 0 {
+                self.ssl.pfx_path =
+                    get_existing_file_path("PKCS12", &self.ssl.cert_path, "pfx")?;
+            } else {
+                self.ssl.cert_path =
+                    get_existing_file_path("certificate", &self.ssl.cert_path, "cert")?;
+                self.ssl.key_path =
+                    get_existing_file_path("key", &self.ssl.cert_path, "key")?;
             }
-            eprintln!("Usually, for security, PKCS files are encrypted with a password.");
-            eprintln!(
-                "Your proxy will require that password in order to function properly."
-            );
-            eprintln!(
-                "You have the choice of storing your password in your config file or"
-            );
-            eprintln!(
-                "in the value of an environment variable (FRL_PROXY_SSL.CERT_PASSWORD)."
-            );
-            let prompt = if self.ssl.cert_password.is_empty() {
+            eprintln!("Files containing keys are usually encrypted with a password.");
+            eprintln!("Your proxy requires that password in order to function properly.");
+            eprintln!("You can keep your password either in your config file or");
+            eprintln!("in an environment variable named FRL_PROXY_SSL.CERT_PASSWORD.");
+            let prompt = if self.ssl.password.is_empty() {
                 "Do you want to store a password in your configuration file?"
             } else {
                 "Do you want to update the password in your configuration file?"
@@ -365,9 +409,13 @@ impl SettingsRef {
                     .with_confirmation("Confirm password", "Passwords don't match")
                     .allow_empty_password(true)
                     .interact()?;
-                self.ssl.cert_password = choice;
+                self.ssl.password = choice;
             }
         }
+        Ok(())
+    }
+
+    fn update_upstream_config(&mut self) -> Result<()> {
         // update network settings
         let prompt = "Does your network require this proxy to use an upstream proxy?";
         let choice = Confirm::new()
@@ -407,8 +455,15 @@ impl SettingsRef {
                 self.network.proxy_password = choice;
             }
         }
+        Ok(())
+    }
+
+    fn update_logging_config(&mut self) -> Result<()> {
         // update log settings
         let prompt = if let LogLevel::Off = self.logging.level {
+            // defensively set log destination to console when logging is off
+            // to avoid problems with manually configured log files.
+            self.logging.destination = LogDestination::Console;
             "Do you want your proxy server to log information about its operation?"
         } else {
             "Do you want to customize your proxy server's logging configuration?"
@@ -419,33 +474,22 @@ impl SettingsRef {
             .with_prompt(prompt)
             .interact()?;
         if choice {
-            eprintln!("The proxy can log to the console (standard output) or to a file on disk.");
-            let choices = vec!["console", "disk file"];
-            let choice = Select::new()
-                .items(&choices)
-                .default(1)
-                .with_prompt("Log destination")
-                .interact()?;
-            self.logging.destination =
-                if choice == 0 { LogDestination::Console } else { LogDestination::File };
-            if choice == 1 {
-                let choice: String = Input::new()
-                    .allow_empty(false)
-                    .with_prompt("Name of (or path to) your log file")
-                    .with_initial_text(&self.logging.file_path)
-                    .interact_text()?;
-                self.logging.file_path = choice;
-            }
-            let mut choice = !matches!(self.logging.level, LogLevel::Info);
-            if !choice {
+            let log_level_info = match self.logging.level {
+                LogLevel::Off | LogLevel::Info => {
+                    self.logging.level = LogLevel::Info;
+                    true
+                }
+                _ => false,
+            };
+            let do_configure = !log_level_info || {
                 eprintln!("The proxy will log errors, warnings and summary information.");
-                choice = Confirm::new()
+                Confirm::new()
                     .default(false)
                     .wait_for_newline(false)
                     .with_prompt("Do you want to adjust the level of logged information?")
-                    .interact()?;
-            }
-            if choice {
+                    .interact()?
+            };
+            if do_configure {
                 eprintln!("Read the user guide to find out more about logging levels.");
                 let choices =
                     vec!["no logging", "error", "warn", "info", "debug", "trace"];
@@ -465,68 +509,120 @@ impl SettingsRef {
                 let choice: LogLevel = choices[choice].try_into().unwrap();
                 self.logging.level = choice;
             }
-        } else {
-            self.logging.level = LogLevel::Off;
-            self.logging.destination = LogDestination::Console;
+            if matches!(self.logging.level, LogLevel::Off) {
+                // if there is no logging, use the console, so we don't create an empty log file
+                self.logging.destination = LogDestination::Console;
+            } else {
+                eprintln!("The proxy can log to the console (standard output) or to a file on disk.");
+                let choices = vec!["console", "disk file"];
+                let choice = Select::new()
+                    .items(&choices)
+                    .default(1)
+                    .with_prompt("Log destination")
+                    .interact()?;
+                self.logging.destination = if choice == 0 {
+                    LogDestination::Console
+                } else {
+                    LogDestination::File
+                };
+                if choice == 1 {
+                    let choice: String = Input::new()
+                        .allow_empty(false)
+                        .with_prompt("Name of (or path to) your log file")
+                        .with_initial_text(&self.logging.file_path)
+                        .interact_text()?;
+                    self.logging.file_path = choice;
+                }
+            }
+            // ask about log rotation
+            let mut target_size = self.logging.rotate_size_kb;
+            if matches!(self.logging.destination, LogDestination::File) {
+                let prompt = if target_size == 0 {
+                    eprintln!("The proxy is not doing log rotation.");
+                    target_size = 1024;
+                    "Do you want to enable log rotation?"
+                } else {
+                    eprintln!(
+                        "The proxy is rotating logs when they reach {target_size}KB."
+                    );
+                    "Do you want to change your log rotation configuration?"
+                };
+                let choice = Confirm::new()
+                    .default(false)
+                    .wait_for_newline(false)
+                    .with_prompt(prompt)
+                    .interact()?;
+                if choice {
+                    self.logging.rotate_size_kb = Input::new()
+                        .default(target_size)
+                        .with_prompt("Max log file size in KB (0 for no rotation)")
+                        .interact()?;
+                    if self.logging.rotate_size_kb > 0 {
+                        self.logging.rotate_count = Input::new()
+                            .default(self.logging.rotate_count)
+                            .validate_with(|cnt: &u32| {
+                                if *cnt > 0 && *cnt < 100 {
+                                    Ok(())
+                                } else {
+                                    Err(eyre!("Value must be between 0 and 100"))
+                                }
+                            })
+                            .with_prompt("Keep this many log files (1-99)")
+                            .interact()?;
+                    }
+                }
+            }
         }
         Ok(())
     }
+}
 
-    pub fn validate(&self) -> Result<()> {
-        let bind_addr = if self.proxy.ssl {
-            format!("{}:{}", self.proxy.host, self.proxy.port)
-        } else {
-            format!("{}:{}", self.proxy.host, self.proxy.ssl_port)
-        };
-        if bind_addr.parse::<std::net::SocketAddr>().is_err() {
-            return Err(eyre!(
-                "Host must be a dotted IP address (e.g., 0.0.0.0); port must be numeric (e.g., 8080)"
-            ));
-        }
-        if self.proxy.ssl {
-            let path = &self.ssl.cert_path;
-            if path.is_empty() {
-                return Err(eyre!("Certificate path can't be empty when SSL is enabled"));
-            }
-            std::fs::metadata(path)
-                .wrap_err(format!("Invalid certificate path: {}", path))?;
-        }
-        let cops: http::Uri =
-            self.proxy.remote_host.parse().wrap_err("Invalid Adobe endpoint")?;
-        if cops.scheme_str().unwrap_or("").to_lowercase() != "https" {
-            return Err(eyre!("The Adobe endpoint must use HTTPS"));
-        }
-        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
-        {
-            if self.cache.db_path.is_empty() {
-                return Err(eyre!("Database path can't be empty when cache is enabled"));
-            }
-        }
-        if self.network.use_proxy {
-            if self.network.proxy_host.is_empty() {
-                return Err(eyre!("Proxy host can't be empty"));
-            }
-            if self.network.proxy_host.contains(':') {
-                return Err(eyre!(
-                    "Proxy host must not contain a port (use the 'proxy_port' config option)"
-                ));
-            }
-            if self.network.proxy_port.is_empty() {
-                return Err(eyre!("Proxy port can't be empty"));
-            }
-            if self.network.use_basic_auth && self.network.proxy_username.is_empty() {
-                return Err(eyre!(
-                    "Proxy username can't be empty if proxy authentication is on"
-                ));
-            }
-        }
-        if let LogDestination::File = self.logging.destination {
-            if self.logging.file_path.is_empty() {
-                return Err(eyre!("File path must be specified when logging to a file"));
-            }
-        }
-        Ok(())
+#[allow(clippy::ptr_arg)]
+fn host_validator(s: &String) -> Result<()> {
+    let s = s.as_str();
+    if s.contains(':') {
+        return Err(eyre!("Do not specify a port, just an IPv4 address"));
     }
+    let s = format!("{}:0", s);
+    let val = s.parse::<std::net::SocketAddr>();
+    match val {
+        Ok(_) => Ok(()),
+        Err(_) => Err(eyre!("Specify a valid IPv4 numeric address (e.g. 127.0.0.1)")),
+    }
+}
+
+#[allow(clippy::ptr_arg)]
+fn port_validator(s: &String) -> Result<()> {
+    match s.parse::<u32>() {
+        Ok(p) if p > 0 && p < 65_536 => Ok(()),
+        Ok(_) => Err(eyre!("Port must be between 0 and 65536")),
+        Err(_) => Err(eyre!("Port must be a number")),
+    }
+}
+
+fn get_existing_file_path(
+    prompt: &str,
+    initial: &str,
+    extension: &str,
+) -> Result<String> {
+    let ext = std::path::Path::new(initial).extension().and_then(OsStr::to_str);
+    let prompt = format!("Name of (or path to) your {} file", prompt);
+    let mut choice = match ext {
+        None => format!("{}.{}", initial, extension),
+        Some(_) => initial.to_string(),
+    };
+    loop {
+        choice = Input::new()
+            .with_prompt(&prompt)
+            .with_initial_text(choice)
+            .interact_text()?;
+        if std::fs::metadata(&choice).is_ok() {
+            break;
+        } else {
+            eprintln!("There is no file at that path, try again.");
+        }
+    }
+    Ok(choice)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

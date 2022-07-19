@@ -19,6 +19,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 use eyre::{eyre, Result, WrapErr};
 use openssl::{pkey::PKey, pkey::Private, x509::X509};
 
+#[derive(Debug, Clone)]
 pub struct CertificateData {
     key: PKey<Private>,
     cert: X509,

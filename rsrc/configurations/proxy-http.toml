@@ -1,23 +1,23 @@
 [proxy]
 mode = "cache"
-host = "0.0.0.0"
+host = "127.0.0.1"
 port = "8080"
 ssl_port = "8443"
 remote_host = "https://lcs-cops.adobe.io"
-ssl = true
+ssl = false
 
 [ssl]
 use_pfx = true
 pfx_path = "proxy-certkey"
-cert_path = "proxy-cert"
-key_path = "proxy-key"
+cert_path = "proxy-cert.pfx"
+key_path = ""
 password = ""
 
 [logging]
-level = "info"
+level = "trace"
 destination = "file"
-file_path = "proxy-log.log"
-rotate_size_kb = 0
+file_path = "proxy-http.log"
+rotate_size_kb = 5
 rotate_count = 10
 
 [cache]

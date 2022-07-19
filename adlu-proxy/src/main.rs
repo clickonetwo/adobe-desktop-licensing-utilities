@@ -23,7 +23,7 @@ use log::debug;
 use cache::Cache;
 use cli::{Command, FrlProxy};
 
-use crate::settings::ProxyMode;
+use crate::settings::{ProxyConfiguration, ProxyMode};
 
 mod api;
 mod cache;
@@ -46,22 +46,16 @@ async fn main() -> Result<()> {
                 logging::init(&settings)?;
                 if let ProxyMode::Forward = settings.proxy.mode {
                     let cache = Cache::from(&settings, false).await?;
-                    proxy::forward_stored_requests(settings.clone(), cache.clone()).await;
+                    let conf = ProxyConfiguration::new(&settings, &cache)?;
+                    proxy::forward_stored_requests(conf).await?;
                     cache.close().await;
                 } else {
                     let cache = Cache::from(&settings, true).await?;
+                    let conf = ProxyConfiguration::new(&settings, &cache)?;
                     if settings.proxy.ssl {
-                        proxy::serve_incoming_https_requests(
-                            settings.clone(),
-                            cache.clone(),
-                        )
-                        .await;
+                        proxy::serve_incoming_https_requests(conf).await?;
                     } else {
-                        proxy::serve_incoming_http_requests(
-                            settings.clone(),
-                            cache.clone(),
-                        )
-                        .await;
+                        proxy::serve_incoming_http_requests(conf).await?;
                     }
                     cache.close().await;
                 }

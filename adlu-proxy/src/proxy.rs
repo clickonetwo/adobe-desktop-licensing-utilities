@@ -16,55 +16,56 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
+use eyre::Result;
 use log::{error, info};
 use warp::Filter;
 
-use adlu_base::{get_first_interrupt, load_pfx_file};
+use adlu_base::get_first_interrupt;
 
 use crate::api::{activate_route, deactivate_route, status_route};
-use crate::cache::Cache;
 use crate::handlers;
-use crate::settings::{ProxyConfiguration, Settings};
+use crate::settings::ProxyConfiguration;
 
-pub async fn serve_incoming_https_requests(settings: Settings, cache: Cache) {
-    let conf = ProxyConfiguration::new(&settings, &cache);
+pub async fn serve_incoming_https_requests(conf: ProxyConfiguration) -> Result<()> {
     let routes = activate_route(conf.clone())
         .or(deactivate_route(conf.clone()))
         .or(status_route(conf.clone()));
-    let pfx_data = load_pfx_file(&settings.ssl.cert_path, &settings.ssl.cert_password)
-        .unwrap_or_else(|err| panic!("Failed to load certificate data: {}", err));
+    let bind_addr = conf.bind_addr()?;
+    let cert_data = conf.cert_data()?;
     let (addr, server) = warp::serve(routes)
         .tls()
-        .cert(pfx_data.cert_pem())
-        .key(pfx_data.key_pem())
-        .bind_with_graceful_shutdown(conf.bind_addr, get_first_interrupt());
+        .cert(cert_data.cert_pem())
+        .key(cert_data.key_pem())
+        .bind_with_graceful_shutdown(bind_addr, get_first_interrupt());
     info!("Serving HTTPS requests on {:?}...", addr);
     match tokio::task::spawn(server).await {
         Ok(_) => info!("HTTPS server terminated normally"),
         Err(err) => error!("HTTPS server terminated abnormally: {:?}", err),
     }
+    Ok(())
 }
 
-pub async fn serve_incoming_http_requests(settings: Settings, cache: Cache) {
-    let conf = ProxyConfiguration::new(&settings, &cache);
+pub async fn serve_incoming_http_requests(conf: ProxyConfiguration) -> Result<()> {
     let routes = activate_route(conf.clone())
         .or(deactivate_route(conf.clone()))
         .or(status_route(conf.clone()));
-    let (addr, server) = warp::serve(routes)
-        .bind_with_graceful_shutdown(conf.bind_addr, get_first_interrupt());
+    let bind_addr = conf.bind_addr()?;
+    let (addr, server) =
+        warp::serve(routes).bind_with_graceful_shutdown(bind_addr, get_first_interrupt());
     info!("Serving HTTP requests on {:?}...", addr);
     match tokio::task::spawn(server).await {
         Ok(_) => info!("HTTP server terminated normally"),
-        Err(err) => error!("HTTPS server terminated abnormally: {:?}", err),
+        Err(err) => error!("HTTP server terminated abnormally: {:?}", err),
     }
+    Ok(())
 }
 
-pub async fn forward_stored_requests(settings: Settings, cache: Cache) {
-    let conf = ProxyConfiguration::new(&settings, &cache);
-    let reqs = cache.fetch_forwarding_requests().await;
+pub async fn forward_stored_requests(conf: ProxyConfiguration) -> Result<()> {
+    let reqs = conf.cache.fetch_forwarding_requests().await;
     if reqs.is_empty() {
+        info!("No requests to forward.");
         eprintln!("No requests to forward.");
-        return;
+        return Ok(());
     }
     let count = reqs.len();
     eprintln!("Found {} request(s) to forward", count);
@@ -80,4 +81,5 @@ pub async fn forward_stored_requests(settings: Settings, cache: Cache) {
         "Forwarding produced {} success(es) and {} failure(s).",
         successes, failures
     );
+    Ok(())
 }

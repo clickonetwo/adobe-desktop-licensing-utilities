@@ -24,7 +24,7 @@ use chrono::prelude::*;
 use eyre::{eyre, Result, WrapErr};
 use serde_json::Value;
 
-pub use certificate::{load_pem_files, load_pfx_file};
+pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
 pub use ngl::get_adobe_device_id;
 pub use signal::get_first_interrupt;
 
