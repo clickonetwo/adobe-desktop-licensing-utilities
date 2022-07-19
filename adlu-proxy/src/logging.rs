@@ -16,35 +16,49 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use crate::settings::{LogDestination, LogLevel, Settings};
 use eyre::{Result, WrapErr};
-use fern::{log_file, Dispatch};
 use log::LevelFilter;
-use std::io;
+use log4rs::{
+    append::{
+        console::{ConsoleAppender, Target},
+        file::FileAppender,
+    },
+    config::{Appender, Config, Root},
+    encode::pattern::PatternEncoder,
+};
 
-pub fn init(conf: &Settings) -> Result<()> {
-    let mut base_config = Dispatch::new().format(|out, message, record| {
-        out.finish(format_args!(
-            "{}[{}][{}] {}",
-            chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-            record.target(),
-            record.level(),
-            message
-        ))
-    });
-    let level = log_level(&conf.logging.level);
-    match conf.logging.destination {
-        LogDestination::Console => {
-            base_config =
-                base_config.chain(Dispatch::new().level(level).chain(io::stdout()))
-        }
-        LogDestination::File => {
-            base_config = base_config.chain(
-                Dispatch::new().level(level).chain(log_file(&conf.logging.file_path)?),
-            )
-        }
-    }
-    base_config.apply().wrap_err("Cannot initialize logging subsystem")?;
+use crate::settings::{LogDestination, LogLevel, Settings};
+
+pub fn init(settings: &Settings) -> Result<()> {
+    let pattern = "{d([%Y-%m-%d][%H:%M:%S])}[{t}][{l}] {m}{n}";
+    let encoder = PatternEncoder::new(pattern);
+    let filter = log_level(&settings.logging.level);
+    let appender = if let LogDestination::Console = &settings.logging.destination {
+        Appender::builder().build(
+            "logger",
+            Box::new(
+                ConsoleAppender::builder()
+                    .encoder(Box::new(encoder))
+                    .target(Target::Stdout)
+                    .build(),
+            ),
+        )
+    } else {
+        Appender::builder().build(
+            "logger",
+            Box::new(
+                FileAppender::builder()
+                    .encoder(Box::new(encoder))
+                    .build(&settings.logging.file_path)
+                    .wrap_err("Can't create log file configuration")?,
+            ),
+        )
+    };
+    let config = Config::builder()
+        .appender(appender)
+        .build(Root::builder().appender("logger").build(filter))
+        .wrap_err("Can't create root logging configuration")?;
+    log4rs::init_config(config).wrap_err("Can't initialize logging")?;
     Ok(())
 }
 
