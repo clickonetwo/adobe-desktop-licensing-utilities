@@ -16,15 +16,70 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use crate::cli::FrlProxy;
-use config::{Config, Environment, File as ConfigFile, FileFormat};
-use dialoguer::{Confirm, Input, Password, Select};
-use eyre::{eyre, Report, Result, WrapErr};
-use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::io::prelude::*;
+use std::sync::Arc;
+
+use config::{Config, Environment, File as ConfigFile, FileFormat};
+use dialoguer::{Confirm, Input, Password, Select};
+use eyre::{eyre, Report, Result, WrapErr};
+use serde::{Deserialize, Serialize};
+
+use crate::cli::FrlProxy;
+use crate::Command;
+
+#[derive(Debug, Clone)]
+pub struct ProxyConfiguration {
+    pub settings: Settings,
+    pub cache: crate::Cache,
+    pub client: reqwest::Client,
+    pub bind_addr: std::net::SocketAddr,
+    pub adobe_server: String,
+}
+
+impl ProxyConfiguration {
+    pub fn new(settings: &Settings, cache: &crate::Cache) -> Self {
+        let bad_config = "Proxy Configuration failure (please report a bug)";
+        let cops_uri: http::Uri = settings.proxy.remote_host.parse().expect(bad_config);
+        let cops_host = cops_uri.host().expect(bad_config);
+        let mut builder = reqwest::Client::builder();
+        builder = builder.timeout(std::time::Duration::new(59, 0));
+        if settings.network.use_proxy {
+            let proxy_host = format!(
+                "{}://{}:{}",
+                "http", settings.network.proxy_host, settings.network.proxy_port
+            );
+            let mut proxy = reqwest::Proxy::https(&proxy_host).expect(bad_config);
+            if settings.network.use_basic_auth {
+                proxy = proxy.basic_auth(
+                    &settings.network.proxy_username,
+                    &settings.network.proxy_password,
+                );
+            }
+            builder = builder.proxy(proxy)
+        }
+        let addr = if settings.proxy.ssl {
+            format!("{}:{}", settings.proxy.host, settings.proxy.port)
+        } else {
+            format!("{}:{}", settings.proxy.host, settings.proxy.ssl_port)
+        };
+        let bind_addr: std::net::SocketAddr =
+            addr.parse().expect("Invalid proxy bind address (please report a bug)");
+        ProxyConfiguration {
+            settings: settings.clone(),
+            cache: cache.clone(),
+            client: builder.build().expect(bad_config),
+            bind_addr,
+            adobe_server: if let Some(port) = cops_uri.port() {
+                format!("https://{}:{}", cops_host, port.as_str())
+            } else {
+                format!("https://{}", cops_host)
+            },
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proxy {
@@ -87,7 +142,7 @@ impl Debug for Network {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Settings {
+pub struct SettingsRef {
     pub proxy: Proxy,
     pub ssl: Ssl,
     pub logging: Logging,
@@ -95,43 +150,95 @@ pub struct Settings {
     pub network: Network,
 }
 
-impl Settings {
-    pub fn load_config(args: &FrlProxy) -> Result<Option<Self>> {
-        let path = args.config_file.as_str();
-        if std::fs::metadata(path).is_ok() {
-            let mut s = Config::new();
-            s.merge(ConfigFile::from_str(
-                include_str!("res/defaults.toml"),
-                FileFormat::Toml,
-            ))?;
-            s.merge(ConfigFile::with_name(path).format(FileFormat::Toml))?;
-            s.merge(Environment::with_prefix("frl_proxy"))?;
-            let mut conf: Self = s.try_into()?;
-            match args.debug {
-                1 => conf.logging.level = LogLevel::Debug,
-                2 => conf.logging.level = LogLevel::Trace,
-                _ => {}
-            }
-            if let Some(log_to) = &args.log_to {
-                let destination: LogDestination = log_to
-                    .as_str()
-                    .try_into()
-                    .wrap_err(format!("Not a recognized log destination: {}", log_to))?;
-                conf.logging.destination = destination;
-            }
-            Ok(Some(conf))
-        } else {
-            eprintln!("Creating initial configuration file...");
-            let template = include_str!("res/defaults.toml");
-            let mut file =
-                File::create(path).wrap_err(format!("Cannot create config file: {}", path))?;
-            file.write_all(template.as_bytes())
-                .wrap_err(format!("Cannot write config file: {}", path))?;
-            Ok(None)
-        }
+pub type Settings = Arc<SettingsRef>;
+
+/// Load settings from the configuration file
+pub fn load_config_file(args: &FrlProxy) -> Result<Settings> {
+    Ok(Settings::new(SettingsRef::load_config(args)?))
+}
+
+/// Update (or create) a configuration file after interviewing user
+/// No logging on this path, because it might interfere with the interview
+pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()> {
+    // get the configuration
+    let mut conf: SettingsRef = match settings {
+        Some(settings) => settings.as_ref().clone(),
+        None => SettingsRef::default_config(),
+    };
+    // interview the user for updates
+    conf.update_config().wrap_err("Configuration interview failed")?;
+    // save the configuration
+    let toml = toml::to_string(&conf)
+        .wrap_err(format!("Cannot serialize configuration: {:?}", &conf))?;
+    let mut file =
+        File::create(path).wrap_err(format!("Cannot create config file: {}", path))?;
+    file.write_all(toml.as_bytes())
+        .wrap_err(format!("Cannot write config file: {}", path))?;
+    eprintln!("Wrote config file '{}'", path);
+    Ok(())
+}
+
+impl SettingsRef {
+    /// Create a new default config
+    pub fn default_config() -> Self {
+        let base_str = include_str!("res/defaults.toml");
+        let builder = Config::builder()
+            .add_source(ConfigFile::from_str(base_str, FileFormat::Toml));
+        let conf: Self = builder
+            .build()
+            .expect("Can't build default configuration (please report a bug)")
+            .try_deserialize()
+            .expect("Can't create default configuration (please report a bug");
+        conf
     }
 
-    pub fn update_config_file(&mut self, path: &str) -> Result<()> {
+    /// Load an existing config file, returning its contained config
+    pub fn load_config(args: &FrlProxy) -> Result<Self> {
+        let base_str = include_str!("res/defaults.toml");
+        let builder = Config::builder()
+            .add_source(ConfigFile::from_str(base_str, FileFormat::Toml))
+            .add_source(ConfigFile::new(&args.config_file, FileFormat::Toml))
+            .add_source(Environment::with_prefix("frl_proxy"));
+        let mut settings: Self = builder.build()?.try_deserialize()?;
+        // Now process the args as overrides: global first, then command-specific
+        match args.debug {
+            1 => settings.logging.level = LogLevel::Debug,
+            2 => settings.logging.level = LogLevel::Trace,
+            _ => {}
+        }
+        if let Some(log_to) = &args.log_to {
+            let destination: LogDestination = log_to
+                .as_str()
+                .try_into()
+                .wrap_err(format!("Not a recognized log destination: {}", log_to))?;
+            settings.logging.destination = destination;
+        }
+        match &args.cmd {
+            Command::Start { mode, ssl } => {
+                if let Some(mode) = mode {
+                    settings.proxy.mode = mode.as_str().try_into()?;
+                }
+                if let Some(ssl) = ssl {
+                    settings.proxy.ssl = *ssl;
+                }
+            }
+            Command::Clear { .. } | Command::Import { .. } | Command::Export { .. } => {
+                settings.proxy.mode = ProxyMode::Cache;
+                // log to file, because this command is interactive
+                settings.logging.destination = LogDestination::File;
+            }
+            Command::Configure => {
+                // no logging, because it might interfere with interviews
+                settings.logging.level = LogLevel::Off;
+            }
+        }
+        settings.validate()?;
+        Ok(settings)
+    }
+
+    /// Update configuration settings by interviewing user
+    /// No logging on this path, because it might interfere with the interview
+    pub fn update_config(&mut self) -> Result<()> {
         // update configuration file by interviewing user
         eprintln!("The proxy has four modes: cache, store, forward, and passthrough.");
         eprintln!("Read the user guide to understand which is right for each situation.");
@@ -149,9 +256,12 @@ impl Settings {
             .interact()?;
         let choice: ProxyMode = choices[choice].try_into().unwrap();
         self.proxy.mode = choice;
-        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode {
+        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
+        {
             eprintln!("The proxy uses a SQLite database to keep track of requests and responses.");
-            eprintln!("The proxy will create this database if one does not already exist.");
+            eprintln!(
+                "The proxy will create this database if one does not already exist."
+            );
             let choice: String = Input::new()
                 .allow_empty(false)
                 .with_prompt("Name of (or path to) your database file")
@@ -159,7 +269,9 @@ impl Settings {
                 .interact_text()?;
             self.cache.db_path = choice;
         }
-        eprintln!("The host and port of the proxy must match the one in your license package.");
+        eprintln!(
+            "The host and port of the proxy must match the one in your license package."
+        );
         let choice: String = Input::new()
             .with_prompt("Host IP to listen on")
             .with_initial_text(&self.proxy.host)
@@ -207,8 +319,12 @@ impl Settings {
                 .with_initial_text(&self.proxy.ssl_port)
                 .interact_text()?;
             self.proxy.ssl_port = choice;
-            eprintln!("The proxy requires a certificate store in PKCS format to use SSL.");
-            eprintln!("Read the user guide to learn how to obtain and prepare this file.");
+            eprintln!(
+                "The proxy requires a certificate store in PKCS format to use SSL."
+            );
+            eprintln!(
+                "Read the user guide to learn how to obtain and prepare this file."
+            );
             let mut need_cert = true;
             let mut choice = self.ssl.cert_path.clone();
             while need_cert {
@@ -224,9 +340,15 @@ impl Settings {
                 }
             }
             eprintln!("Usually, for security, PKCS files are encrypted with a password.");
-            eprintln!("Your proxy will require that password in order to function properly.");
-            eprintln!("You have the choice of storing your password in your config file or");
-            eprintln!("in the value of an environment variable (FRL_PROXY_SSL.CERT_PASSWORD).");
+            eprintln!(
+                "Your proxy will require that password in order to function properly."
+            );
+            eprintln!(
+                "You have the choice of storing your password in your config file or"
+            );
+            eprintln!(
+                "in the value of an environment variable (FRL_PROXY_SSL.CERT_PASSWORD)."
+            );
             let prompt = if self.ssl.cert_password.is_empty() {
                 "Do you want to store a password in your configuration file?"
             } else {
@@ -304,11 +426,8 @@ impl Settings {
                 .default(1)
                 .with_prompt("Log destination")
                 .interact()?;
-            self.logging.destination = if choice == 0 {
-                LogDestination::Console
-            } else {
-                LogDestination::File
-            };
+            self.logging.destination =
+                if choice == 0 { LogDestination::Console } else { LogDestination::File };
             if choice == 1 {
                 let choice: String = Input::new()
                     .allow_empty(false)
@@ -328,7 +447,8 @@ impl Settings {
             }
             if choice {
                 eprintln!("Read the user guide to find out more about logging levels.");
-                let choices = vec!["no logging", "error", "warn", "info", "debug", "trace"];
+                let choices =
+                    vec!["no logging", "error", "warn", "info", "debug", "trace"];
                 let default = match self.logging.level {
                     LogLevel::Off => 0,
                     LogLevel::Error => 1,
@@ -349,31 +469,35 @@ impl Settings {
             self.logging.level = LogLevel::Off;
             self.logging.destination = LogDestination::Console;
         }
-        // save the configuration
-        let toml = toml::to_string(self)
-            .wrap_err(format!("Cannot serialize configuration: {:?}", self))?;
-        let mut file =
-            File::create(path).wrap_err(format!("Cannot create config file: {}", path))?;
-        file.write_all(toml.as_bytes())
-            .wrap_err(format!("Cannot write config file: {}", path))?;
-        eprintln!("Wrote config file '{}'", path);
         Ok(())
     }
 
-    pub fn validate(&mut self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
+        let bind_addr = if self.proxy.ssl {
+            format!("{}:{}", self.proxy.host, self.proxy.port)
+        } else {
+            format!("{}:{}", self.proxy.host, self.proxy.ssl_port)
+        };
+        if bind_addr.parse::<std::net::SocketAddr>().is_err() {
+            return Err(eyre!(
+                "Host must be a dotted IP address (e.g., 0.0.0.0); port must be numeric (e.g., 8080)"
+            ));
+        }
         if self.proxy.ssl {
             let path = &self.ssl.cert_path;
             if path.is_empty() {
                 return Err(eyre!("Certificate path can't be empty when SSL is enabled"));
             }
-            std::fs::metadata(path).wrap_err(format!("Invalid certificate path: {}", path))?;
+            std::fs::metadata(path)
+                .wrap_err(format!("Invalid certificate path: {}", path))?;
         }
-        if self.proxy.host.contains(':') {
-            return Err(eyre!(
-                "Host must not contain a port (use the 'port' and 'ssl_port' config options)"
-            ));
+        let cops: http::Uri =
+            self.proxy.remote_host.parse().wrap_err("Invalid Adobe endpoint")?;
+        if cops.scheme_str().unwrap_or("").to_lowercase() != "https" {
+            return Err(eyre!("The Adobe endpoint must use HTTPS"));
         }
-        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode {
+        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
+        {
             if self.cache.db_path.is_empty() {
                 return Err(eyre!("Database path can't be empty when cache is enabled"));
             }
@@ -382,11 +506,18 @@ impl Settings {
             if self.network.proxy_host.is_empty() {
                 return Err(eyre!("Proxy host can't be empty"));
             }
+            if self.network.proxy_host.contains(':') {
+                return Err(eyre!(
+                    "Proxy host must not contain a port (use the 'proxy_port' config option)"
+                ));
+            }
             if self.network.proxy_port.is_empty() {
                 return Err(eyre!("Proxy port can't be empty"));
             }
             if self.network.use_basic_auth && self.network.proxy_username.is_empty() {
-                return Err(eyre!("Proxy username can't be empty"));
+                return Err(eyre!(
+                    "Proxy username can't be empty if proxy authentication is on"
+                ));
             }
         }
         if let LogDestination::File = self.logging.destination {
@@ -460,10 +591,7 @@ impl TryFrom<&str> for LogDestination {
         } else if "file".starts_with(&sl) {
             Ok(LogDestination::File)
         } else {
-            Err(eyre!(
-                "log destination '{}' must be a prefix of console or file",
-                s
-            ))
+            Err(eyre!("log destination '{}' must be a prefix of console or file", s))
         }
     }
 }
@@ -504,7 +632,7 @@ impl TryFrom<&str> for LogLevel {
             Ok(LogLevel::Trace)
         } else {
             Err(eyre!(
-                "log level '{}' must be a prefix of off, error, warn, info, debug, or trace",
+                "Log level '{}' must be a prefix of off, error, warn, info, debug, or trace",
                 s
             ))
         }

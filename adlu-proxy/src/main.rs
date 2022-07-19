@@ -17,101 +17,87 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use clap::Parser;
+use eyre::{Result, WrapErr};
+use log::debug;
 
+use cache::Cache;
+use cli::{Command, FrlProxy};
+
+use crate::settings::ProxyMode;
+
+mod api;
 mod cache;
 mod cli;
-mod cops;
+mod handlers;
 mod logging;
 mod proxy;
 mod settings;
-
-use crate::cli::Command;
-use crate::settings::{LogDestination, ProxyMode};
-use cache::Cache;
-use cli::FrlProxy;
-use eyre::{Result, WrapErr};
-use log::debug;
-use proxy::{plain, secure};
-use settings::Settings;
-use std::convert::TryInto;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     openssl_probe::init_ssl_cert_env_vars();
     let args: FrlProxy = FrlProxy::parse();
 
-    // make sure we have a config file.  if not, make one
-    if let Some(mut conf) = Settings::load_config(&args)? {
+    // if we have a valid config, proceed, else update the config
+    if let Ok(settings) = settings::load_config_file(&args) {
+        debug!("Loaded config: {:?}", &settings);
         match args.cmd {
-            cli::Command::Start { mode, ssl } => {
-                if let Some(mode) = mode {
-                    conf.proxy.mode = mode.as_str().try_into()?;
-                };
-                if let Some(ssl) = ssl {
-                    conf.proxy.ssl = ssl;
-                }
-                conf.validate()?;
-                logging::init(&conf)?;
-                debug!("conf: {:?}", conf);
-                if let ProxyMode::Forward = conf.proxy.mode {
-                    let cache = Cache::from(&conf, false).await?;
-                    proxy::forward_stored_requests(&conf, Arc::clone(&cache)).await;
+            Command::Start { .. } => {
+                logging::init(&settings)?;
+                if let ProxyMode::Forward = settings.proxy.mode {
+                    let cache = Cache::from(&settings, false).await?;
+                    proxy::forward_stored_requests(settings.clone(), cache.clone()).await;
                     cache.close().await;
                 } else {
-                    let cache = Cache::from(&conf, true).await?;
-                    if conf.proxy.ssl {
-                        secure::run_server(&conf, Arc::clone(&cache)).await?;
+                    let cache = Cache::from(&settings, true).await?;
+                    if settings.proxy.ssl {
+                        proxy::serve_incoming_https_requests(
+                            settings.clone(),
+                            cache.clone(),
+                        )
+                        .await;
                     } else {
-                        plain::run_server(&conf, Arc::clone(&cache)).await?;
+                        proxy::serve_incoming_http_requests(
+                            settings.clone(),
+                            cache.clone(),
+                        )
+                        .await;
                     }
                     cache.close().await;
                 }
             }
-            cli::Command::Configure => {
-                conf.validate()?;
-                // do not log configuration changes, because
-                // logging might interfere with the interactions
-                // and there really isn't anything to log.
-                conf.update_config_file(&args.config_file)?;
-            }
             Command::Clear { yes } => {
-                conf.proxy.mode = ProxyMode::Cache;
-                // log to file, because this command is interactive
-                conf.logging.destination = LogDestination::File;
-                conf.validate()?;
-                logging::init(&conf)?;
-                let cache = Cache::from(&conf, true).await?;
+                logging::init(&settings)?;
+                let cache = Cache::from(&settings, true).await?;
                 cache.clear(yes).await.wrap_err("Failed to clear cache")?;
+                cache.close().await;
             }
             Command::Import { import_path } => {
-                conf.proxy.mode = ProxyMode::Cache;
-                // log to file, because this command is interactive
-                conf.logging.destination = LogDestination::File;
-                conf.validate()?;
-                logging::init(&conf)?;
-                let cache = Cache::from(&conf, true).await?;
+                logging::init(&settings)?;
+                let cache = Cache::from(&settings, true).await?;
                 cache
                     .import(&import_path)
                     .await
                     .wrap_err(format!("Failed to import from {}", &import_path))?;
+                cache.close().await;
             }
             Command::Export { export_path } => {
-                conf.proxy.mode = ProxyMode::Cache;
-                // log to file, because this command is interactive
-                conf.logging.destination = LogDestination::File;
-                conf.validate()?;
-                logging::init(&conf)?;
-                let cache = Cache::from(&conf, false).await?;
+                logging::init(&settings)?;
+                let cache = Cache::from(&settings, false).await?;
                 cache
                     .export(&export_path)
                     .await
                     .wrap_err(format!("Failed to export to {}", &export_path))?;
+                cache.close().await;
+            }
+            Command::Configure => {
+                // no logging on this path, because it might interfere with the interview
+                settings::update_config_file(Some(&settings), &args.config_file)?;
             }
         }
     } else {
-        let mut conf = Settings::load_config(&args)?.unwrap();
-        conf.update_config_file(&args.config_file)
+        eprintln!("Couldn't read the configuration file, creating a new one...");
+        settings::update_config_file(None, &args.config_file)
             .wrap_err("Failed to update configuration file")?;
     }
     Ok(())

@@ -71,8 +71,7 @@ mod test {
             "Adobe device ID is not a SHA256 hash!"
         );
         assert!(
-            id.chars()
-                .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase()),
+            id.chars().all(|c| c.is_ascii_digit() || c.is_ascii_lowercase()),
             "Adobe device ID is not all lowercase!"
         );
     }

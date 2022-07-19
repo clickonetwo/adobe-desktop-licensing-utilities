@@ -19,21 +19,22 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 mod cli;
 mod description;
 
-use adlu_config::Configuration;
+use adlu_parse::admin::Configuration;
 use clap::Parser;
 use cli::{Opt, DEFAULT_CONFIG_DIR};
 use description::describe_configuration;
 
 fn main() {
     let opt: Opt = Opt::parse();
-    if let Ok(config) = Configuration::from_path(&opt.path) {
-        describe_configuration(&config, opt.verbose);
-    } else {
-        if opt.path.eq_ignore_ascii_case(DEFAULT_CONFIG_DIR) {
-            eprintln!("Error: There are no licenses installed on this computer")
-        } else {
-            eprintln!("Error: No such directory: {}", &opt.path)
+    match Configuration::from_path(&opt.path) {
+        Ok(config) => describe_configuration(&config, opt.verbose),
+        Err(err) => {
+            if opt.path.eq_ignore_ascii_case(DEFAULT_CONFIG_DIR) {
+                eprintln!("Error: There are no licenses installed on this computer")
+            } else {
+                eprintln!("Error: {}", err)
+            }
+            std::process::exit(1);
         }
-        std::process::exit(1);
     };
 }

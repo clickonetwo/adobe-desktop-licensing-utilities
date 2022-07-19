@@ -1,14 +1,20 @@
 [package]
 name = "adlu-base"
-authors = ["Daniel Brotsky <dev@clickonetwo.io>"]
-version = "1.0.0"
+authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
+license = "AGPLv3"
+version = "1.0.0-alpha.1"
 edition = "2021"
 
 [dependencies]
-base64 = "0.13.0"
-chrono = "0.4.19"
-eyre = "0.6.7"
-keyring = "1.1.2"
-serde = "1.0.136"
-serde_json = "1.0.79"
-sha2 = "0.10.2"
+base64 = "0.13"
+bytes = "1"
+chrono = "0.4"
+ctrlc = { version = "3.1", features = ["termination"] }
+eyre = "0.6"
+keyring = "1"
+log = "0.4"
+openssl = "0.10"
+serde = "1"
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["sync"] }

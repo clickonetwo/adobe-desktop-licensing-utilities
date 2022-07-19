@@ -1,0 +1,308 @@
+[
+  {
+    "actualPort": 443,
+    "clientAddress": "/127.0.0.1",
+    "clientPort": 52336,
+    "durations": {
+      "connect": 32,
+      "dns": 12,
+      "latency": 221,
+      "request": 6,
+      "response": 4,
+      "ssl": 192,
+      "total": 467
+    },
+    "host": "lcs-cops.adobe.io",
+    "keptAlive": false,
+    "method": "DELETE",
+    "path": "//asnp/frl_connected/v1",
+    "protocolVersion": "HTTP/1.1",
+    "query": "npdId=YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz&deviceId=2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa&osUserId=b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0",
+    "remoteAddress": "lcs-cops.adobe.io/52.13.231.217",
+    "request": {
+      "body": {
+        "charset": null,
+        "text": ""
+      },
+      "charset": null,
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "DELETE //asnp/frl_connected/v1?npdId=YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz&deviceId=2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa&osUserId=b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0 HTTP/1.1",
+        "headers": [
+          {
+            "name": "Host",
+            "value": "lcs-cops.adobe.io"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "Accept-Encoding",
+            "value": "gzip, deflate, br"
+          },
+          {
+            "name": "X-Session-Id",
+            "value": "faebf2a5-b3bb-4f66-9764-bf19a04476ee.1656530565773"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "adobe_licensing_toolkit"
+          },
+          {
+            "name": "Accept",
+            "value": "application/json"
+          },
+          {
+            "name": "User-Agent",
+            "value": "NGL Client/ (MAC/10.16.0) [2022-06-29T12:22:45.172-0700]"
+          },
+          {
+            "name": "X-Request-Id",
+            "value": "Req-Id-0ac385a7-5c20-4d18-8c96-f2c64b4d3f52"
+          },
+          {
+            "name": "Content-Length",
+            "value": "0"
+          },
+          {
+            "name": "Accept-Language",
+            "value": "en-us"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 0,
+        "handshake": 1314,
+        "headers": 736
+      }
+    },
+    "response": {
+      "body": {
+        "charset": "UTF-8",
+        "text": "{\"invalidationSuccessful\":true}"
+      },
+      "charset": "UTF-8",
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "HTTP/1.1 200 OK",
+        "headers": [
+          {
+            "name": "Server",
+            "value": "openresty"
+          },
+          {
+            "name": "Date",
+            "value": "Wed, 29 Jun 2022 19:22:46 GMT"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "name": "Transfer-Encoding",
+            "value": "chunked"
+          },
+          {
+            "name": "x-request-id",
+            "value": "Req-Id-0ac385a7-5c20-4d18-8c96-f2c64b4d3f52"
+          },
+          {
+            "name": "vary",
+            "value": "Origin,Access-Control-Request-Method,Access-Control-Request-Headers"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 40,
+        "handshake": 24472,
+        "headers": 0
+      },
+      "status": 200
+    },
+    "scheme": "https",
+    "speeds": {
+      "overall": 56877,
+      "request": 341666,
+      "response": 6128000
+    },
+    "ssl": {
+      "cipherSuite": "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "protocol": "TLSv1.2"
+    },
+    "status": "COMPLETE",
+    "times": {
+      "end": "2022-06-29T12:22:46.792-07:00",
+      "requestBegin": "2022-06-29T12:22:46.561-07:00",
+      "requestComplete": "2022-06-29T12:22:46.567-07:00",
+      "responseBegin": "2022-06-29T12:22:46.788-07:00",
+      "start": "2022-06-29T12:22:45.874-07:00"
+    },
+    "totalSize": 26562,
+    "tunnel": false,
+    "webSocket": false
+  },
+  {
+    "actualPort": 443,
+    "clientAddress": "/127.0.0.1",
+    "clientPort": 52340,
+    "durations": {
+      "connect": 35,
+      "dns": 3,
+      "latency": 262,
+      "request": 2,
+      "response": 3,
+      "ssl": 153,
+      "total": 458
+    },
+    "host": "lcs-cops.adobe.io",
+    "keptAlive": false,
+    "method": "DELETE",
+    "path": "//asnp/frl_connected/v1",
+    "protocolVersion": "HTTP/1.1",
+    "query": "npdId=YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz&deviceId=2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa&osUserId=b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0",
+    "remoteAddress": "lcs-cops.adobe.io/34.211.127.250",
+    "request": {
+      "body": {
+        "charset": null,
+        "text": ""
+      },
+      "charset": null,
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "DELETE //asnp/frl_connected/v1?npdId=YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz&deviceId=2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa&osUserId=b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0 HTTP/1.1",
+        "headers": [
+          {
+            "name": "Host",
+            "value": "lcs-cops.adobe.io"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "Accept-Encoding",
+            "value": "gzip, deflate, br"
+          },
+          {
+            "name": "X-Session-Id",
+            "value": "e8e1b2c5-995b-4f76-8de5-ee504bfc9cc1.1656530572290"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "adobe_licensing_toolkit"
+          },
+          {
+            "name": "Accept",
+            "value": "application/json"
+          },
+          {
+            "name": "User-Agent",
+            "value": "NGL Client/ (MAC/10.16.0) [2022-06-29T12:22:52.769-0700]"
+          },
+          {
+            "name": "X-Request-Id",
+            "value": "Req-Id-c8badc43-8e38-4c09-b678-5872d33a706d"
+          },
+          {
+            "name": "Content-Length",
+            "value": "0"
+          },
+          {
+            "name": "Accept-Language",
+            "value": "en-us"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 0,
+        "handshake": 1314,
+        "headers": 736
+      }
+    },
+    "response": {
+      "body": {
+        "charset": "UTF-8",
+        "text": "{\"invalidationSuccessful\":true}"
+      },
+      "charset": "UTF-8",
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "HTTP/1.1 200 OK",
+        "headers": [
+          {
+            "name": "Server",
+            "value": "openresty"
+          },
+          {
+            "name": "Date",
+            "value": "Wed, 29 Jun 2022 19:22:52 GMT"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "name": "Transfer-Encoding",
+            "value": "chunked"
+          },
+          {
+            "name": "x-request-id",
+            "value": "Req-Id-c8badc43-8e38-4c09-b678-5872d33a706d"
+          },
+          {
+            "name": "vary",
+            "value": "Origin,Access-Control-Request-Method,Access-Control-Request-Headers"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 40,
+        "handshake": 24472,
+        "headers": 0
+      },
+      "status": 200
+    },
+    "scheme": "https",
+    "speeds": {
+      "overall": 57995,
+      "request": 1025000,
+      "response": 8170666
+    },
+    "ssl": {
+      "cipherSuite": "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "protocol": "TLSv1.2"
+    },
+    "status": "COMPLETE",
+    "times": {
+      "end": "2022-06-29T12:22:52.861-07:00",
+      "requestBegin": "2022-06-29T12:22:52.594-07:00",
+      "requestComplete": "2022-06-29T12:22:52.596-07:00",
+      "responseBegin": "2022-06-29T12:22:52.858-07:00",
+      "start": "2022-06-29T12:22:52.362-07:00"
+    },
+    "totalSize": 26562,
+    "tunnel": false,
+    "webSocket": false
+  }
+]

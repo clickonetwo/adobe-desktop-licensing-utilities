@@ -1,16 +1,16 @@
 [package]
 name = "adlu-decoder"
-version = "2.0.0"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
+license = "AGPLv3"
+version = "1.0.0-alpha.1"
 edition = "2021"
-default-run = "adlu-decoder"
 
 [[bin]]
 name = "adlu-decoder"
 
 [dependencies]
 adlu-base = { path = "../adlu-base" }
-adlu-config = { path = "../adlu-config" }
+adlu-parse = { path = "../adlu-parse" }
 chrono = "0.4.19"
 clap = { version = "3.1.6", features = ["derive"] }
 eyre = "0.6.7"

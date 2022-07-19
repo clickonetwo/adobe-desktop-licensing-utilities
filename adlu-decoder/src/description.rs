@@ -16,8 +16,8 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use adlu_base::date_from_epoch_millis;
-use adlu_config::{ActivationType, Configuration, OcFileSpec, PreconditioningData};
+use adlu_base::local_date_from_epoch_millis;
+use adlu_parse::admin::{ActivationType, Configuration, OcFileSpec, PreconditioningData};
 
 pub fn describe_configuration(config: &Configuration, verbose: i32) {
     match config {
@@ -58,7 +58,7 @@ fn describe_operating_configs(ocs: &[OcFileSpec], verbose: i32) {
             if let Some(date) = oc.cached_expiry() {
                 println!(
                     "    Cached activation expires: {}",
-                    date_from_epoch_millis(&date).expect("Invalid timestamp")
+                    local_date_from_epoch_millis(&date).expect("Invalid timestamp")
                 )
             } else {
                 println!("    No cached activation")
@@ -101,11 +101,7 @@ fn describe_package(oc: &OcFileSpec, verbose: i32) {
 fn describe_app(count: i32, app_id: &str, group_id: &str, verbose: i32) {
     println!(
         "{}App ID: {}{}",
-        if count < 0 {
-            String::from("    ")
-        } else {
-            format!("{: >2}: ", count + 1)
-        },
+        if count < 0 { String::from("    ") } else { format!("{: >2}: ", count + 1) },
         app_id,
         if verbose > 0 {
             format!(", Certificate Group: {}", group_id)

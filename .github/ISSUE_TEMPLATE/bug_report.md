@@ -1,5 +1,5 @@
 ---
-name: Bug report
+name: Bug Report
 about: Create a report to help us improve
 title: ''
 labels: ''
@@ -12,7 +12,7 @@ A clear and concise description of what the bug is.
 
 **To Reproduce**
 Steps to reproduce the behavior:
-1. the command line used: `adobe-license-decoder ...`
+1. the command line used: `adlu-decoder ...`
 2. the working directory (if relevant)
 3. the output produced (provide excerpt or attach a file)
 4. a listing of your OperatingConfigs directory or package directory (if relevant)

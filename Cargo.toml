@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "adlu-base",
-    "adlu-config",
+    "adlu-parse",
     "adlu-decoder",
     "adlu-proxy",
 ]

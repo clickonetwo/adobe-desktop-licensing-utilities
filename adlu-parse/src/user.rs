@@ -105,7 +105,8 @@ pub fn get_cached_expiry(oc_spec: &OcFileSpec) -> Option<String> {
     if let Ok(json) = get_saved_credential(&note_key) {
         if let Ok(license) = serde_json::from_str::<CachedOnlineLicense>(&json) {
             if npd_id.eq(&license.cust_asnp.payload.npd_id) {
-                let timestamp = license.asnp.payload.legacy_profile.effective_end_timestamp;
+                let timestamp =
+                    license.asnp.payload.legacy_profile.effective_end_timestamp;
                 return Some(timestamp.to_string());
             }
         }
@@ -122,7 +123,7 @@ mod tests {
     fn test_get_online_expiration() {
         let npd_id = "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz";
         let path = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let path = path.join("../rsrc/Credentials/ps-online-mac.json");
+        let path = path.join("../rsrc/credentials/ps-online-mac.json");
         let json = std::fs::read_to_string(path).expect("Couldn't read test json");
         let license = serde_json::from_str::<CachedOnlineLicense>(&json)
             .expect("Couldn't read cached license");

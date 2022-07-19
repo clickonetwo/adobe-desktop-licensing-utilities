@@ -16,15 +16,21 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-mod ngl;
-
 extern crate base64;
+
+use std::collections::HashMap;
 
 use chrono::prelude::*;
 use eyre::{eyre, Result, WrapErr};
-pub use ngl::get_adobe_device_id;
 use serde_json::Value;
-use std::collections::HashMap;
+
+pub use certificate::{load_pem_files, load_pfx_file};
+pub use ngl::get_adobe_device_id;
+pub use signal::get_first_interrupt;
+
+mod certificate;
+mod ngl;
+mod signal;
 
 pub type JsonMap = HashMap<String, Value>;
 
@@ -46,6 +52,7 @@ pub fn json_from_str(s: &str) -> Result<JsonMap> {
 }
 
 pub mod base64_encoded_json {
+    use serde::{Deserializer, Serialize, Serializer};
     // This module implements serialization and deserialization from
     // base64-encoded JSON.  It's intended for embedding JSON as
     // a field value inside of a larger data structure, but it can
@@ -55,7 +62,6 @@ pub mod base64_encoded_json {
     // encode JSON in query strings.
     use serde::de::DeserializeOwned;
     use serde::Deserialize;
-    use serde::{Deserializer, Serialize, Serializer};
 
     pub fn serialize<S, T>(val: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -77,13 +83,12 @@ pub mod base64_encoded_json {
         let base64_string = String::deserialize(deserializer)?;
         // println!("base64 string starts: {:?}", &base64_string);
         let json_bytes = base64::decode_config(&base64_string, base64::URL_SAFE_NO_PAD)
-            .map_err(|e| serde::de::Error::custom(&format!("Illegal base64: {:?}", e)))?;
+            .map_err(|e| {
+            serde::de::Error::custom(&format!("Illegal base64: {:?}", e))
+        })?;
         // println!("JSON bytes start: {:?}", &json_bytes);
         serde_json::from_reader(json_bytes.as_slice()).map_err(|e| {
-            println!(
-                "Failure to parse looking for: {:?}",
-                std::any::type_name::<T>()
-            );
+            println!("Failure to parse looking for: {:?}", std::any::type_name::<T>());
             println!("JSON is: {}", &super::u64decode(&base64_string).unwrap());
             serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e))
         })
@@ -91,12 +96,12 @@ pub mod base64_encoded_json {
 }
 
 pub mod template_json {
+    use serde::{Deserializer, Serialize, Serializer};
     // This module implements serialization and deserialization from
     // a JSON string.  It's intended for embedding JSON as
     // a field value inside of a template data structure
     use serde::de::DeserializeOwned;
     use serde::Deserialize;
-    use serde::{Deserializer, Serialize, Serializer};
 
     pub fn serialize<S, T>(val: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -115,23 +120,88 @@ pub mod template_json {
         T: DeserializeOwned,
     {
         let json_string = String::deserialize(deserializer)?;
-        serde_json::from_str(&json_string)
-            .map_err(|e| serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e)))
+        serde_json::from_str(&json_string).map_err(|e| {
+            serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e))
+        })
     }
 }
 
-pub fn date_from_epoch_millis(timestamp: &str) -> Result<String> {
-    let timestamp = timestamp
-        .parse::<i64>()
-        .wrap_err("Illegal license timestamp")?;
-    let date = Local.timestamp(timestamp / 1000, 0);
-    Ok(date.format("%Y-%m-%d").to_string())
+pub fn json_from_file(path: &str) -> Result<JsonMap> {
+    let file = std::fs::File::open(std::path::Path::new(path))
+        .wrap_err("Can't read license file")?;
+    serde_json::from_reader(&file).wrap_err("Can't parse license data")
 }
 
-pub fn json_from_file(path: &str) -> Result<JsonMap> {
-    let file =
-        std::fs::File::open(std::path::Path::new(path)).wrap_err("Can't read license file")?;
-    serde_json::from_reader(&file).wrap_err("Can't parse license data")
+/// NGL timestamps are typically in millseconds since the Unix Epoch.
+/// We have a type that holds them and allows conversion to and from
+/// various integer and string forms, including datestamps.
+/// The debug representation is a datestamp, while the string version
+/// is the integer.  Either are acceptable for parsing.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Timestamp(i64);
+
+impl Timestamp {
+    pub fn from_millis(epoch_millis: i64) -> Self {
+        Timestamp(epoch_millis)
+    }
+
+    pub fn from_date(date_string: &str) -> Self {
+        Self::from_storage(date_string)
+    }
+
+    pub fn now() -> Self {
+        Self(Utc::now().timestamp_millis())
+    }
+
+    /// When you need to store a timestamp as a string,
+    /// use this function.
+    pub fn to_storage(&self) -> String {
+        self.to_string()
+    }
+
+    /// An infallible parse, used for reading
+    /// timestamps that have been stored as strings
+    /// either in integer or datestamp form.
+    pub fn from_storage(s: &str) -> Self {
+        if let Ok(ts) = s.parse() {
+            ts
+        } else {
+            Timestamp(Utc::now().timestamp_millis())
+        }
+    }
+}
+
+impl std::fmt::Debug for Timestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Local.timestamp_millis(self.0).format("%Y-%m-%dT%H:%M:%S%.3f%z").fmt(f)
+    }
+}
+
+impl std::fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for Timestamp {
+    type Err = chrono::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(val) = s.parse::<i64>() {
+            Ok(Timestamp(val))
+        } else {
+            match s.parse::<DateTime<Utc>>() {
+                Ok(dt) => Ok(Timestamp(dt.timestamp_millis())),
+                Err(err) => Err(err),
+            }
+        }
+    }
+}
+
+pub fn local_date_from_epoch_millis(timestamp: &str) -> Result<String> {
+    let timestamp = timestamp.parse::<i64>().wrap_err("Illegal license timestamp")?;
+    let date = Local.timestamp_millis(timestamp);
+    Ok(date.format("%Y-%m-%d").to_string())
 }
 
 #[cfg(target_os = "macos")]

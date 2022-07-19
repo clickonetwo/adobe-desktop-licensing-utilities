@@ -1,0 +1,27 @@
+[package]
+name = "adlu-parse"
+authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
+license = "AGPLv3"
+version = "1.0.0-alpha.1"
+edition = "2021"
+
+[features]
+parse-reponses = []
+
+[dependencies]
+adlu-base = { path = "../adlu-base" }
+chrono = { version = "0.4", features = ["clock"] }
+eyre = "0.6"
+glob = "0.3"
+http = "0.2"
+if_chain = "1"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+visdom = "0.5"
+warp = "0.3"
+zip = "0.5"
+
+[dev-dependencies]
+legacy = { path = "../legacy" }
+

@@ -1,0 +1,5 @@
+# my preferences are for more horizontal, less vertical code,
+# but I do have idiosyncracies :)
+#
+max_width = 90
+use_small_heuristics = "Max"

@@ -35,19 +35,16 @@ pub fn init(conf: &Settings) -> Result<()> {
     let level = log_level(&conf.logging.level);
     match conf.logging.destination {
         LogDestination::Console => {
-            base_config = base_config.chain(Dispatch::new().level(level).chain(io::stdout()))
+            base_config =
+                base_config.chain(Dispatch::new().level(level).chain(io::stdout()))
         }
         LogDestination::File => {
             base_config = base_config.chain(
-                Dispatch::new()
-                    .level(level)
-                    .chain(log_file(&conf.logging.file_path)?),
+                Dispatch::new().level(level).chain(log_file(&conf.logging.file_path)?),
             )
         }
     }
-    base_config
-        .apply()
-        .wrap_err("Cannot initialize logging subsystem")?;
+    base_config.apply().wrap_err("Cannot initialize logging subsystem")?;
     Ok(())
 }
 

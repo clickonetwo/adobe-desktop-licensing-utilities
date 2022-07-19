@@ -1,32 +1,41 @@
 [package]
-name = "frl-proxy"
-version = "2.0.0"
-authors = ["Andrew Dorton <adorton@adobe.com>", "Daniel Brotsky <dan@clickonetwo.io>"]
+name = "adlu-proxy"
+authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
+license = "AGPLv3"
+version = "1.0.0-alpha.1"
 edition = "2021"
 
+[features]
+parse_responses = ["adlu-parse/parse-reponses"]
+
 [dependencies]
-async-stream = "0.3.0"
+adlu-base = { path = "../adlu-base" }
+adlu-parse = { path = "../adlu-parse" }
+bytes = "1"
 chrono = "0.4"
-clap = { version = "3.1.6", features = ["derive"] }
-config = "0.10"
+clap = { version = "3.1", features = ["derive"] }
+config = "0.13"
 ctrlc = { version = "3.1", features = ["termination"] }
-dialoguer = "0.8.0"
+dialoguer = "0.8"
 eyre = "0.6"
 fern = "0.6"
-futures = "0.3.1"
+futures = "0.3"
 futures-util = "0.3.1"
 headers = "0.3.4"
+http = "0.2"
 hyper = { version = "0.14.2", features = ["full"] }
 hyper-proxy = "0.9.1"
 hyper-tls = "0.5"
 log = "0.4"
 native-tls = "0.2.7"
 openssl-probe = "0.1.2"
+reqwest = "0.11"
 serde = { version = "1.0.123", features = ["derive"] }
 serde_json = "1.0.62"
 sqlx = { version = "0.5.1", default-features = false, features = [ "runtime-tokio-native-tls", "sqlite" ] }
 sys-info = "0.7.0"
-tokio = { version = "1.0.3", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tokio-native-tls = "0.3"
 toml = "0.5"
 url = "2.1.1"
+warp = { version = "0.3", features = ["tls"] }

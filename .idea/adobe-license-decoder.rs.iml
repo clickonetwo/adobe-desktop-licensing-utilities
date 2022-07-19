@@ -3,11 +3,11 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/adlu-base/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/adlu-config/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/legacy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ngl/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/adlu-decoder/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/adlu-parse/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/adlu-proxy/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/local" />

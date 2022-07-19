@@ -16,10 +16,10 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-mod admin;
+pub mod admin;
+pub mod protocol;
 mod user;
 
-pub use admin::{ActivationType, Configuration, OcFileSpec, PreconditioningData};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -48,4 +48,18 @@ pub struct CertificateDetails {
     pub sha1_hash: String,
     pub sequence: i32,
     pub download_path: String,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdobeSignatures {
+    pub signature1: String,
+    pub signature2: String,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomerSignatures {
+    pub customer_signature2: String,
+    pub customer_signature1: String,
 }

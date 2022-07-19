@@ -1,0 +1,308 @@
+[
+  {
+    "actualPort": 443,
+    "clientAddress": "/127.0.0.1",
+    "clientPort": 61965,
+    "durations": {
+      "connect": 32,
+      "dns": 48,
+      "latency": 12666,
+      "request": 6,
+      "response": 24,
+      "ssl": 136,
+      "total": 12912
+    },
+    "host": "lcs-cops.adobe.io",
+    "keptAlive": false,
+    "method": "POST",
+    "path": "//asnp/frl_connected/values/v2",
+    "protocolVersion": "HTTP/1.1",
+    "query": null,
+    "remoteAddress": "lcs-cops.adobe.io/34.211.127.250",
+    "request": {
+      "body": {
+        "charset": null,
+        "text": "{\n\t\"appDetails\" : \n\t{\n\t\t\"currentAsnpId\" : \"\",\n\t\t\"nglAppId\" : \"Photoshop1\",\n\t\t\"nglAppVersion\" : \"23.4.1\",\n\t\t\"nglLibVersion\" : \"1.30.0.1\"\n\t},\n\t\"asnpTemplateId\" : \"WXpRNVptSXdPVFl0TkRjME55MDBNR001TFdKaE5HUXRNekZoWmpGaU9ERXpNR1V6e302Y2JjYTViYy01NTZjLTRhNTYtYjgwNy05ZjNjMWFhM2VhZjc\",\n\t\"deviceDetails\" : \n\t{\n\t\t\"currentDate\" : \"2022-06-28T17:08:01.736-0700\",\n\t\t\"deviceId\" : \"2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa\",\n\t\t\"enableVdiMarkerExists\" : false,\n\t\t\"isOsUserAccountInDomain\" : false,\n\t\t\"isVirtualEnvironment\" : false,\n\t\t\"osName\" : \"MAC\",\n\t\t\"osUserId\" : \"b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d\",\n\t\t\"osVersion\" : \"12.4.0\"\n\t},\n\t\"npdId\" : \"YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz\",\n\t\"npdPrecedence\" : 80\n}"
+      },
+      "charset": null,
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "POST //asnp/frl_connected/values/v2 HTTP/1.1",
+        "headers": [
+          {
+            "name": "Host",
+            "value": "lcs-cops.adobe.io"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "Accept-Encoding",
+            "value": "gzip, deflate, br"
+          },
+          {
+            "name": "X-Session-Id",
+            "value": "b9d54389-fdc4-4327-a773-1cafa696a531.1656461281312"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "ngl_photoshop1"
+          },
+          {
+            "name": "Accept",
+            "value": "application/json"
+          },
+          {
+            "name": "User-Agent",
+            "value": "NGL Client/1.30.0.1 (MAC/12.4.0) [2022-06-28T17:08:01.895-0700]"
+          },
+          {
+            "name": "X-Request-Id",
+            "value": "Req-Id-24b5dd41-f668-4d42-a27a-ec49ee7c731b"
+          },
+          {
+            "name": "Content-Length",
+            "value": "759"
+          },
+          {
+            "name": "Accept-Language",
+            "value": "en-us"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 759,
+        "handshake": 1314,
+        "headers": 465
+      }
+    },
+    "response": {
+      "body": {
+        "charset": "UTF-8",
+        "text": "{\"adobeCertSignedValues\":{\"signatures\":{\"signature1\":\"laj2sLbWlRkmcBDVgWrYvugx5a03zC4iYEpqb80rDFlPTQynNEodyNyatPAQ2qYElhB6GtiR53ZBWHccJ7eUCy-RiJSR4XjiVK8fa2IKjS-4eYyupMzR7t0_B1MPe0XZpisqKPrWjjc84Wuro_Zxgv7Bi7zc8UTUcbhkyRfL0Ue_dgT4NYNbO9p7sg0HORnloiKDRqYsM8ZDzbYrbEfydPfRSdPXxSulm1_5t9TivpnjEuPoV5MYp00Z0kuXw6vHH1Tk10jTMWk057-64zJ5uFqdHdDFKEprVFkAtOO04joPs4-0jw2AERZRrqSDfBPj8qyfKwup9QdXVzB6TTgygfpXhWUPPYe3CprNQMaybLeNUOb64gBggxEU-5N_nGdG-16WrGNSHWVotr3O9XLe3QM6UUKXk-8WkKplJytfsCtBpHaMwjRcfg5fvEjZnFwsIkoa8pTdYoJ9_odVQiOBlFEzbj35Nc5JPB1kyLRWB2IvW1kbMSLkn_NFjMJgbOdvYw_TMIpSxx3PTCqXqi2MHQEqNddtV8ZpieB_s1JNzHQDwZyed3lDEZWoc8Nt0EjnvI_0MU4MXZKXAFQvfBBE9dYuxibFqnPf9dHJy-VFVklSn6eAdnxJAp_Kj-9awxrj3h1cr7W42V8OFXhlTWC47KZJyQRNuOi9zqEy12olv6M\",\"signature2\":\"aSAqFfd44j2scxrZiE52YjTzGcr26HCWPKLjRYn6x9PI2d0TPmanONPSW2fquXC5o84r1fhe88chEAjuz9nqMecy2bY2kId03UoRa2wg-NnrEeDJnqP79Sn9D8pkd53RtLaN5os3qGXWUSAcBa_jSNfac7jjaVudFadY2cgE3k1SwBpMcsLDyMxrnPvQ-dilS7Hdfb5ED2Hvl2NEb_RbU0ZO-96_BfSlZkY3uJh5uglwAGfP1EMA90WexyFOD2k79sEs5rW3i82Q35vTYRIkne95gkfVrYvBvLzxAF2UTWJTH0gnBz44po6bHcF9ZIx_l--bOWz2UAlER6-wBWjsTtmrAsSNVrE9ZbN05pMuFZrPAY8TBh1iR-vpnZ6iYHYJFZmFTTusgxeLvN3DeenT1eDT1Tq6tJcxbpFIMjsch3OI1_9e35PTbR7uwUCUTzkYdQ4TpAapuBe2ZufLy4Zm0k6G6AXg2wjLyqV2vWpm051_QMnSbisfpd5GnSz3b0bpGjannO53cI3anEg_bdhO-Mk6OUEWAqQ9VBDPFbAfDutB70BIpThSqMWWXsZn3AHJGd_fqFHw6VmReMUXHZ-2WCK9nACqHmZBpC8sHS4BoLQbM5VMhkcNVDdS9x5CdJXATpZA-qswDONO8XHngamkI4p9y0Sg1SXkbpwFzAWgoLQ\"},\"values\":{\"licenseExpiryTimestamp\":\"1750060801000\",\"enigmaData\":\"{\\\\\\\"productId\\\\\\\":45,\\\\\\\"serialKey\\\\\\\":\\\\\\\"104545012345537554907209\\\\\\\",\\\\\\\"clearSerialKey\\\\\\\":null,\\\\\\\"locale\\\\\\\":\\\\\\\"ALL\\\\\\\",\\\\\\\"associatedLocales\\\\\\\":\\\\\\\"ALL\\\\\\\",\\\\\\\"platform\\\\\\\":0,\\\\\\\"isk\\\\\\\":454042,\\\\\\\"customerId\\\\\\\":0,\\\\\\\"deliveryMethod\\\\\\\":3,\\\\\\\"pc\\\\\\\":true,\\\\\\\"rb\\\\\\\":false}\",\"graceTime\":\"8553600000\",\"createdForVdi\":\"false\",\"profileStatus\":\"PROFILE_AVAILABLE\",\"effectiveEndTimestamp\":\"1741507201000\",\"licenseExpiryWarningStartTimestamp\":\"1749456001000\",\"nglLibRefreshInterval\":\"86400000\",\"licenseId\":\"8A935605037F4F02B7BA\",\"licensedFeatures\":\"[\\\\\\\"AMT_SUBSCRIPTION_6.0\\\\\\\",\\\\\\\"Bridge_Base_4.0\\\\\\\",\\\\\\\"Bridge_Base_5.0\\\\\\\",\\\\\\\"Bridge_Base_6.0\\\\\\\",\\\\\\\"Bridge_CameraRaw_4.0\\\\\\\",\\\\\\\"Bridge_CameraRaw_5.0\\\\\\\",\\\\\\\"Bridge_CameraRaw_6.0\\\\\\\",\\\\\\\"Bridge_MiniBridge_1.0\\\\\\\",\\\\\\\"Bridge_MiniBridge_2.0\\\\\\\",\\\\\\\"Bridge_MiniBridge_3.0\\\\\\\",\\\\\\\"Euclid_Base_1.0\\\\\\\",\\\\\\\"MobileCenter_Base_3.0\\\\\\\",\\\\\\\"Photoshop_14.0\\\\\\\",\\\\\\\"Photoshop_Base_12.0\\\\\\\",\\\\\\\"Photoshop_Base_13.0\\\\\\\",\\\\\\\"Photoshop_Base_14.0\\\\\\\",\\\\\\\"Photoshop_Premium_12.0\\\\\\\",\\\\\\\"Photoshop_Premium_13.0\\\\\\\",\\\\\\\"Photoshop_Premium_14.0\\\\\\\"]\",\"appRefreshInterval\":\"86400000\",\"appEntitlementStatus\":\"SUBSCRIPTION\"}},\"customerCertSignedValues\":{\"signatures\":{\"customerSignature2\":\"LV5a3B2I-1_Tr2Lev54_PntYTWKrevciaodE7lH933NpEeJrp1qBJPobXS0dKhSzUmiFyGeCCUat5SursCpce2291WcRIHOYAJjkMKfQ3Lr_L_gewGcnDvyCEbGHRluoqgXvGOJgD5gFJviDXAw754cIpoKhfnPCk9WtgfCQbnG6enmC6hWXCIgRx1dgAggC3HNW0Rh_13HdG71UCyYTYpMYXxZef-aM0UTvrVHEOM7NXyGu5mCnQZFIqhc--JCGdENPtUgEFBPqwWQfbMrdN31572iimU3FyIVy4L1yEQBHQFP3Ra9RX-_7gzmuo_wR9c0kBy7QpxM7UDYt-deqLb68i0txT3yFb_iWt0c55wORmOMcA3ZOelHPkZ6T01ey9-SeT-d2aTxTXzGIquu7eTBE_focGXEVfB11V4oQ3qG73uaxRfLQ_bkQYeh1vXLc9hvxswAtFb5aZ797XeJ3nb2uVGgr2AXFmeRQrowGEK4uK7DFUbrMwuZtj_1b6ZOh7n2Z8gIGQHlPkm3mqPLYt8mj7e1JCnc4_TcIccphWG6pkyZlq9Xuhdg8Yqg-IAW50qOP0uTAlXXYjLHt0SICIB6uPcnwG8frfAnP0X_vDkxf_uwaaPqBADcLWSOgu5i4KFbOPVayZqST1WbhJxlcw5odSbapwrfcRTTjtolQDSI\",\"customerSignature1\":\"mmzlAlEcU6X_a-F77AaGRRrzAh-btGgRg_ymvttxR-fegm_8UxFL8qHJgZmsT4QvgqjuWOb5l05sn5kNeBcBAf-Tw1Gth_WOy9bWo8JS2fd3HBRyQSJkpsyhHPzBkqfEqUpNZkjm0tR73cS8aWtDTAkbF7BBNoEAVfIfvnPRId3tn_HMf04em26ED19MoYajBCyl-LuF25yqLutOh6-2By1A_ujajIFESL7jw2aTWXgf_eG7d6fMMliGn29FUvn-afEYUXO6Lhgfy9qrPtfPB4f7LNIWMTTKKtfxDotnQsF75Qri-A3OTeAe-tMXD55HIyJl-tZEXE14Dp9tapRhYA47MPYgGIVYch1OduGWPopqjAtzCn4423IugZRtQAzJWuT07qmBTBQHL_2cSWLve1UsSg9pjEroO9Grhayn6xxk44vIyoEz2g47JyZFRw0Oa8XxTN1e8FAlQZ6at-rh5F9afrenAb2ndmJxCG9NKI7_PmRy4U9v1BCxS34NT--S2gWIRKZHdc8wRIEZHy6MkF-80Y7KuRf9HpZOUR1Msxfap6bsnw9iHGE1akT8xMMZLOgRsWaLcab5jyhWVnLVeMTaFUtsRKrKQtnyvt6jUsaAz0EhyXigJ2R8XOmVsbdo8A86Adbfs_EXerQGGTHMuIVvJ5K1KHoHJ5dPXZI3oYY\"},\"values\":\"eyJucGRJZCI6Ill6UTVabUl3T1RZdE5EYzBOeTAwTUdNNUxXSmhOR1F0TXpGaFpqRmlPREV6TUdVeiIsImFzbnBJZCI6IjIyMWJmYWQ1LTBhZTMtNDY4MC05Mjc1LWY3ZDVjYTFjMjNmZiIsImNyZWF0aW9uVGltZXN0YW1wIjoxNjU2NDYxMjgyMDA5LCJjYWNoZUxpZmV0aW1lIjo5MzU5OTUxODk5MSwicmVzcG9uc2VUeXBlIjoiRlJMX0lOSVRJQUwiLCJjYWNoZUV4cGlyeVdhcm5pbmdDb250cm9sIjp7Indhcm5pbmdTdGFydFRpbWVzdGFtcCI6MTc0OTQ1NjAwMTAwMCwid2FybmluZ0ludGVydmFsIjo4NjQwMDAwMH0sInByZXZpb3VzQXNucElkIjoiIiwiZGV2aWNlSWQiOiIyYzkzYzg3OThhYTJiNjI1M2M2NTFlNmVmZDVmZTQ2OTQ1OTVhOGRhZDgyZGMzZDM1ZGUyMzNkZjU5MjhjMmZhIiwib3NVc2VySWQiOiJiNjkzYmUzNTZhYzUyNDExMzg5YTZjMDZlZWRlOGI0ZTQ3ZTU4MzgxODM4NGNkZGM2MmFmZjc4YzNlY2UwODRkIiwiZGV2aWNlRGF0ZSI6IjIwMjItMDYtMjhUMTc6MDg6MDEuNzM2LTA3MDAiLCJzZXNzaW9uSWQiOiJiOWQ1NDM4OS1mZGM0LTQzMjctYTc3My0xY2FmYTY5NmE1MzEuMTY1NjQ2MTI4MTMxMi9TVUJTRVFVRU5UIn0\"}}"
+      },
+      "charset": "UTF-8",
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "HTTP/1.1 200 OK",
+        "headers": [
+          {
+            "name": "Server",
+            "value": "openresty"
+          },
+          {
+            "name": "Date",
+            "value": "Wed, 29 Jun 2022 00:08:14 GMT"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "name": "Transfer-Encoding",
+            "value": "chunked"
+          },
+          {
+            "name": "x-request-id",
+            "value": "Req-Id-24b5dd41-f668-4d42-a27a-ec49ee7c731b"
+          },
+          {
+            "name": "vary",
+            "value": "Origin,Access-Control-Request-Method,Access-Control-Request-Headers"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 4932,
+        "handshake": 24472,
+        "headers": 0
+      },
+      "status": 200
+    },
+    "scheme": "https",
+    "speeds": {
+      "overall": 2473,
+      "request": 423000,
+      "response": 1225166
+    },
+    "ssl": {
+      "cipherSuite": "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "protocol": "TLSv1.2"
+    },
+    "status": "COMPLETE",
+    "times": {
+      "end": "2022-06-28T17:08:14.551-07:00",
+      "requestBegin": "2022-06-28T17:08:01.855-07:00",
+      "requestComplete": "2022-06-28T17:08:01.861-07:00",
+      "responseBegin": "2022-06-28T17:08:14.527-07:00",
+      "start": "2022-06-28T17:08:01.598-07:00"
+    },
+    "totalSize": 31942,
+    "tunnel": false,
+    "webSocket": false
+  },
+  {
+    "actualPort": 443,
+    "clientAddress": "/127.0.0.1",
+    "clientPort": 62131,
+    "durations": {
+      "connect": 34,
+      "dns": 19,
+      "latency": 298,
+      "request": 1,
+      "response": 11,
+      "ssl": 107,
+      "total": 470
+    },
+    "host": "lcs-cops.adobe.io",
+    "keptAlive": false,
+    "method": "POST",
+    "path": "//asnp/frl_connected/values/v2",
+    "protocolVersion": "HTTP/1.1",
+    "query": null,
+    "remoteAddress": "lcs-cops.adobe.io/52.88.177.51",
+    "request": {
+      "body": {
+        "charset": null,
+        "text": "{\n\t\"appDetails\" : \n\t{\n\t\t\"currentAsnpId\" : \"\",\n\t\t\"nglAppId\" : \"Photoshop1\",\n\t\t\"nglAppVersion\" : \"23.4.1\",\n\t\t\"nglLibVersion\" : \"1.30.0.1\"\n\t},\n\t\"asnpTemplateId\" : \"WXpRNVptSXdPVFl0TkRjME55MDBNR001TFdKaE5HUXRNekZoWmpGaU9ERXpNR1V6e302Y2JjYTViYy01NTZjLTRhNTYtYjgwNy05ZjNjMWFhM2VhZjc\",\n\t\"deviceDetails\" : \n\t{\n\t\t\"currentDate\" : \"2022-06-28T17:09:25.399-0700\",\n\t\t\"deviceId\" : \"2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa\",\n\t\t\"enableVdiMarkerExists\" : false,\n\t\t\"isOsUserAccountInDomain\" : false,\n\t\t\"isVirtualEnvironment\" : false,\n\t\t\"osName\" : \"MAC\",\n\t\t\"osUserId\" : \"b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d\",\n\t\t\"osVersion\" : \"12.4.0\"\n\t},\n\t\"npdId\" : \"YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz\",\n\t\"npdPrecedence\" : 80\n}"
+      },
+      "charset": null,
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "POST //asnp/frl_connected/values/v2 HTTP/1.1",
+        "headers": [
+          {
+            "name": "Host",
+            "value": "lcs-cops.adobe.io"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "Accept-Encoding",
+            "value": "gzip, deflate, br"
+          },
+          {
+            "name": "X-Session-Id",
+            "value": "94c10871-49f9-4cb9-a6d4-bb40968ce5eb.1656461365202"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "ngl_photoshop1"
+          },
+          {
+            "name": "Accept",
+            "value": "application/json"
+          },
+          {
+            "name": "User-Agent",
+            "value": "NGL Client/1.30.0.1 (MAC/12.4.0) [2022-06-28T17:09:25.817-0700]"
+          },
+          {
+            "name": "X-Request-Id",
+            "value": "Req-Id-52454318-f3b1-4298-b56d-713463330ab6"
+          },
+          {
+            "name": "Content-Length",
+            "value": "759"
+          },
+          {
+            "name": "Accept-Language",
+            "value": "en-us"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 759,
+        "handshake": 1314,
+        "headers": 465
+      }
+    },
+    "response": {
+      "body": {
+        "charset": "UTF-8",
+        "text": "{\"adobeCertSignedValues\":{\"signatures\":{\"signature1\":\"laj2sLbWlRkmcBDVgWrYvugx5a03zC4iYEpqb80rDFlPTQynNEodyNyatPAQ2qYElhB6GtiR53ZBWHccJ7eUCy-RiJSR4XjiVK8fa2IKjS-4eYyupMzR7t0_B1MPe0XZpisqKPrWjjc84Wuro_Zxgv7Bi7zc8UTUcbhkyRfL0Ue_dgT4NYNbO9p7sg0HORnloiKDRqYsM8ZDzbYrbEfydPfRSdPXxSulm1_5t9TivpnjEuPoV5MYp00Z0kuXw6vHH1Tk10jTMWk057-64zJ5uFqdHdDFKEprVFkAtOO04joPs4-0jw2AERZRrqSDfBPj8qyfKwup9QdXVzB6TTgygfpXhWUPPYe3CprNQMaybLeNUOb64gBggxEU-5N_nGdG-16WrGNSHWVotr3O9XLe3QM6UUKXk-8WkKplJytfsCtBpHaMwjRcfg5fvEjZnFwsIkoa8pTdYoJ9_odVQiOBlFEzbj35Nc5JPB1kyLRWB2IvW1kbMSLkn_NFjMJgbOdvYw_TMIpSxx3PTCqXqi2MHQEqNddtV8ZpieB_s1JNzHQDwZyed3lDEZWoc8Nt0EjnvI_0MU4MXZKXAFQvfBBE9dYuxibFqnPf9dHJy-VFVklSn6eAdnxJAp_Kj-9awxrj3h1cr7W42V8OFXhlTWC47KZJyQRNuOi9zqEy12olv6M\",\"signature2\":\"aSAqFfd44j2scxrZiE52YjTzGcr26HCWPKLjRYn6x9PI2d0TPmanONPSW2fquXC5o84r1fhe88chEAjuz9nqMecy2bY2kId03UoRa2wg-NnrEeDJnqP79Sn9D8pkd53RtLaN5os3qGXWUSAcBa_jSNfac7jjaVudFadY2cgE3k1SwBpMcsLDyMxrnPvQ-dilS7Hdfb5ED2Hvl2NEb_RbU0ZO-96_BfSlZkY3uJh5uglwAGfP1EMA90WexyFOD2k79sEs5rW3i82Q35vTYRIkne95gkfVrYvBvLzxAF2UTWJTH0gnBz44po6bHcF9ZIx_l--bOWz2UAlER6-wBWjsTtmrAsSNVrE9ZbN05pMuFZrPAY8TBh1iR-vpnZ6iYHYJFZmFTTusgxeLvN3DeenT1eDT1Tq6tJcxbpFIMjsch3OI1_9e35PTbR7uwUCUTzkYdQ4TpAapuBe2ZufLy4Zm0k6G6AXg2wjLyqV2vWpm051_QMnSbisfpd5GnSz3b0bpGjannO53cI3anEg_bdhO-Mk6OUEWAqQ9VBDPFbAfDutB70BIpThSqMWWXsZn3AHJGd_fqFHw6VmReMUXHZ-2WCK9nACqHmZBpC8sHS4BoLQbM5VMhkcNVDdS9x5CdJXATpZA-qswDONO8XHngamkI4p9y0Sg1SXkbpwFzAWgoLQ\"},\"values\":{\"licenseExpiryTimestamp\":\"1750060801000\",\"enigmaData\":\"{\\\\\\\"productId\\\\\\\":45,\\\\\\\"serialKey\\\\\\\":\\\\\\\"104545012345537554907209\\\\\\\",\\\\\\\"clearSerialKey\\\\\\\":null,\\\\\\\"locale\\\\\\\":\\\\\\\"ALL\\\\\\\",\\\\\\\"associatedLocales\\\\\\\":\\\\\\\"ALL\\\\\\\",\\\\\\\"platform\\\\\\\":0,\\\\\\\"isk\\\\\\\":454042,\\\\\\\"customerId\\\\\\\":0,\\\\\\\"deliveryMethod\\\\\\\":3,\\\\\\\"pc\\\\\\\":true,\\\\\\\"rb\\\\\\\":false}\",\"graceTime\":\"8553600000\",\"createdForVdi\":\"false\",\"profileStatus\":\"PROFILE_AVAILABLE\",\"effectiveEndTimestamp\":\"1741507201000\",\"licenseExpiryWarningStartTimestamp\":\"1749456001000\",\"nglLibRefreshInterval\":\"86400000\",\"licenseId\":\"8A935605037F4F02B7BA\",\"licensedFeatures\":\"[\\\\\\\"AMT_SUBSCRIPTION_6.0\\\\\\\",\\\\\\\"Bridge_Base_4.0\\\\\\\",\\\\\\\"Bridge_Base_5.0\\\\\\\",\\\\\\\"Bridge_Base_6.0\\\\\\\",\\\\\\\"Bridge_CameraRaw_4.0\\\\\\\",\\\\\\\"Bridge_CameraRaw_5.0\\\\\\\",\\\\\\\"Bridge_CameraRaw_6.0\\\\\\\",\\\\\\\"Bridge_MiniBridge_1.0\\\\\\\",\\\\\\\"Bridge_MiniBridge_2.0\\\\\\\",\\\\\\\"Bridge_MiniBridge_3.0\\\\\\\",\\\\\\\"Euclid_Base_1.0\\\\\\\",\\\\\\\"MobileCenter_Base_3.0\\\\\\\",\\\\\\\"Photoshop_14.0\\\\\\\",\\\\\\\"Photoshop_Base_12.0\\\\\\\",\\\\\\\"Photoshop_Base_13.0\\\\\\\",\\\\\\\"Photoshop_Base_14.0\\\\\\\",\\\\\\\"Photoshop_Premium_12.0\\\\\\\",\\\\\\\"Photoshop_Premium_13.0\\\\\\\",\\\\\\\"Photoshop_Premium_14.0\\\\\\\"]\",\"appRefreshInterval\":\"86400000\",\"appEntitlementStatus\":\"SUBSCRIPTION\"}},\"customerCertSignedValues\":{\"signatures\":{\"customerSignature2\":\"E1iu8zwTewAYA6R5O1ZmtyElsAwwOlasoF233k9_glpEfpcY0SeZsLSGBoQv5y9rpNPISCeqbb3I2jUKzAR8JeyA-7qp2_HMKPoTcvvl0PfNLwn2sS9_we66PELPtx2Xz--VaT-r7ZZ6W4-OinlTpwZKkrmtS7CU-hEf3BVUP7H1P92463xD8zl9dhCQG9mK9glh5qSSACdN7AxDCGi7TPbmx6BW5XgJWu1tFPi4fZ1ifFz-mziMq47dWZysy86-16CiQErQS-eu30Lz6jhiva3dKNH9swNHazRQ1Rlze7DwtfjAOMADuXZAnqv-Rw589FqDdE7XzhQTOq5d6SEZf5kT7WQh82sNQ-99dcxVkRO8gwzGVbtfwzvDdIfFmbHQse-PL8D2KFnm57hK8v2PVdXOhAC2yhttlLvlql-3Rlje-y6PNofs0fouX63dXdtev0Ltf0yHcGX2Rl3V30QYX8t3xVqcjFGfsbrI2kRh5yONyFqDYBZZ6SOwrI2rj7yIHAy7PI_SpYEie7V0_viZPMa1zq4Sj7Y3uSar58MF3SYb9E0ezTCy43BWGwXVBw23Yn6Dasrw8iVfY3FcehZMY2Lrpsc29O1eDMqjco3VwfupQAVVt1Im7eRZvshtr91ZaQGsdV8slMpwaTYjjXcOftM17UAoGfQLyVSCL36krO0\",\"customerSignature1\":\"EcOpPXhEAMOEs-baHL-D4u09NKTUopg2ufNLS3lV3e3fSr6j-DxG4p-A4tKOin-6wL3Btm2aIOC-bMH7eVdMB2F3mS46qxgTVV4S2BNT4yRcx33lWXwQMb_xtRW1LnyBb_gQmBhIwPHC19HLOEhO3boFZrFPJ-qCU73HuCADP4Z7OpflfSxaLRFI2plEXJY7QbJ1p8DfwbWPLFyvy4a4PUIgMBeXmZt-cgPZq-wz3hhlmU1UvJbybKbVr-giB4FPPMNobtovOQdByHYWhQtf5KQxeonsdBc5i6Ddg9JYxEXQn4INRIw3N81a1B34cJ5r81b4oOFY-lhFzpb4D8D6tFSxVLoaEE5VBohN7SPlkNlue76DsVNfMI2HiVIqVAcwLKHNMMJ6MY9Oo08NSBzywR0J7PZiOFUJJxiUByGqJbbUPGw1v2ahighqbMsxWaH5krbIPvkZRo6VDikZV77ET3nsbNJQJWZTsCUU2v0OeQhkOzZVBhkeWS2aVYivF89jMF-_vtOLmf4aKE6S58BXxm43v-H-bYNiSTBFyPbwMft6_0dK4sVy2S0f65iDi4SCg3t6fRImFhXJqFiQaLciHKVigF01S2_wXqjbI2uaEL7WPw_7RQteq3cCEjyXBy036eCO8zKS8UicHoESN6a-2Lpg9GuYmVmZJq0VwVkJpbc\"},\"values\":\"eyJucGRJZCI6Ill6UTVabUl3T1RZdE5EYzBOeTAwTUdNNUxXSmhOR1F0TXpGaFpqRmlPREV6TUdVeiIsImFzbnBJZCI6IjNlNTkyOWQ1LThlMGEtNDE1MC05NDk0LTYzM2ZhYWM2ZjU1NyIsImNyZWF0aW9uVGltZXN0YW1wIjoxNjU2NDYxMzY1NzI4LCJjYWNoZUxpZmV0aW1lIjo5MzU5OTQzNTI3MiwicmVzcG9uc2VUeXBlIjoiRlJMX0lOSVRJQUwiLCJjYWNoZUV4cGlyeVdhcm5pbmdDb250cm9sIjp7Indhcm5pbmdTdGFydFRpbWVzdGFtcCI6MTc0OTQ1NjAwMTAwMCwid2FybmluZ0ludGVydmFsIjo4NjQwMDAwMH0sInByZXZpb3VzQXNucElkIjoiMjIxYmZhZDUtMGFlMy00NjgwLTkyNzUtZjdkNWNhMWMyM2ZmIiwiZGV2aWNlSWQiOiIyYzkzYzg3OThhYTJiNjI1M2M2NTFlNmVmZDVmZTQ2OTQ1OTVhOGRhZDgyZGMzZDM1ZGUyMzNkZjU5MjhjMmZhIiwib3NVc2VySWQiOiJiNjkzYmUzNTZhYzUyNDExMzg5YTZjMDZlZWRlOGI0ZTQ3ZTU4MzgxODM4NGNkZGM2MmFmZjc4YzNlY2UwODRkIiwiZGV2aWNlRGF0ZSI6IjIwMjItMDYtMjhUMTc6MDk6MjUuMzk5LTA3MDAiLCJzZXNzaW9uSWQiOiI5NGMxMDg3MS00OWY5LTRjYjktYTZkNC1iYjQwOTY4Y2U1ZWIuMTY1NjQ2MTM2NTIwMi9TVUJTRVFVRU5UIn0\"}}"
+      },
+      "charset": "UTF-8",
+      "contentEncoding": null,
+      "header": {
+        "firstLine": "HTTP/1.1 200 OK",
+        "headers": [
+          {
+            "name": "Server",
+            "value": "openresty"
+          },
+          {
+            "name": "Date",
+            "value": "Wed, 29 Jun 2022 00:09:25 GMT"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json;charset=UTF-8"
+          },
+          {
+            "name": "Transfer-Encoding",
+            "value": "chunked"
+          },
+          {
+            "name": "x-request-id",
+            "value": "Req-Id-52454318-f3b1-4298-b56d-713463330ab6"
+          },
+          {
+            "name": "vary",
+            "value": "Origin,Access-Control-Request-Method,Access-Control-Request-Headers"
+          },
+          {
+            "name": "Connection",
+            "value": "keep-alive"
+          }
+        ]
+      },
+      "mimeType": "application/json",
+      "sizes": {
+        "body": 4980,
+        "handshake": 24472,
+        "headers": 0
+      },
+      "status": 200
+    },
+    "scheme": "https",
+    "speeds": {
+      "overall": 68063,
+      "request": 2538000,
+      "response": 2677454
+    },
+    "ssl": {
+      "cipherSuite": "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "protocol": "TLSv1.2"
+    },
+    "status": "COMPLETE",
+    "times": {
+      "end": "2022-06-28T17:09:25.929-07:00",
+      "requestBegin": "2022-06-28T17:09:25.619-07:00",
+      "requestComplete": "2022-06-28T17:09:25.620-07:00",
+      "responseBegin": "2022-06-28T17:09:25.918-07:00",
+      "start": "2022-06-28T17:09:25.428-07:00"
+    },
+    "totalSize": 31990,
+    "tunnel": false,
+    "webSocket": false
+  }
+]

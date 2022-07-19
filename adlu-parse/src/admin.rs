@@ -17,7 +17,7 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use super::user::get_cached_expiry;
-use super::SignatureSpecifier;
+use super::{AdobeSignatures, CustomerSignatures, SignatureSpecifier};
 use adlu_base::u64decode;
 use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
@@ -78,10 +78,7 @@ impl Configuration {
             if !ocs.is_empty() {
                 return Ok(Self::Installed(ocs));
             }
-            Err(eyre!(
-                "No configuration files found in directory: {}",
-                dir_str
-            ))
+            Err(eyre!("No configuration files found in directory: {}", dir_str))
         } else {
             Err(eyre!(
                 "Cannot search for configurations in non-UTF8 path: {}",
@@ -91,12 +88,8 @@ impl Configuration {
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let extension = path
-            .as_ref()
-            .extension()
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default();
+        let extension =
+            path.as_ref().extension().unwrap_or_default().to_str().unwrap_or_default();
         if extension.eq_ignore_ascii_case("json") {
             let pc_data = PreconditioningData::from_pc_file(path)?;
             return Ok(Self::Packaged(vec![pc_data]));
@@ -109,10 +102,7 @@ impl Configuration {
             let oc = OcFileSpec::from_file(path)?;
             return Ok(Configuration::Installed(vec![oc]));
         }
-        Err(eyre!(
-            "Not a configuration file: {}",
-            path.as_ref().to_string_lossy()
-        ))
+        Err(eyre!("Not a configuration file: {}", path.as_ref().to_string_lossy()))
     }
 }
 
@@ -130,7 +120,8 @@ impl PreconditioningData {
     pub fn from_pc_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let json_data =
             std::fs::read_to_string(path).wrap_err("Can't read preconditioning data")?;
-        let pc_data = serde_json::from_str(&json_data).wrap_err("Invalid preconditioning data")?;
+        let pc_data =
+            serde_json::from_str(&json_data).wrap_err("Invalid preconditioning data")?;
         Ok(pc_data)
     }
 
@@ -146,13 +137,10 @@ impl PreconditioningData {
                 .map_err(|e| eyre!(e))
                 .wrap_err("Can't find configuration data in package")?;
             let mut buffer = String::new();
-            file.read_to_string(&mut buffer)
-                .wrap_err("Can't read package")?;
+            file.read_to_string(&mut buffer).wrap_err("Can't read package")?;
             buffer
         } else {
-            std::str::from_utf8(&bytes)
-                .wrap_err("Invalid package format")?
-                .to_string()
+            std::str::from_utf8(&bytes).wrap_err("Invalid package format")?.to_string()
         };
         let doc = visdom::Vis::load(&html)
             .map_err(|e| eyre!("{}", e))
@@ -177,16 +165,17 @@ pub struct OcFileSpec {
 }
 
 impl OcFileSpec {
-    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         if let Some(name) = path.as_ref().file_stem() {
             if let Some(name) = name.to_str() {
                 if let Some(extension) = path.as_ref().extension() {
                     if let Some(extension) = extension.to_str() {
-                        let mod_date: chrono::DateTime<chrono::Local> = std::fs::metadata(&path)
-                            .wrap_err("Can't access operating config")?
-                            .modified()
-                            .wrap_err("Can't access operating config")?
-                            .into();
+                        let mod_date: chrono::DateTime<chrono::Local> =
+                            std::fs::metadata(&path)
+                                .wrap_err("Can't access operating config")?
+                                .modified()
+                                .wrap_err("Can't access operating config")?
+                                .into();
                         let json_data = std::fs::read_to_string(&path)
                             .wrap_err("Can't read operating config")?;
                         let oc = serde_json::from_str(&json_data)
@@ -194,7 +183,9 @@ impl OcFileSpec {
                         return Ok(Self {
                             name: name.to_string(),
                             extension: extension.to_string(),
-                            mod_date: Some(mod_date.format("%Y-%m-%d %H:%M:%S %Z").to_string()),
+                            mod_date: Some(
+                                mod_date.format("%Y-%m-%d %H:%M:%S %Z").to_string(),
+                            ),
                             content: oc,
                         });
                     }
@@ -251,9 +242,9 @@ impl OcFileSpec {
                     .values
                     .challenge_codes
                     .clone();
-                let code0 = codes
-                    .get(0)
-                    .expect("Invalid license data (FRL Isolated with no challenge codes)");
+                let code0 = codes.get(0).expect(
+                    "Invalid license data (FRL Isolated with no challenge codes)",
+                );
                 if code0.len() > 18 {
                     ActivationType::FrlOffline
                 } else {
@@ -263,7 +254,12 @@ impl OcFileSpec {
                             if code.len() != 18 {
                                 "invalid-census-code".to_string()
                             } else {
-                                format!("{}-{}-{}", &code[0..6], &code[6..12], &code[12..18])
+                                format!(
+                                    "{}-{}-{}",
+                                    &code[0..6],
+                                    &code[6..12],
+                                    &code[12..18]
+                                )
                             }
                         })
                         .collect();
@@ -282,8 +278,9 @@ impl OcFileSpec {
             .and_then(|asnp| asnp.adobe_cert_signed_values.as_ref())
         {
             let timestamp = adobe_values.values.license_expiry_timestamp.as_str();
-            adlu_base::date_from_epoch_millis(timestamp)
-                .unwrap_or_else(|_| panic!("Invalid license data (bad timestamp: {})", timestamp))
+            adlu_base::local_date_from_epoch_millis(timestamp).unwrap_or_else(|_| {
+                panic!("Invalid license data (bad timestamp: {})", timestamp)
+            })
         } else {
             "controlled by server".to_string()
         }
@@ -381,13 +378,6 @@ pub struct CustomerSignedValues {
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AdobeSignatures {
-    pub signature1: String,
-    pub signature2: String,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct AdobeValues {
     pub license_expiry_timestamp: String,
     pub enigma_data: String,
@@ -400,13 +390,6 @@ pub struct AdobeValues {
     pub licensed_features: String,
     pub app_refresh_interval: String,
     pub app_entitlement_status: String,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CustomerSignatures {
-    pub customer_signature2: String,
-    pub customer_signature1: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -441,16 +424,19 @@ mod tests {
         // first parse the actual operating config and make sure it matches the hand parse
         let path = "../rsrc/OperatingConfigs/UGhvdG9zaG9wMXt9MjAxODA3MjAwNA-ODU0YjU5OGQtOTE1Ni00NDZiLWFlZDYtMGQ1ZGM2ZmVhZDBi-80.operatingconfig";
         let info = FileInfo::from_path(path).expect("Can't find online test data");
-        let json = std::fs::read_to_string(&info.pathname).expect("Can't read online data file");
-        let oc1: OperatingConfig = serde_json::from_str(&json).expect("Can't parse online data");
-        let oc2 =
-            ManualOperatingConfig::from_license_file(&info).expect("Can't manually extract config");
+        let json =
+            std::fs::read_to_string(&info.pathname).expect("Can't read online data file");
+        let oc1: OperatingConfig =
+            serde_json::from_str(&json).expect("Can't parse online data");
+        let oc2 = ManualOperatingConfig::from_license_file(&info)
+            .expect("Can't manually extract config");
         assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
         assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
         // now serialize the OC and make sure it matches the hand-generated reference decode
         let decode = serde_json::to_string(&oc1).unwrap();
         let ref_path = "../rsrc/OperatingConfigs/ps-online-proxy.operatingconfig";
-        let ref_decode = std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
         assert_eq!(decode, ref_decode);
     }
 
@@ -458,15 +444,18 @@ mod tests {
     fn test_isolated_oc() {
         let path = "../rsrc/OperatingConfigs/SWxsdXN0cmF0b3Ixe30yMDE4MDcyMDA0-MmE0N2E4M2UtNjFmNS00NmM2LWE0N2ItOGE0Njc2MTliOTI5-80.operatingconfig";
         let info = FileInfo::from_path(path).expect("Can't find isolated test data");
-        let json = std::fs::read_to_string(&info.pathname).expect("Can't read isolated data file");
-        let oc1: OperatingConfig = serde_json::from_str(&json).expect("Can't parse isolated data");
-        let oc2 =
-            ManualOperatingConfig::from_license_file(&info).expect("Can't manually extract config");
+        let json = std::fs::read_to_string(&info.pathname)
+            .expect("Can't read isolated data file");
+        let oc1: OperatingConfig =
+            serde_json::from_str(&json).expect("Can't parse isolated data");
+        let oc2 = ManualOperatingConfig::from_license_file(&info)
+            .expect("Can't manually extract config");
         assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
         assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
         let decode = serde_json::to_string(&oc1).unwrap();
         let ref_path = "../rsrc/OperatingConfigs/ai-isolated.operatingconfig";
-        let ref_decode = std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
         assert_eq!(decode, ref_decode);
     }
 
@@ -474,15 +463,18 @@ mod tests {
     fn test_lan_oc() {
         let path = "../rsrc/OperatingConfigs/SWxsdXN0cmF0b3Ixe30yMDE4MDcyMDA0-OTUzZTViZWYtYWJmMy00NGUxLWFjYjUtZmZhN2MyMDY4YjQx-80.operatingconfig";
         let info = FileInfo::from_path(path).expect("Can't find LAN test data");
-        let json = std::fs::read_to_string(&info.pathname).expect("Can't read LAN data file");
-        let oc1: OperatingConfig = serde_json::from_str(&json).expect("Can't parse LAN data");
-        let oc2 =
-            ManualOperatingConfig::from_license_file(&info).expect("Can't manually extract config");
+        let json =
+            std::fs::read_to_string(&info.pathname).expect("Can't read LAN data file");
+        let oc1: OperatingConfig =
+            serde_json::from_str(&json).expect("Can't parse LAN data");
+        let oc2 = ManualOperatingConfig::from_license_file(&info)
+            .expect("Can't manually extract config");
         assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
         assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
         let decode = serde_json::to_string(&oc1).unwrap();
         let ref_path = "../rsrc/OperatingConfigs/ai-lan.operatingconfig";
-        let ref_decode = std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
         assert_eq!(decode, ref_decode);
     }
 
@@ -490,12 +482,14 @@ mod tests {
     fn test_sdl_oc() {
         let acro_path = "../rsrc/OperatingConfigs/QWNyb2JhdERDMXt9MjAxODA3MjAwNA-NDIzOTc1ZTItODQ2Ni00MDU0LTk2ZDEtNWQ4NzMwOWE4NGZk-90.operatingconfig";
         let id_path = "../rsrc/OperatingConfigs/SW5EZXNpZ24xe30yMDE4MDcyMDA0-NDIzOTc1ZTItODQ2Ni00MDU0LTk2ZDEtNWQ4NzMwOWE4NGZk-90.operatingconfig";
-        let acro_info = FileInfo::from_path(acro_path).expect("Can't find Acrobat SDL test data");
-        let id_info = FileInfo::from_path(id_path).expect("Can't find InDesign SDL test data");
-        let acro_json =
-            std::fs::read_to_string(&acro_info.pathname).expect("Can't read Acrobat LAN data file");
-        let id_json =
-            std::fs::read_to_string(&id_info.pathname).expect("Can't read InDesign LAN data file");
+        let acro_info =
+            FileInfo::from_path(acro_path).expect("Can't find Acrobat SDL test data");
+        let id_info =
+            FileInfo::from_path(id_path).expect("Can't find InDesign SDL test data");
+        let acro_json = std::fs::read_to_string(&acro_info.pathname)
+            .expect("Can't read Acrobat LAN data file");
+        let id_json = std::fs::read_to_string(&id_info.pathname)
+            .expect("Can't read InDesign LAN data file");
         let acro_oc1: OperatingConfig =
             serde_json::from_str(&acro_json).expect("Can't parse Acrobat LAN data");
         let id_oc1: OperatingConfig =
@@ -512,10 +506,7 @@ mod tests {
             acro_oc1.payload.ngl_app_id, acro_oc2.app_id,
             "Acrobat appIds do not match"
         );
-        assert_eq!(
-            id_oc1.payload.npd_id, id_oc2.npd_id,
-            "InDesign npdIds do not match"
-        );
+        assert_eq!(id_oc1.payload.npd_id, id_oc2.npd_id, "InDesign npdIds do not match");
         assert_eq!(
             id_oc1.payload.ngl_app_id, id_oc2.app_id,
             "InDesign appIds do not match"
@@ -534,19 +525,17 @@ mod tests {
 
     #[test]
     fn test_online_package() {
-        let path = "../rsrc/packages/mac/online-proxy-premiere/ngl-preconditioning-data.json";
+        let path =
+            "../rsrc/packages/mac/online-proxy-premiere/ngl-preconditioning-data.json";
         let info = FileInfo::from_path(path).expect("Can't find test data");
-        let json = std::fs::read_to_string(&info.pathname).expect("Can't read package data");
+        let json =
+            std::fs::read_to_string(&info.pathname).expect("Can't read package data");
         let pcd: PreconditioningData =
             serde_json::from_str(&json).expect("Can't parse package data");
         let ocs1 = pcd.operating_configs;
         let ocs2 = ManualOperatingConfig::from_preconditioning_file(&info)
             .expect("Can't manually extract config");
-        assert_eq!(
-            ocs1.len(),
-            ocs2.len(),
-            "Different number of OC specs and OCs?"
-        );
+        assert_eq!(ocs1.len(), ocs2.len(), "Different number of OC specs and OCs?");
         for i in 0..ocs1.len() {
             let oc1 = &ocs1[i].content;
             let oc2 = &ocs2[i];
@@ -568,13 +557,17 @@ pub enum ActivationType {
 impl std::fmt::Display for ActivationType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ActivationType::FrlOnline(server) => format!("FRL Online (server: {})", server).fmt(f),
+            ActivationType::FrlOnline(server) => {
+                format!("FRL Online (server: {})", server).fmt(f)
+            }
             ActivationType::FrlOffline => "FRL Offline".fmt(f),
             ActivationType::FrlIsolated(codes) => match codes.len() {
                 1 => "FRL Isolated (1 census code)".fmt(f),
                 n => format!("FRL Isolated ({} census codes)", n).fmt(f),
             },
-            ActivationType::FrlLan(server) => format!("FRL LAN (server: {})", server).fmt(f),
+            ActivationType::FrlLan(server) => {
+                format!("FRL LAN (server: {})", server).fmt(f)
+            }
             ActivationType::Sdl => "SDL".fmt(f),
             ActivationType::Unknown(s) => s.fmt(f),
         }
