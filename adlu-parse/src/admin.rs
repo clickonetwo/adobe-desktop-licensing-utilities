@@ -411,140 +411,6 @@ pub struct CacheExpiryWarningControl {
     pub warning_interval: u64,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::OperatingConfig;
-    use super::PreconditioningData;
-    use legacy::types::{FileInfo, OperatingConfig as ManualOperatingConfig};
-
-    extern crate serde_json; // 1.0.69
-
-    #[test]
-    fn test_online_oc() {
-        // first parse the actual operating config and make sure it matches the hand parse
-        let path = "../rsrc/OperatingConfigs/UGhvdG9zaG9wMXt9MjAxODA3MjAwNA-ODU0YjU5OGQtOTE1Ni00NDZiLWFlZDYtMGQ1ZGM2ZmVhZDBi-80.operatingconfig";
-        let info = FileInfo::from_path(path).expect("Can't find online test data");
-        let json =
-            std::fs::read_to_string(&info.pathname).expect("Can't read online data file");
-        let oc1: OperatingConfig =
-            serde_json::from_str(&json).expect("Can't parse online data");
-        let oc2 = ManualOperatingConfig::from_license_file(&info)
-            .expect("Can't manually extract config");
-        assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
-        assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
-        // now serialize the OC and make sure it matches the hand-generated reference decode
-        let decode = serde_json::to_string(&oc1).unwrap();
-        let ref_path = "../rsrc/OperatingConfigs/ps-online-proxy.operatingconfig";
-        let ref_decode =
-            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
-        assert_eq!(decode, ref_decode);
-    }
-
-    #[test]
-    fn test_isolated_oc() {
-        let path = "../rsrc/OperatingConfigs/SWxsdXN0cmF0b3Ixe30yMDE4MDcyMDA0-MmE0N2E4M2UtNjFmNS00NmM2LWE0N2ItOGE0Njc2MTliOTI5-80.operatingconfig";
-        let info = FileInfo::from_path(path).expect("Can't find isolated test data");
-        let json = std::fs::read_to_string(&info.pathname)
-            .expect("Can't read isolated data file");
-        let oc1: OperatingConfig =
-            serde_json::from_str(&json).expect("Can't parse isolated data");
-        let oc2 = ManualOperatingConfig::from_license_file(&info)
-            .expect("Can't manually extract config");
-        assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
-        assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
-        let decode = serde_json::to_string(&oc1).unwrap();
-        let ref_path = "../rsrc/OperatingConfigs/ai-isolated.operatingconfig";
-        let ref_decode =
-            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
-        assert_eq!(decode, ref_decode);
-    }
-
-    #[test]
-    fn test_lan_oc() {
-        let path = "../rsrc/OperatingConfigs/SWxsdXN0cmF0b3Ixe30yMDE4MDcyMDA0-OTUzZTViZWYtYWJmMy00NGUxLWFjYjUtZmZhN2MyMDY4YjQx-80.operatingconfig";
-        let info = FileInfo::from_path(path).expect("Can't find LAN test data");
-        let json =
-            std::fs::read_to_string(&info.pathname).expect("Can't read LAN data file");
-        let oc1: OperatingConfig =
-            serde_json::from_str(&json).expect("Can't parse LAN data");
-        let oc2 = ManualOperatingConfig::from_license_file(&info)
-            .expect("Can't manually extract config");
-        assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
-        assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
-        let decode = serde_json::to_string(&oc1).unwrap();
-        let ref_path = "../rsrc/OperatingConfigs/ai-lan.operatingconfig";
-        let ref_decode =
-            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
-        assert_eq!(decode, ref_decode);
-    }
-
-    #[test]
-    fn test_sdl_oc() {
-        let acro_path = "../rsrc/OperatingConfigs/QWNyb2JhdERDMXt9MjAxODA3MjAwNA-NDIzOTc1ZTItODQ2Ni00MDU0LTk2ZDEtNWQ4NzMwOWE4NGZk-90.operatingconfig";
-        let id_path = "../rsrc/OperatingConfigs/SW5EZXNpZ24xe30yMDE4MDcyMDA0-NDIzOTc1ZTItODQ2Ni00MDU0LTk2ZDEtNWQ4NzMwOWE4NGZk-90.operatingconfig";
-        let acro_info =
-            FileInfo::from_path(acro_path).expect("Can't find Acrobat SDL test data");
-        let id_info =
-            FileInfo::from_path(id_path).expect("Can't find InDesign SDL test data");
-        let acro_json = std::fs::read_to_string(&acro_info.pathname)
-            .expect("Can't read Acrobat LAN data file");
-        let id_json = std::fs::read_to_string(&id_info.pathname)
-            .expect("Can't read InDesign LAN data file");
-        let acro_oc1: OperatingConfig =
-            serde_json::from_str(&acro_json).expect("Can't parse Acrobat LAN data");
-        let id_oc1: OperatingConfig =
-            serde_json::from_str(&id_json).expect("Can't parse InDesign LAN data");
-        let acro_oc2 = ManualOperatingConfig::from_license_file(&acro_info)
-            .expect("Can't manually extract Acrobat config");
-        let id_oc2 = ManualOperatingConfig::from_license_file(&id_info)
-            .expect("Can't manually extract Acrobat config");
-        assert_eq!(
-            acro_oc1.payload.npd_id, acro_oc2.npd_id,
-            "Acrobat npdIds do not match"
-        );
-        assert_eq!(
-            acro_oc1.payload.ngl_app_id, acro_oc2.app_id,
-            "Acrobat appIds do not match"
-        );
-        assert_eq!(id_oc1.payload.npd_id, id_oc2.npd_id, "InDesign npdIds do not match");
-        assert_eq!(
-            id_oc1.payload.ngl_app_id, id_oc2.app_id,
-            "InDesign appIds do not match"
-        );
-        let acro_decode = serde_json::to_string(&acro_oc1).unwrap();
-        let acro_ref_path = "../rsrc/OperatingConfigs/acrobat-sdl.operatingconfig";
-        let acro_ref_decode =
-            std::fs::read_to_string(acro_ref_path).expect("Can't read reference JSON");
-        assert_eq!(acro_decode, acro_ref_decode);
-        let id_decode = serde_json::to_string(&id_oc1).unwrap();
-        let id_ref_path = "../rsrc/OperatingConfigs/indesign-sdl.operatingconfig";
-        let id_ref_decode =
-            std::fs::read_to_string(id_ref_path).expect("Can't read reference JSON");
-        assert_eq!(id_decode, id_ref_decode);
-    }
-
-    #[test]
-    fn test_online_package() {
-        let path =
-            "../rsrc/packages/mac/online-proxy-premiere/ngl-preconditioning-data.json";
-        let info = FileInfo::from_path(path).expect("Can't find test data");
-        let json =
-            std::fs::read_to_string(&info.pathname).expect("Can't read package data");
-        let pcd: PreconditioningData =
-            serde_json::from_str(&json).expect("Can't parse package data");
-        let ocs1 = pcd.operating_configs;
-        let ocs2 = ManualOperatingConfig::from_preconditioning_file(&info)
-            .expect("Can't manually extract config");
-        assert_eq!(ocs1.len(), ocs2.len(), "Different number of OC specs and OCs?");
-        for i in 0..ocs1.len() {
-            let oc1 = &ocs1[i].content;
-            let oc2 = &ocs2[i];
-            assert_eq!(oc1.payload.npd_id, oc2.npd_id, "npdIds do not match");
-            assert_eq!(oc1.payload.ngl_app_id, oc2.app_id, "appIds do not match");
-        }
-    }
-}
-
 pub enum ActivationType {
     FrlOnline(String),
     FrlOffline,
@@ -589,5 +455,94 @@ impl std::fmt::Display for Precedence {
             Precedence::CcAllApps => "90 (CC All Apps)".fmt(f),
             Precedence::AcrobatPro => "100 (Acrobat Pro)".fmt(f),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OperatingConfig;
+    use super::PreconditioningData;
+
+    extern crate serde_json; // 1.0.69
+
+    #[test]
+    fn test_online_oc() {
+        // first parse the actual operating config and make sure it matches the hand parse
+        let path = "../rsrc/OperatingConfigs/UGhvdG9zaG9wMXt9MjAxODA3MjAwNA-ODU0YjU5OGQtOTE1Ni00NDZiLWFlZDYtMGQ1ZGM2ZmVhZDBi-80.operatingconfig";
+        let json = std::fs::read_to_string(path).expect("Can't read online data file");
+        let oc1: OperatingConfig =
+            serde_json::from_str(&json).expect("Can't parse online data");
+        // now serialize the OC and make sure it matches the hand-generated reference decode
+        let decode = serde_json::to_string(&oc1).unwrap();
+        let ref_path = "../rsrc/OperatingConfigs/ps-online-proxy.operatingconfig";
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        assert_eq!(decode, ref_decode);
+    }
+
+    #[test]
+    fn test_isolated_oc() {
+        let path = "../rsrc/OperatingConfigs/SWxsdXN0cmF0b3Ixe30yMDE4MDcyMDA0-MmE0N2E4M2UtNjFmNS00NmM2LWE0N2ItOGE0Njc2MTliOTI5-80.operatingconfig";
+        let json = std::fs::read_to_string(path).expect("Can't read isolated data file");
+        let oc1: OperatingConfig =
+            serde_json::from_str(&json).expect("Can't parse isolated data");
+        let decode = serde_json::to_string(&oc1).unwrap();
+        let ref_path = "../rsrc/OperatingConfigs/ai-isolated.operatingconfig";
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        assert_eq!(decode, ref_decode);
+    }
+
+    #[test]
+    fn test_lan_oc() {
+        let path = "../rsrc/OperatingConfigs/SWxsdXN0cmF0b3Ixe30yMDE4MDcyMDA0-OTUzZTViZWYtYWJmMy00NGUxLWFjYjUtZmZhN2MyMDY4YjQx-80.operatingconfig";
+        let json = std::fs::read_to_string(path).expect("Can't read LAN data file");
+        let oc1: OperatingConfig =
+            serde_json::from_str(&json).expect("Can't parse LAN data");
+        let decode = serde_json::to_string(&oc1).unwrap();
+        let ref_path = "../rsrc/OperatingConfigs/ai-lan.operatingconfig";
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        assert_eq!(decode, ref_decode);
+    }
+
+    #[test]
+    fn test_sdl_oc() {
+        let acro_path = "../rsrc/OperatingConfigs/QWNyb2JhdERDMXt9MjAxODA3MjAwNA-NDIzOTc1ZTItODQ2Ni00MDU0LTk2ZDEtNWQ4NzMwOWE4NGZk-90.operatingconfig";
+        let id_path = "../rsrc/OperatingConfigs/SW5EZXNpZ24xe30yMDE4MDcyMDA0-NDIzOTc1ZTItODQ2Ni00MDU0LTk2ZDEtNWQ4NzMwOWE4NGZk-90.operatingconfig";
+        let acro_json =
+            std::fs::read_to_string(acro_path).expect("Can't read Acrobat LAN data file");
+        let id_json =
+            std::fs::read_to_string(id_path).expect("Can't read InDesign LAN data file");
+        let acro_oc1: OperatingConfig =
+            serde_json::from_str(&acro_json).expect("Can't parse Acrobat LAN data");
+        let id_oc1: OperatingConfig =
+            serde_json::from_str(&id_json).expect("Can't parse InDesign LAN data");
+        let acro_decode = serde_json::to_string(&acro_oc1).unwrap();
+        let acro_ref_path = "../rsrc/OperatingConfigs/acrobat-sdl.operatingconfig";
+        let acro_ref_decode =
+            std::fs::read_to_string(acro_ref_path).expect("Can't read reference JSON");
+        assert_eq!(acro_decode, acro_ref_decode);
+        let id_decode = serde_json::to_string(&id_oc1).unwrap();
+        let id_ref_path = "../rsrc/OperatingConfigs/indesign-sdl.operatingconfig";
+        let id_ref_decode =
+            std::fs::read_to_string(id_ref_path).expect("Can't read reference JSON");
+        assert_eq!(id_decode, id_ref_decode);
+    }
+
+    #[test]
+    fn test_online_package() {
+        let path =
+            "../rsrc/packages/mac/online-proxy-premiere/ngl-preconditioning-data.json";
+        let json = std::fs::read_to_string(path).expect("Can't read package data");
+        let pcd: PreconditioningData =
+            serde_json::from_str(&json).expect("Can't parse package data");
+        let ocs1 = &pcd.operating_configs;
+        assert_eq!(ocs1.len(), 3, "Wrong number of OC specs");
+        let decode = serde_json::to_string(&pcd).unwrap();
+        let ref_path = "../rsrc/packages/mac/online-proxy-premiere/ngl-preconditioning-data.expanded.json";
+        let ref_decode =
+            std::fs::read_to_string(ref_path).expect("Can't read reference JSON");
+        assert_eq!(decode, ref_decode);
     }
 }

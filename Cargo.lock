@@ -49,11 +49,10 @@ dependencies = [
  "glob",
  "http",
  "if_chain",
- "legacy",
  "reqwest",
  "serde",
  "serde_json",
- "visdom 0.5.2",
+ "visdom",
  "warp",
  "zip",
 ]
@@ -1195,26 +1194,6 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
-
-[[package]]
-name = "legacy"
-version = "1.5.0"
-dependencies = [
- "adlu-base",
- "base64",
- "chrono",
- "clap",
- "eyre",
- "glob",
- "keyring",
- "num-traits",
- "serde",
- "serde_json",
- "sha2 0.9.9",
- "shellexpand",
- "visdom 0.4.13",
- "zip",
-]
 
 [[package]]
 name = "libc"
@@ -2836,18 +2815,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "visdom"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96ebcc1bd395b5a5cc35a89375380c0e76bc166c1e22de2e2ca6b3a2ad771818"
-dependencies = [
- "lazy_static",
- "regex",
- "rphtml",
- "thiserror",
-]
 
 [[package]]
 name = "visdom"

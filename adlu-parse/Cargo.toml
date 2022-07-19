@@ -21,7 +21,3 @@ serde_json = "1"
 visdom = "0.5"
 warp = "0.3"
 zip = "0.5"
-
-[dev-dependencies]
-legacy = { path = "../legacy" }
-
