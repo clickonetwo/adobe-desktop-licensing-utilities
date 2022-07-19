@@ -54,9 +54,9 @@ jobs:
           command: clippy
           args: -- -D warnings
 
-      - name: Test libraries
+      - name: Test libraries (except when cross-compiling on mac)
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.arch != 'aarch64-apple-darwin' }}
         with:
           command: test
           args: --target ${{ matrix.arch }} --workspace --lib -- --nocapture
