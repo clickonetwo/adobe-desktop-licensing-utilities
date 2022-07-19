@@ -16,8 +16,6 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-extern crate base64;
-
 use std::collections::HashMap;
 
 use chrono::prelude::*;
@@ -25,10 +23,12 @@ use eyre::{eyre, Result, WrapErr};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
+#[cfg(target_os = "macos")]
 pub use ngl::get_adobe_device_id;
 pub use signal::get_first_interrupt;
 
 mod certificate;
+#[cfg(target_os = "macos")]
 mod ngl;
 mod signal;
 

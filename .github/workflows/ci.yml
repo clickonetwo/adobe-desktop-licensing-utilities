@@ -54,29 +54,32 @@ jobs:
           command: clippy
           args: -- -D warnings
 
-      - name: Build debug
+      - name: Test libraries
         uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target ${{ matrix.arch }} --workspace
-
-      - name: Test
-        uses: actions-rs/cargo@v1
-        if: ${{ matrix.arch != 'aarch64-apple-darwin' }}
+        if: ${{ matrix.os == 'macos-latest' }}
         with:
           command: test
-          args: --target ${{ matrix.arch }} --libs -- --nocapture
+          args: --target ${{ matrix.arch }} --workspace --lib -- --nocapture
 
-      - name: Build release locked
+      - name: Build release adlu-proxy (all platforms)
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args:  --target ${{ matrix.arch }} --release --locked
+          args: --target ${{ matrix.arch }} --package adlu-proxy  --release --locked
+
+      - name: Build release adlu-decoder (mac only for now, until windows libngl is built)
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.arch != 'x86_64-unknown-linux-musl' }}
+        with:
+          command: build
+          args: --target ${{ matrix.arch }} --package adlu-decoder --release --locked
 
       - name: Upload executables
         uses: actions/upload-artifact@v2
         with:
           name: executables
           path: |
-            target/**/adobe-license-decoder
-            target/**/adobe-license-decoder.exe
+            target/**/adlu-decoder
+            target/**/adlu-decoder.exe
+            target/**/adlu-proxy
+            target/**/adlu-proxy.exe
