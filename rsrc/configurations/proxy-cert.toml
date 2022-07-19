@@ -4,19 +4,19 @@ host = "127.0.0.1"
 port = "8080"
 ssl_port = "8443"
 remote_host = "https://lcs-cops.adobe.io"
-ssl = false
+ssl = true
 
 [ssl]
-use_pfx = true
-pfx_path = "proxy-certkey"
-cert_path = "proxy-cert.pfx"
-key_path = ""
-password = ""
+use_pfx = false
+pfx_path = "../certificates/pfx-testing.pfx"
+cert_path = "../certificates/pfx-testing.cert"
+key_path = "../certificates/pfx-testing.key"
+password = "pfx-testing"
 
 [logging]
 level = "debug"
 destination = "file"
-file_path = "proxy-http.log"
+file_path = "proxy-cert.log"
 rotate_size_kb = 0
 rotate_count = 10
 

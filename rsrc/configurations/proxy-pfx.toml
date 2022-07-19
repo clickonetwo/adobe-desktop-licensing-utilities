@@ -14,10 +14,10 @@ key_path = "proxy-key"
 password = "pfx-testing"
 
 [logging]
-level = "trace"
+level = "debug"
 destination = "file"
-file_path = "proxy-https.log"
-rotate_size_kb = 5
+file_path = "proxy-pfx.log"
+rotate_size_kb = 0
 rotate_count = 10
 
 [cache]

@@ -381,13 +381,15 @@ impl SettingsRef {
                 .with_prompt("How will you supply your certificate and key")
                 .interact()?;
             if choice == 0 {
+                self.ssl.use_pfx = true;
                 self.ssl.pfx_path =
                     get_existing_file_path("PKCS12", &self.ssl.cert_path, "pfx")?;
             } else {
+                self.ssl.use_pfx = false;
                 self.ssl.cert_path =
                     get_existing_file_path("certificate", &self.ssl.cert_path, "cert")?;
                 self.ssl.key_path =
-                    get_existing_file_path("key", &self.ssl.cert_path, "key")?;
+                    get_existing_file_path("key", &self.ssl.key_path, "key")?;
             }
             eprintln!("Files containing keys are usually encrypted with a password.");
             eprintln!("Your proxy requires that password in order to function properly.");
