@@ -19,7 +19,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 use std::collections::HashMap;
 
 use chrono::prelude::*;
-use eyre::{Result, WrapErr};
+use eyre::{eyre, Result, WrapErr};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
@@ -212,9 +212,9 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
         Ok(s) => Ok(s),
         Err(keyring::Error::NoStorageAccess(err)) => {
             eprintln!("Credential store could not be accessed.  Is it unlocked?");
-            Err(eyre::eyre!(err))
+            Err(eyre!(err))
         }
-        Err(err) => Err(eyre::eyre!(err)),
+        Err(err) => Err(eyre!(err)),
     }
 }
 
@@ -234,10 +234,15 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
         }
     }
     if result.is_empty() {
-        Err(eyre::eyre!("No credential data found"))
+        Err(eyre!("No credential data found"))
     } else {
         Ok(result)
     }
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_saved_credential(_key: &str) -> Result<String> {
+    Err(eyre!("Adobe caches credentials only on Mac and Win"))
 }
 
 #[cfg(test)]
