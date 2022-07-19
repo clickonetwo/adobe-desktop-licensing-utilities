@@ -9,8 +9,8 @@ ssl = false
 [ssl]
 use_pfx = true
 pfx_path = "proxy-certkey"
-cert_path = "proxy-cert.pfx"
-key_path = ""
+cert_path = "proxy-cert"
+key_path = "proxy-key"
 password = ""
 
 [logging]

@@ -126,7 +126,13 @@ async fn send_to_adobe(
         FrlRequest::Activation(_) => http::Method::POST,
         FrlRequest::Deactivation(_) => http::Method::DELETE,
     };
-    let builder = conf.client.request(method, endpoint).header("User-Agent", agent());
+    let builder = conf
+        .client
+        .request(method, endpoint)
+        .header("User-Agent", agent())
+        // .header("Accept-Encoding", "gzip, deflate, br")
+        // .header("Accept", "application/json")
+        ;
     let request = req
         .to_network(builder)
         .build()
