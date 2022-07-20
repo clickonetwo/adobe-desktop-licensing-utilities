@@ -105,18 +105,22 @@ mod test {
         let pfx_data = super::load_pfx_file(pfx_path, password).unwrap();
         let pfx_key_str = String::from_utf8(pfx_data.key_pem()).unwrap();
         let pfx_cert_str = String::from_utf8(pfx_data.cert_pem()).unwrap();
-        assert_eq!(pfx_key_str, key_str);
-        assert_eq!(pfx_cert_str, cert_str);
+        assert_eq!(remove_ascii_whitespace(&pfx_key_str), remove_ascii_whitespace(&key_str));
+        assert_eq!(remove_ascii_whitespace(&pfx_cert_str), remove_ascii_whitespace(&cert_str));
         let pem_data =
             super::load_pem_files(key_path, cert_path, Some(password)).unwrap();
         let pem_key_str = String::from_utf8(pem_data.key_pem()).unwrap();
         let pem_cert_str = String::from_utf8(pem_data.cert_pem()).unwrap();
-        assert_eq!(pem_key_str, key_str);
-        assert_eq!(pem_cert_str, cert_str);
+        assert_eq!(remove_ascii_whitespace(&pem_key_str), remove_ascii_whitespace(&key_str));
+        assert_eq!(remove_ascii_whitespace(&pem_cert_str), remove_ascii_whitespace(&cert_str));
         let pem_data = super::load_pem_files(clear_key_path, cert_path, None).unwrap();
         let pem_key_str = String::from_utf8(pem_data.key_pem()).unwrap();
         let pem_cert_str = String::from_utf8(pem_data.cert_pem()).unwrap();
-        assert_eq!(pem_key_str, key_str);
-        assert_eq!(pem_cert_str, cert_str);
+        assert_eq!(remove_ascii_whitespace(&pem_key_str), remove_ascii_whitespace(&key_str));
+        assert_eq!(remove_ascii_whitespace(&pem_cert_str), remove_ascii_whitespace(&cert_str));
+    }
+    
+    fn remove_ascii_whitespace(s: &str) -> String {
+        s.split_ascii_whitespace().collect::<Vec<&str>>().join("")
     }
 }
