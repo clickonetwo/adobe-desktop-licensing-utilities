@@ -2,5 +2,4 @@
 /local/
 *.log
 *.gz
-*.sqlite
-*.sqlite3
+*.sqlite*
