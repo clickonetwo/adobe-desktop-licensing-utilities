@@ -23,6 +23,7 @@ use warp::{reply, Reply};
 use adlu_parse::protocol::{FrlRequest, FrlResponse};
 
 use crate::settings::{ProxyConfiguration, ProxyMode};
+use crate::test_generators as tg;
 
 pub async fn status(conf: ProxyConfiguration) -> reply::Response {
     let status = format!("Proxy running in {:?} mode", conf.settings.proxy.mode);
@@ -39,12 +40,9 @@ pub async fn process_web_request(
     info!("Received activation request id: {}", req.request_id());
     debug!("Received activation request: {:?}", &req);
     conf.cache.store_request(&req).await;
-    if let ProxyMode::Store = conf.settings.proxy.mode {
-        debug!("Store mode - not contacting COPS");
-        return proxy_offline_reply();
-    }
     match send_frl_request(&conf, &req).await {
         FrlOutcome::Success(resp) => proxy_reply(200, resp),
+        FrlOutcome::StoreMode => proxy_offline_reply(),
         FrlOutcome::NetworkError(err) => cops_failure_reply(err),
         FrlOutcome::ParseFailure(err) => cops_error_reply(err),
         FrlOutcome::ErrorStatus(response) => cops_bad_status_reply(response).await,
@@ -57,6 +55,7 @@ pub async fn forward_stored_request(conf: &ProxyConfiguration, req: &FrlRequest)
 
 pub enum FrlOutcome {
     Success(FrlResponse),
+    StoreMode,
     NetworkError(Report),
     ParseFailure(Report),
     ErrorStatus(reqwest::Response),
@@ -64,40 +63,45 @@ pub enum FrlOutcome {
 
 pub async fn send_frl_request(conf: &ProxyConfiguration, req: &FrlRequest) -> FrlOutcome {
     let id = req.request_id();
-    info!("Sending activation request to COPS with request ID {}", id);
-    let outcome = match send_to_adobe(conf, req).await {
-        Ok(response) => {
-            if response.status().is_success() {
-                match FrlResponse::from_network(req, response).await {
-                    Ok(resp) => {
-                        info!("Received valid activation for request ID {}", id);
-                        debug!(
-                            "Received valid response for request ID {}: {:?}",
-                            id, resp
-                        );
-                        // cache the response
-                        conf.cache.store_response(req, &resp).await;
-                        FrlOutcome::Success(resp)
+    let outcome = if let ProxyMode::Store = conf.settings.proxy.mode {
+        info!("Store mode - not forwarding request ID {}", id);
+        FrlOutcome::StoreMode
+    } else {
+        info!("Sending request ID {} to Adobe endpoint", id);
+        match send_to_adobe(conf, req).await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    match FrlResponse::from_network(req, response).await {
+                        Ok(resp) => {
+                            info!("Received valid activation for request ID {}", id);
+                            debug!(
+                                "Received valid response for request ID {}: {:?}",
+                                id, resp
+                            );
+                            // cache the response
+                            conf.cache.store_response(req, &resp).await;
+                            FrlOutcome::Success(resp)
+                        }
+                        Err(err) => {
+                            error!(
+                                "Received invalid response for request ID {}: {}",
+                                id, err
+                            );
+                            FrlOutcome::ParseFailure(err)
+                        }
                     }
-                    Err(err) => {
-                        error!(
-                            "Received invalid response for request ID {}: {}",
-                            id, err
-                        );
-                        FrlOutcome::ParseFailure(err)
-                    }
+                } else {
+                    let status = response.status();
+                    error!("Received failure status for request ID {}: {:?}", id, status);
+                    debug!("Received failure response: {:?}", response);
+                    // return the safe bits of the response
+                    FrlOutcome::ErrorStatus(response)
                 }
-            } else {
-                let status = response.status();
-                error!("Received failure status for request ID {}: {:?}", id, status);
-                debug!("Received failure response: {:?}", response);
-                // return the safe bits of the response
-                FrlOutcome::ErrorStatus(response)
             }
-        }
-        Err(err) => {
-            info!("Network failure on activation call for request ID {}", id);
-            FrlOutcome::NetworkError(err)
+            Err(err) => {
+                info!("Network failure on activation call for request ID {}", id);
+                FrlOutcome::NetworkError(err)
+            }
         }
     };
     if let FrlOutcome::Success(resp) = outcome {
@@ -137,7 +141,11 @@ async fn send_to_adobe(
         .to_network(builder)
         .build()
         .wrap_err("Failure building FRL network request")?;
-    conf.client.execute(request).await.wrap_err("Error executing FRL network request")
+    if cfg!(test) {
+        tg::mock_adobe_server(request).await.wrap_err("Error mocking FRL network request")
+    } else {
+        conf.client.execute(request).await.wrap_err("Error executing FRL network request")
+    }
 }
 
 fn proxy_reply(status_code: u16, core: impl Reply) -> reply::Response {

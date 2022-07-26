@@ -20,18 +20,10 @@ use clap::Parser;
 use eyre::{Result, WrapErr};
 use log::debug;
 
-use cache::Cache;
-use cli::{Command, FrlProxy};
-
-use crate::settings::{ProxyConfiguration, ProxyMode};
-
-mod api;
-mod cache;
-mod cli;
-mod handlers;
-mod logging;
-mod proxy;
-mod settings;
+use adlu_proxy::cache::Cache;
+use adlu_proxy::cli::{Command, FrlProxy};
+use adlu_proxy::settings::{ProxyConfiguration, ProxyMode};
+use adlu_proxy::{api, cache, cli, handlers, logging, proxy, settings};
 
 #[tokio::main]
 async fn main() -> Result<()> {

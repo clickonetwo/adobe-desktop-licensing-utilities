@@ -23,25 +23,26 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
 
-use adlu_base::{load_pem_files, load_pfx_file, CertificateData};
 use config::{Config, Environment, File as ConfigFile, FileFormat};
 use dialoguer::{Confirm, Input, Password, Select};
 use eyre::{eyre, Report, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 
+use adlu_base::{load_pem_files, load_pfx_file, CertificateData};
+
+use crate::cli::Command;
 use crate::cli::FrlProxy;
-use crate::Command;
 
 #[derive(Debug, Clone)]
 pub struct ProxyConfiguration {
     pub settings: Settings,
-    pub cache: crate::Cache,
+    pub cache: crate::cache::Cache,
     pub client: reqwest::Client,
     pub adobe_server: String,
 }
 
 impl ProxyConfiguration {
-    pub fn new(settings: &Settings, cache: &crate::Cache) -> Result<Self> {
+    pub fn new(settings: &Settings, cache: &crate::cache::Cache) -> Result<Self> {
         let mut builder = reqwest::Client::builder();
         builder = builder.timeout(std::time::Duration::new(59, 0));
         if settings.network.use_proxy {
@@ -215,6 +216,19 @@ impl SettingsRef {
             .expect("Can't build default configuration (please report a bug)")
             .try_deserialize()
             .expect("Can't create default configuration (please report a bug)");
+        conf
+    }
+
+    #[cfg(test)]
+    pub fn test_config() -> Self {
+        let base_str = include_str!("res/defaults.toml");
+        let builder = Config::builder()
+            .add_source(ConfigFile::from_str(base_str, FileFormat::Toml));
+        let conf: Self = builder
+            .build()
+            .expect("Can't build test configuration")
+            .try_deserialize()
+            .expect("Can't create test configuration");
         conf
     }
 
