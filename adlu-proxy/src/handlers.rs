@@ -18,12 +18,12 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use eyre::{eyre, Report, Result, WrapErr};
 use log::{debug, error, info};
+use reqwest::Request;
 use warp::{reply, Reply};
 
 use adlu_parse::protocol::{FrlRequest, FrlResponse};
 
 use crate::settings::{ProxyConfiguration, ProxyMode};
-use crate::test_generators as tg;
 
 pub async fn status(conf: ProxyConfiguration) -> reply::Response {
     let status = format!("Proxy running in {:?} mode", conf.settings.proxy.mode);
@@ -142,10 +142,20 @@ async fn send_to_adobe(
         .build()
         .wrap_err("Failure building FRL network request")?;
     if cfg!(test) {
-        tg::mock_adobe_server(request).await.wrap_err("Error mocking FRL network request")
+        mock_adobe_server(request).await.wrap_err("Error mocking FRL network request")
     } else {
         conf.client.execute(request).await.wrap_err("Error executing FRL network request")
     }
+}
+
+#[cfg(test)]
+async fn mock_adobe_server(request: Request) -> Result<reqwest::Response> {
+    crate::test_generators::mock_adobe_server(request).await
+}
+
+#[cfg(not(test))]
+async fn mock_adobe_server(_: Request) -> Result<reqwest::Response> {
+    Err(eyre!("Can't mock except in testing"))
 }
 
 fn proxy_reply(status_code: u16, core: impl Reply) -> reply::Response {

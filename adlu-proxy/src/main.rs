@@ -23,7 +23,7 @@ use log::debug;
 use adlu_proxy::cache::Cache;
 use adlu_proxy::cli::{Command, FrlProxy};
 use adlu_proxy::settings::{ProxyConfiguration, ProxyMode};
-use adlu_proxy::{api, cache, cli, handlers, logging, proxy, settings};
+use adlu_proxy::{logging, proxy, settings};
 
 #[tokio::main]
 async fn main() -> Result<()> {
