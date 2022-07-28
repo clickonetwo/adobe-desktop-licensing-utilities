@@ -16,7 +16,7 @@ ctrlc = { version = "3.1", features = ["termination"] }
 eyre = "0.6"
 keyring = "1"
 log = "0.4"
-openssl = { varsion = "0.10", features = ["vendored", "v111"] }
+openssl = { version = "0.10", features = ["vendored", "v111"] }
 serde = "1"
 serde_json = "1"
 sha2 = "0.10"
