@@ -49,7 +49,6 @@ mod tests {
             builder,
         );
         let response = builder.reply(&filter).await;
-        eprintln!("response: {:?}", response);
         assert_eq!(response.status().as_u16(), 200);
     }
 }

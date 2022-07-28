@@ -216,7 +216,6 @@ pub fn mock_deactivation_response(req: reqwest::Request) -> Result<reqwest::Resp
 }
 
 pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Response> {
-    eprintln!("request: {:?}", req);
     let mi: MockInfo = req.headers().get("X-Request-Id").into();
     match mi.outcome {
         MockOutcome::Success => {
