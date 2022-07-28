@@ -18,9 +18,10 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use eyre::{eyre, Result, WrapErr};
 use http::HeaderValue;
+use std::borrow::BorrowMut;
+use std::collections::HashMap;
+use std::sync::RwLock;
 use uuid::Uuid;
-
-const NAMESPACE: &str = "24b5dd41-f668-4d42-a27a-ec49ee7c731b";
 
 #[derive(Debug, Clone)]
 pub enum MockOutcome {
@@ -31,33 +32,63 @@ pub enum MockOutcome {
     ErrorStatus,
 }
 
-impl From<Option<&HeaderValue>> for MockOutcome {
-    fn from(hdr: Option<&HeaderValue>) -> Self {
-        match hdr {
-            Some(val) if val == "Success" => MockOutcome::Success,
-            Some(val) if val == "StoreMode" => MockOutcome::StoreMode,
-            Some(val) if val == "NetworkError" => MockOutcome::NetworkError,
-            Some(val) if val == "ParseFailure" => MockOutcome::ParseFailure,
-            _ => MockOutcome::ErrorStatus,
-        }
+impl Default for MockOutcome {
+    fn default() -> Self {
+        MockOutcome::Success
     }
 }
 
-impl From<MockOutcome> for HeaderValue {
-    fn from(val: MockOutcome) -> Self {
-        match val {
-            MockOutcome::Success => HeaderValue::from_static("Success"),
-            MockOutcome::StoreMode => HeaderValue::from_static("StoreMode"),
-            MockOutcome::NetworkError => HeaderValue::from_static("NetworkError"),
-            MockOutcome::ParseFailure => HeaderValue::from_static("ParseFailure"),
-            MockOutcome::ErrorStatus => HeaderValue::from_static("ErrorStatus"),
+#[derive(Debug, Clone, Default)]
+pub struct MockInfo {
+    pub request_name: String,
+    pub request_id: String,
+    pub session_id: String,
+    pub outcome: MockOutcome,
+}
+
+lazy_static::lazy_static! {
+    static ref MOCK_INFO_MAP: RwLock<HashMap<String, MockInfo>> = RwLock::new(HashMap::new());
+}
+
+impl MockInfo {
+    pub fn new(name: &str) -> Self {
+        Self::new_with_outcome(name, &MockOutcome::Success)
+    }
+
+    pub fn new_with_outcome(name: &str, outcome: &MockOutcome) -> Self {
+        let uuid = Uuid::new_v4().hyphenated().to_string();
+        let request_id = uuid.clone();
+        let session_id = format!("{}.{}", uuid, chrono::Local::now().timestamp_millis());
+        let mi = MockInfo {
+            request_name: name.to_string(),
+            request_id,
+            session_id,
+            outcome: outcome.clone(),
+        };
+        let mut map = MOCK_INFO_MAP.write().unwrap();
+        map.borrow_mut().insert(mi.request_id.clone(), mi.clone());
+        mi
+    }
+}
+
+impl From<Option<&HeaderValue>> for MockInfo {
+    fn from(hdr: Option<&HeaderValue>) -> Self {
+        if let Some(hdr) = hdr {
+            if let Ok(val) = hdr.to_str() {
+                let map = MOCK_INFO_MAP.read().unwrap();
+                return match map.get(val) {
+                    Some(mi) => mi.clone(),
+                    None => MockInfo::default(),
+                };
+            }
         }
+        MockInfo::default()
     }
 }
 
 pub fn mock_activation_request(
     name: &str,
-    ask: MockOutcome,
+    ask: &MockOutcome,
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
     let headers = vec![
@@ -92,14 +123,10 @@ pub fn mock_activation_request(
             "npdId" : "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz",
             "npdPrecedence" : 80
         }"#;
-    let namespace = Uuid::try_parse(NAMESPACE).unwrap();
-    let uuid = Uuid::new_v5(&namespace, name.as_bytes());
-    let request_id = uuid.to_string();
-    let session_id = format!("{}.{}", uuid, chrono::Local::now().timestamp_millis());
-    let mut builder = builder.header("X-Request-Name", name);
-    builder = builder.header("X-Requested-Outcome", ask as u32);
-    builder = builder.header("X-Request-Id", request_id);
-    builder = builder.header("X-Session-Id", session_id);
+    let mi = MockInfo::new_with_outcome(name, ask);
+    let mut builder = builder
+        .header("X-Request-Id", &mi.request_id)
+        .header("X-Session-Id", &mi.session_id);
     for (key, val) in headers {
         builder = builder.header(key, val)
     }
@@ -189,7 +216,9 @@ pub fn mock_deactivation_response(req: reqwest::Request) -> Result<reqwest::Resp
 }
 
 pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Response> {
-    match MockOutcome::from(req.headers().get("X-Requested-Outcome")) {
+    eprintln!("request: {:?}", req);
+    let mi: MockInfo = req.headers().get("X-Request-Id").into();
+    match mi.outcome {
         MockOutcome::Success => {
             if req.method() == "POST" {
                 mock_activation_response(req)

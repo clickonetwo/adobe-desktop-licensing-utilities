@@ -41,15 +41,14 @@ mod tests {
         let cache = Cache::from(&settings, true).await.unwrap();
         let conf = ProxyConfiguration::new(&settings, &cache).unwrap();
         let filter = api::activate_route(conf);
-        let builder =
-            warp::test::request().method("POST").path("/asnp/frl_connected/values/v2");
-        let response = tg::mock_activation_request(
+        let mut builder = warp::test::request();
+        builder = builder.method("POST").path("/asnp/frl_connected/values/v2");
+        builder = tg::mock_activation_request(
             "test_request_1",
-            tg::MockOutcome::Success,
+            &tg::MockOutcome::Success,
             builder,
-        )
-        .reply(&filter)
-        .await;
+        );
+        let response = builder.reply(&filter).await;
         eprintln!("response: {:?}", response);
         assert_eq!(response.status().as_u16(), 200);
     }
