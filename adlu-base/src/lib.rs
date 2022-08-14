@@ -163,11 +163,17 @@ impl Timestamp {
     /// timestamps that have been stored as strings
     /// either in integer or datestamp form.
     pub fn from_storage(s: &str) -> Self {
-        if let Ok(ts) = s.parse() {
+        if let Ok(ts) = s.parse::<Self>() {
             ts
         } else {
             Timestamp(Utc::now().timestamp_millis())
         }
+    }
+}
+
+impl Default for Timestamp {
+    fn default() -> Self {
+        Self::now()
     }
 }
 
@@ -189,8 +195,16 @@ impl std::str::FromStr for Timestamp {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(val) = s.parse::<i64>() {
             Ok(Timestamp(val))
+        } else if let Ok(dt) = s.parse::<DateTime<Utc>>() {
+            Ok(Timestamp(dt.timestamp_millis()))
+        } else if let Ok(dt) = DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S:%3f%z") {
+            Ok(Timestamp(dt.timestamp_millis()))
+        } else if let Ok(dt) = DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S:%3f%:z") {
+            Ok(Timestamp(dt.timestamp_millis()))
+        } else if let Ok(dt) = DateTime::parse_from_rfc2822(s) {
+            Ok(Timestamp(dt.timestamp_millis()))
         } else {
-            match s.parse::<DateTime<Utc>>() {
+            match DateTime::parse_from_rfc3339(s) {
                 Ok(dt) => Ok(Timestamp(dt.timestamp_millis())),
                 Err(err) => Err(err),
             }
@@ -247,10 +261,21 @@ pub fn get_saved_credential(_key: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::Timestamp;
+
     #[test]
     #[cfg(target_os = "macos")]
     fn test_get_device_id() {
         let id = super::get_adobe_device_id();
         println!("The test machine's Adobe device ID is '{}'", id);
+    }
+
+    #[test]
+    fn test_timestamp_from_storage() {
+        let ts1 = Timestamp(0);
+        let ts2 = Timestamp::from_storage("1970-01-01T00:00:00.000+00:00");
+        assert_eq!(&ts1, &ts2);
+        let ts3 = Timestamp::from_storage("1970-01-01T00:00:00:000+00:00");
+        assert_eq!(&ts1, &ts3);
     }
 }
