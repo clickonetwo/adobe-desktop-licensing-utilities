@@ -16,7 +16,11 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
+use std::collections::HashMap;
+
 use eyre::{eyre, Result, WrapErr};
+use lazy_static::lazy_static;
+use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Reply};
 
@@ -33,23 +37,26 @@ use crate::{AdobeSignatures, CustomerSignatures};
 /// an umbrella type that can be carried in a collection
 /// allows sorting that collection by timestamp.
 #[derive(Debug, Clone)]
-pub enum FrlRequest {
+pub enum Request {
     Activation(Box<FrlActivationRequest>),
     Deactivation(Box<FrlDeactivationRequest>),
+    LogUpload(Box<LogUploadRequest>),
 }
 
-impl FrlRequest {
+impl Request {
     pub fn timestamp(&self) -> &Timestamp {
         match self {
-            FrlRequest::Activation(req) => &req.timestamp,
-            FrlRequest::Deactivation(req) => &req.timestamp,
+            Request::Activation(req) => &req.timestamp,
+            Request::Deactivation(req) => &req.timestamp,
+            Request::LogUpload(req) => &req.timestamp,
         }
     }
 
     pub fn request_id(&self) -> &str {
         match self {
-            FrlRequest::Activation(req) => &req.request_id,
-            FrlRequest::Deactivation(req) => &req.request_id,
+            Request::Activation(req) => &req.request_id,
+            Request::Deactivation(req) => &req.request_id,
+            Request::LogUpload(req) => &req.request_id,
         }
     }
 
@@ -68,7 +75,7 @@ impl FrlRequest {
                  request_id: String,
                  api_key: String,
                  parsed_body: FrlActivationRequestBody| {
-                    FrlRequest::Activation(Box::new(FrlActivationRequest {
+                    Request::Activation(Box::new(FrlActivationRequest {
                         timestamp: Timestamp::now(),
                         api_key,
                         request_id,
@@ -92,7 +99,7 @@ impl FrlRequest {
                 |request_id: String,
                  api_key: String,
                  params: FrlDeactivationQueryParams| {
-                    FrlRequest::Deactivation(Box::new(FrlDeactivationRequest {
+                    Request::Deactivation(Box::new(FrlDeactivationRequest {
                         timestamp: Timestamp::now(),
                         api_key,
                         request_id,
@@ -102,55 +109,88 @@ impl FrlRequest {
             )
     }
 
+    /// a [`warp::Filter`] that produces a `LogUploadRequest` from a well-formed
+    /// log upload network request posted to a warp server.  You can compose this filter with
+    /// a log upload filter to provide a log upload hander at a specific endpoint.
+    pub fn log_filter() -> impl Filter<Extract = (Self,), Error = warp::Rejection> + Clone
+    {
+        warp::post()
+            .and(warp::header::<String>("Authorization"))
+            .and(warp::header::<String>("X-Api-Key"))
+            .and(warp::body::content_length_limit(11 * 1024 * 1024))
+            .and(warp::body::bytes())
+            .map(|authorization: String, api_key: String, log_data: bytes::Bytes| {
+                let session_data = parse_log_data(log_data.clone());
+                let timestamp = Timestamp::now();
+                let request_id = format!("{}.{}", api_key, timestamp);
+                Request::LogUpload(Box::new(LogUploadRequest {
+                    timestamp,
+                    request_id,
+                    authorization,
+                    api_key,
+                    log_data,
+                    session_data,
+                }))
+            })
+    }
+
     pub fn to_network(
         &self,
         builder: reqwest::RequestBuilder,
     ) -> reqwest::RequestBuilder {
         match self {
-            FrlRequest::Activation(req) => req.to_network(builder),
-            FrlRequest::Deactivation(req) => req.to_network(builder),
+            Request::Activation(req) => req.to_network(builder),
+            Request::Deactivation(req) => req.to_network(builder),
+            Request::LogUpload(req) => req.to_network(builder),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum FrlResponse {
+pub enum Response {
     Activation(Box<FrlActivationResponse>),
     Deactivation(Box<FrlDeactivationResponse>),
+    LogUpload(Box<LogUploadResponse>),
 }
 
-impl FrlResponse {
+impl Response {
     pub fn timestamp(&self) -> &Timestamp {
         match self {
-            FrlResponse::Activation(resp) => &resp.timestamp,
-            FrlResponse::Deactivation(resp) => &resp.timestamp,
+            Response::Activation(resp) => &resp.timestamp,
+            Response::Deactivation(resp) => &resp.timestamp,
+            Response::LogUpload(resp) => &resp.timestamp,
         }
     }
 
-    pub async fn from_network(req: &FrlRequest, resp: reqwest::Response) -> Result<Self> {
+    pub async fn from_network(req: &Request, resp: reqwest::Response) -> Result<Self> {
         match req {
-            FrlRequest::Activation(_) => {
+            Request::Activation(_) => {
                 let resp = FrlActivationResponse::from_network(resp).await?;
-                Ok(FrlResponse::Activation(Box::new(resp)))
+                Ok(Response::Activation(Box::new(resp)))
             }
-            FrlRequest::Deactivation(_) => {
+            Request::Deactivation(_) => {
                 let resp = FrlDeactivationResponse::from_network(resp).await?;
-                Ok(FrlResponse::Deactivation(Box::new(resp)))
+                Ok(Response::Deactivation(Box::new(resp)))
+            }
+            Request::LogUpload(_) => {
+                let resp = LogUploadResponse::from_network(resp).await?;
+                Ok(Response::LogUpload(Box::new(resp)))
             }
         }
     }
 }
 
-impl From<FrlResponse> for warp::reply::Response {
-    fn from(resp: FrlResponse) -> Self {
+impl From<Response> for warp::reply::Response {
+    fn from(resp: Response) -> Self {
         match resp {
-            FrlResponse::Activation(resp) => resp.into_response(),
-            FrlResponse::Deactivation(resp) => resp.into_response(),
+            Response::Activation(resp) => resp.into_response(),
+            Response::Deactivation(resp) => resp.into_response(),
+            Response::LogUpload(resp) => resp.into_response(),
         }
     }
 }
 
-impl Reply for FrlResponse {
+impl Reply for Response {
     fn into_response(self) -> warp::reply::Response {
         self.into()
     }
@@ -453,8 +493,241 @@ pub struct FrlDeactivationResponseBody {
     invalidation_successful: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct LogUploadRequest {
+    pub timestamp: Timestamp,
+    pub request_id: String,
+    pub authorization: String,
+    pub api_key: String,
+    pub log_data: bytes::Bytes,
+    pub session_data: Vec<LogSession>,
+}
+
+impl LogUploadRequest {
+    pub fn to_network(
+        &self,
+        builder: reqwest::RequestBuilder,
+    ) -> reqwest::RequestBuilder {
+        builder
+            .header("Authorization", &self.authorization)
+            .header("X-Api-Key", &self.api_key)
+            .body(self.log_data.clone())
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct LogSession {
+    pub session_id: String,
+    pub initial_entry: Timestamp,
+    pub final_entry: Timestamp,
+    pub session_start: Option<Timestamp>,
+    pub session_end: Option<Timestamp>,
+    pub app_id: Option<String>,
+    pub app_version: Option<String>,
+    pub app_locale: Option<String>,
+    pub ngl_version: Option<String>,
+    pub os_name: Option<String>,
+    pub os_version: Option<String>,
+    pub user_id: Option<String>,
+}
+
+impl LogSession {
+    pub fn merge(&self, other: &LogSession) -> Result<Self> {
+        if self.session_id != other.session_id {
+            Err(eyre!("Can't merge sessions with different IDs"))
+        } else {
+            Ok(LogSession {
+                session_id: self.session_id.clone(),
+                initial_entry: if self.initial_entry <= other.initial_entry {
+                    self.initial_entry.clone()
+                } else {
+                    other.initial_entry.clone()
+                },
+                final_entry: if self.final_entry >= other.final_entry {
+                    self.final_entry.clone()
+                } else {
+                    other.final_entry.clone()
+                },
+                session_start: if self.session_start.is_none() {
+                    other.session_start.clone()
+                } else {
+                    self.session_start.clone()
+                },
+                session_end: if self.session_end.is_none() {
+                    other.session_end.clone()
+                } else {
+                    self.session_end.clone()
+                },
+                app_id: if self.app_id.is_none() {
+                    other.app_id.clone()
+                } else {
+                    self.app_id.clone()
+                },
+                app_version: if self.app_version.is_none() {
+                    other.app_version.clone()
+                } else {
+                    self.app_version.clone()
+                },
+                app_locale: if self.app_locale.is_none() {
+                    other.app_locale.clone()
+                } else {
+                    self.app_locale.clone()
+                },
+                ngl_version: if self.ngl_version.is_none() {
+                    other.ngl_version.clone()
+                } else {
+                    self.ngl_version.clone()
+                },
+                os_name: if self.os_name.is_none() {
+                    other.os_name.clone()
+                } else {
+                    self.os_name.clone()
+                },
+                os_version: if self.os_version.is_none() {
+                    other.os_version.clone()
+                } else {
+                    self.os_version.clone()
+                },
+                user_id: if self.user_id.is_none() {
+                    other.user_id.clone()
+                } else {
+                    self.user_id.clone()
+                },
+            })
+        }
+    }
+}
+
+lazy_static! {
+    static ref RE_MAP: HashMap<&'static str, Regex> = {
+        let mut map = HashMap::new();
+        map.insert(
+            "line",
+            Regex::new(
+                r#"(?m-u)^SessionID=([^ ]+) Timestamp=([^ ]+) .*Description="(.+)"\r?$"#,
+            )
+            .unwrap(),
+        );
+        map.insert("start", Regex::new(r"(?-u)Initializing session logs").unwrap());
+        map.insert("end", Regex::new(r"(?-u)Terminating session logs").unwrap());
+        map.insert(
+            "os",
+            Regex::new(r"(?-u)SetConfig:.+OS Name=([^,]+), OS Version=([^\s]+)").unwrap(),
+        );
+        map.insert(
+            "app",
+            Regex::new(r"(?-u)SetConfig:.+AppID=([^,]+), AppVersion=([^,]+)").unwrap(),
+        );
+        map.insert("ngl", Regex::new(r"(?-u)SetConfig:.+NGLLibVersion=([^,]+)").unwrap());
+        map.insert(
+            "locale",
+            Regex::new(r"(?-u)SetAppRuntimeConfig:.+AppLocale=([a-zA-Z_]+)").unwrap(),
+        );
+        map.insert(
+            "user",
+            Regex::new(r"(?-u)LogCurrentUser:.+UserID=([a-z0-9]{40})").unwrap(),
+        );
+        map
+    };
+}
+
+pub fn parse_log_data(data: bytes::Bytes) -> Vec<LogSession> {
+    let line_pattern = &RE_MAP["line"];
+    let mut sessions: Vec<LogSession> = Vec::new();
+    let mut session: LogSession = Default::default();
+    for cap in line_pattern.captures_iter(&data) {
+        let sid = String::from_utf8(cap[1].to_vec()).unwrap();
+        let time = String::from_utf8(cap[2].to_vec()).unwrap();
+        let timestamp = Timestamp::from_storage(&time);
+        if sid != session.session_id {
+            if !session.session_id.is_empty() {
+                sessions.push(session.clone())
+            }
+            session = LogSession {
+                session_id: sid,
+                initial_entry: timestamp.clone(),
+                final_entry: timestamp.clone(),
+                ..Default::default()
+            }
+        }
+        parse_log_description(&mut session, &timestamp, &cap[3]);
+    }
+    if !session.session_id.is_empty() {
+        sessions.push(session.clone())
+    }
+    sessions
+}
+
+fn parse_log_description(
+    session: &mut LogSession,
+    timestamp: &Timestamp,
+    description: &[u8],
+) {
+    session.final_entry = timestamp.clone();
+    if RE_MAP["start"].captures(description).is_some() {
+        session.session_start = Some(timestamp.clone());
+    } else if RE_MAP["end"].captures(description).is_some() {
+        session.session_end = Some(timestamp.clone());
+    } else if let Some(cap) = RE_MAP["os"].captures(description) {
+        let os_name = String::from_utf8(cap[1].to_vec()).unwrap();
+        let os_version = String::from_utf8(cap[2].to_vec()).unwrap();
+        session.os_name = Some(os_name);
+        session.os_version = Some(os_version);
+    } else if let Some(cap) = RE_MAP["app"].captures(description) {
+        let app_id = String::from_utf8(cap[1].to_vec()).unwrap();
+        let app_version = String::from_utf8(cap[2].to_vec()).unwrap();
+        session.app_id = Some(app_id);
+        session.app_version = Some(app_version);
+    } else if let Some(cap) = RE_MAP["ngl"].captures(description) {
+        let ngl_version = String::from_utf8(cap[1].to_vec()).unwrap();
+        session.ngl_version = Some(ngl_version);
+    } else if let Some(cap) = RE_MAP["locale"].captures(description) {
+        let locale = String::from_utf8(cap[1].to_vec()).unwrap();
+        session.app_locale = Some(locale);
+    } else if let Some(cap) = RE_MAP["user"].captures(description) {
+        let user_id = String::from_utf8(cap[1].to_vec()).unwrap();
+        session.user_id = Some(user_id);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LogUploadResponse {
+    pub timestamp: Timestamp,
+}
+
+impl Default for LogUploadResponse {
+    fn default() -> Self {
+        LogUploadResponse { timestamp: Timestamp::now() }
+    }
+}
+
+impl LogUploadResponse {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub async fn from_network(_response: reqwest::Response) -> Result<Self> {
+        Ok(Self::new())
+    }
+}
+
+impl From<LogUploadResponse> for warp::reply::Response {
+    fn from(_resp: LogUploadResponse) -> Self {
+        warp::reply().into_response()
+    }
+}
+
+impl Reply for LogUploadResponse {
+    fn into_response(self) -> warp::reply::Response {
+        self.into()
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use adlu_base::Timestamp;
+    use std::fs::read_to_string;
+
     #[test]
     fn test_parse_activation_request() {
         let request_str = r#"
@@ -539,5 +812,52 @@ mod test {
         let response: super::FrlDeactivationResponseBody =
             serde_json::from_str(response_str).unwrap();
         assert!(response.invalidation_successful);
+    }
+
+    #[test]
+    fn test_parse_complete_log_upload() {
+        let path = "../rsrc/logs/mac/NGLClient_PremierePro122.5.0.log";
+        let data = bytes::Bytes::from(read_to_string(path).unwrap());
+        let sessions = super::parse_log_data(data);
+        assert_eq!(sessions.len(), 1);
+        let session = &sessions[0];
+        let session_id = "4f7c3960-48da-49bb-9359-e0f040ecae66.1660326622129";
+        let start = Timestamp::from_storage("2022-08-12T10:50:22:129-0700");
+        let end = Timestamp::from_storage("2022-08-12T10:50:53:807-0700");
+        assert_eq!(session.session_id, session_id);
+        assert_eq!(session.initial_entry, start);
+        assert_eq!(session.session_start.as_ref().unwrap(), &session.initial_entry);
+        assert_eq!(session.final_entry, end);
+        assert_eq!(session.session_end.as_ref().unwrap(), &session.final_entry);
+        assert_eq!(session.app_id.as_ref().unwrap(), "PremierePro1");
+        assert_eq!(session.app_version.as_ref().unwrap(), "22.5.0");
+        assert_eq!(session.ngl_version.as_ref().unwrap(), "1.30.0.1");
+        assert_eq!(session.app_locale.as_ref().unwrap(), "en_US");
+        assert_eq!(
+            session.user_id.as_ref().unwrap(),
+            "9f22a90139cbb9f1676b0113e1fb574976dc550a"
+        );
+    }
+
+    #[test]
+    fn test_parse_partial_log_upload() {
+        let path = "../rsrc/logs/mac/NGLClient_AcrobatDC122.1.20169.7.log";
+        let data = bytes::Bytes::from(read_to_string(path).unwrap());
+        let sessions = super::parse_log_data(data);
+        assert_eq!(sessions.len(), 1);
+        let session = &sessions[0];
+        let session_id = "e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834";
+        let start = Timestamp::from_storage("2022-08-08T09:25:33:720-0700");
+        let end = Timestamp::from_storage("2022-08-08T09:25:33:720-0700");
+        assert_eq!(session.session_id, session_id);
+        assert_eq!(session.initial_entry, start);
+        assert!(session.session_start.is_none());
+        assert_eq!(session.final_entry, end);
+        assert_eq!(session.session_end.as_ref().unwrap(), &session.final_entry);
+        assert!(session.app_id.is_none());
+        assert!(session.app_version.is_none());
+        assert!(session.ngl_version.is_none());
+        assert!(session.app_locale.is_none());
+        assert!(session.user_id.is_none());
     }
 }
