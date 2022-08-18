@@ -16,14 +16,11 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use std::{env, str::FromStr, sync::Arc};
-
-use dialoguer::Confirm;
-use eyre::{eyre, Result, WrapErr};
-use log::{debug, error, info};
+use eyre::{eyre, Result};
+use log::debug;
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions, SqliteRow},
-    ConnectOptions, Row,
+    sqlite::{SqlitePool, SqliteRow},
+    Row,
 };
 
 use adlu_base::Timestamp;
@@ -32,230 +29,99 @@ use adlu_parse::protocol::{
     FrlActivationResponse as ActResp, FrlActivationResponseBody, FrlAppDetails,
     FrlDeactivationQueryParams, FrlDeactivationRequest as DeactReq,
     FrlDeactivationResponse as DeactResp, FrlDeactivationResponseBody, FrlDeviceDetails,
-    FrlRequest, FrlResponse,
 };
 
-use crate::settings::{ProxyMode, Settings};
-
-/// A cache for requests and responses.
-///
-/// This cache uses an SQLite v3 database accessed asynchronously via `sqlx`.
-///
-/// The cache uses an [`Arc`] internally, so you can just allocate one globally
-/// and use it everywhere.
-#[derive(Debug, Clone)]
-pub struct Cache {
-    inner: Arc<CacheRef>,
+pub async fn clear(pool: &SqlitePool) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    sqlx::query(CLEAR_ALL).execute(&mut tx).await?;
+    tx.commit().await?;
+    eprintln!("FRL cache has been cleared.");
+    Ok(())
 }
 
-#[derive(Debug, Default)]
-struct CacheRef {
-    enabled: bool,
-    mode: ProxyMode,
-    db_pool: Option<SqlitePool>,
-}
-
-impl Cache {
-    pub async fn from(conf: &Settings, can_create: bool) -> Result<Self> {
-        if let ProxyMode::Passthrough = conf.proxy.mode {
-            return Ok(Cache { inner: Arc::new(CacheRef::default()) });
-        }
-        let db_name = &conf.cache.db_path;
-        let mode = if can_create {
-            "rwc"
+pub async fn import(pool: &SqlitePool, path: &str) -> Result<()> {
+    std::fs::metadata(path)?;
+    // first read the forwarded pairs
+    let in_pool = super::db_init(path, "rw").await?;
+    db_init(&in_pool).await?;
+    let activations = fetch_answered_activations(&in_pool).await?;
+    let deactivations = fetch_answered_deactivations(&in_pool).await?;
+    let total = activations.len() + deactivations.len();
+    in_pool.close().await;
+    eprintln!("Found {} forwarded request/response pair(s) to import", total);
+    // now add them to the cache:
+    // the activations and deactivations are each sorted in timestamp order.
+    // we need to do a merge of the two in timestamp order, because activations
+    // and deactivations interact with each other.  The assumption here is that
+    // there are no answered requests in the local database that might conflict
+    // with what we are getting from the imported set.  If that turns out to not
+    // be true for some situations, more code will be needed here to check for that.
+    let mut acts = activations.iter();
+    let mut deacts = deactivations.iter();
+    let mut act = acts.next();
+    let mut deact = deacts.next();
+    loop {
+        if let Some(actp) = act {
+            if let Some(deactp) = deact {
+                if actp.0.timestamp <= deactp.0.timestamp {
+                    store_activation_request(pool, &actp.0).await?;
+                    store_activation_response(pool, &actp.0, &actp.1).await?;
+                    act = acts.next();
+                } else {
+                    store_deactivation_request(pool, &deactp.0).await?;
+                    store_deactivation_response(pool, &deactp.0, &deactp.1).await?;
+                    deact = deacts.next();
+                }
+            } else {
+                store_activation_request(pool, &actp.0).await?;
+                store_activation_response(pool, &actp.0, &actp.1).await?;
+                act = acts.next();
+            }
+        } else if let Some(deactp) = deact {
+            store_deactivation_request(pool, &deactp.0).await?;
+            store_deactivation_response(pool, &deactp.0, &deactp.1).await?;
+            deact = deacts.next();
         } else {
-            std::fs::metadata(db_name)
-                .wrap_err(format!("Can't open cache db: {}", db_name))?;
-            "rw"
-        };
-        let pool = db_init(db_name, mode)
-            .await
-            .wrap_err(format!("Can't connect to cache db: {}", db_name))?;
-        info!("Valid cache database: {}", &db_name);
-        Ok(Cache {
-            inner: Arc::new(CacheRef {
-                enabled: true,
-                mode: conf.proxy.mode.clone(),
-                db_pool: Some(pool),
-            }),
-        })
-    }
-
-    pub async fn close(&self) {
-        if self.inner.enabled {
-            if let Some(pool) = &self.inner.db_pool {
-                if !pool.is_closed() {
-                    pool.close().await;
-                }
-            }
+            break;
         }
     }
-
-    pub async fn clear(&self, yes: bool) -> Result<()> {
-        let confirm = match yes {
-            true => true,
-            false => Confirm::new()
-                .with_prompt("Really clear the cache? This operation cannot be undone.")
-                .default(false)
-                .show_default(true)
-                .interact()?,
-        };
-        if confirm {
-            let pool = self.inner.db_pool.as_ref().unwrap();
-            let mut tx = pool.begin().await?;
-            sqlx::query(CLEAR_ALL).execute(&mut tx).await?;
-            tx.commit().await?;
-            eprintln!("Cache has been cleared.");
-        }
-        Ok(())
-    }
-
-    pub async fn import(&self, path: &str) -> Result<()> {
-        std::fs::metadata(path)?;
-        // first read the forwarded pairs
-        let in_pool = db_init(path, "rw").await?;
-        let pairs = fetch_forwarded_pairs(&in_pool).await?;
-        in_pool.close().await;
-        eprintln!("Found {} forwarded request/response pair(s) to import", pairs.len());
-        // now add them to the cache:
-        // these are already sorted in timestamp order, and we import them in that order,
-        // because they the activations and deactivations interact with each other.
-        for (req, resp) in pairs.iter() {
-            self.store_request(req).await;
-            self.store_response(req, resp).await;
-        }
-        eprintln!("Completed import of request/response pairs from {path}");
-        Ok(())
-    }
-
-    pub async fn export(&self, path: &str) -> Result<()> {
-        if std::fs::metadata(path).is_ok() {
-            return Err(eyre!("Cannot export to an existing file: {}", path));
-        }
-        // first read the unanswered requests
-        let in_pool = self.inner.db_pool.as_ref().unwrap();
-        let reqs = fetch_unanswered_requests(in_pool).await?;
-        eprintln!("Found {} unanswered request(s) to export", reqs.len());
-        // now store them to the other database
-        let out_pool = db_init(path, "rwc").await?;
-        for req in reqs.iter() {
-            self.store_request_to_pool(req, &out_pool).await;
-        }
-        out_pool.close().await;
-        eprintln!("Completed export of request(s) to {path}");
-        Ok(())
-    }
-
-    pub async fn store_request(&self, req: &FrlRequest) {
-        if !self.inner.enabled {
-            return;
-        }
-        let pool = self.inner.db_pool.as_ref().unwrap();
-        self.store_request_to_pool(req, pool).await;
-    }
-
-    async fn store_request_to_pool(&self, req: &FrlRequest, pool: &SqlitePool) {
-        let result = match req {
-            FrlRequest::Activation(req) => store_activation_request(pool, req).await,
-            FrlRequest::Deactivation(req) => store_deactivation_request(pool, req).await,
-        };
-        if let Err(err) = result {
-            let id = req.request_id();
-            error!("Cache store of request ID {} failed: {}", id, err);
-        }
-    }
-
-    pub async fn store_response(&self, req: &FrlRequest, resp: &FrlResponse) {
-        if !self.inner.enabled {
-            return;
-        }
-        let id = req.request_id();
-        let pool = self.inner.db_pool.as_ref().unwrap();
-        let mode = self.inner.mode.clone();
-        let result = match resp {
-            FrlResponse::Activation(resp) => {
-                if let FrlRequest::Activation(req) = req {
-                    store_activation_response(mode, pool, req, resp).await
-                } else {
-                    panic!("Internal activation cache inconsistency: please report a bug")
-                }
-            }
-            FrlResponse::Deactivation(resp) => {
-                if let FrlRequest::Deactivation(req) = req {
-                    store_deactivation_response(mode, pool, req, resp).await
-                } else {
-                    panic!(
-                        "Internal deactivation cache inconsistency: please report a bug"
-                    )
-                }
-            }
-        };
-        if let Err(err) = result {
-            error!("Cache store of request ID {} failed: {}", id, err);
-        }
-    }
-
-    pub async fn fetch_response(&self, req: &FrlRequest) -> Option<FrlResponse> {
-        if !self.inner.enabled {
-            return None;
-        }
-        let pool = self.inner.db_pool.as_ref().unwrap();
-        let result = match req {
-            FrlRequest::Activation(request) => {
-                match fetch_activation_response(pool, request).await {
-                    Ok(Some(resp)) => Ok(Some(FrlResponse::Activation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
-            }
-            FrlRequest::Deactivation(request) => {
-                match fetch_deactivation_response(pool, request).await {
-                    Ok(Some(resp)) => Ok(Some(FrlResponse::Deactivation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
-            }
-        };
-        match result {
-            Err(err) => {
-                let id = req.request_id();
-                error!("Cache fetch of request ID {} failed: {}", id, err);
-                None
-            }
-            Ok(val) => val,
-        }
-    }
-
-    pub async fn fetch_forwarding_requests(&self) -> Vec<FrlRequest> {
-        if !self.inner.enabled {
-            return Vec::new();
-        }
-        let pool = self.inner.db_pool.as_ref().unwrap();
-        match fetch_unanswered_requests(pool).await {
-            Ok(result) => result,
-            Err(err) => {
-                error!("Fetch of forwarding requests failed: {:?}", err);
-                Vec::new()
-            }
-        }
-    }
+    eprintln!("Completed import of request/response pairs from {path}");
+    Ok(())
 }
 
-async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
-    let db_url = format!("file:{}?mode={}", db_name, mode);
-    let mut options = SqliteConnectOptions::from_str(&db_url).map_err(|e| eyre!(e))?;
-    if env::var("FRL_PROXY_ENABLE_STATEMENT_LOGGING").is_err() {
-        options.disable_statement_logging();
+pub async fn export(pool: &SqlitePool, path: &str) -> Result<()> {
+    if std::fs::metadata(path).is_ok() {
+        return Err(eyre!("Cannot export to an existing file: {}", path));
     }
-    let pool = SqlitePoolOptions::new().max_connections(5).connect_with(options).await?;
-    sqlx::query(ACTIVATION_REQUEST_SCHEMA).execute(&pool).await?;
-    sqlx::query(DEACTIVATION_REQUEST_SCHEMA).execute(&pool).await?;
-    sqlx::query(ACTIVATION_RESPONSE_SCHEMA).execute(&pool).await?;
-    sqlx::query(DEACTIVATION_RESPONSE_SCHEMA).execute(&pool).await?;
-    Ok(pool)
+    // first read the unanswered requests
+    let in_pool = pool;
+    let activations = fetch_unanswered_activations(in_pool).await?;
+    let deactivations = fetch_unanswered_deactivations(in_pool).await?;
+    let total = activations.len() + deactivations.len();
+    eprintln!("Found {} unanswered request(s) to export", total);
+    // now store them to the export database
+    let out_pool = super::db_init(path, "rwc").await?;
+    db_init(&out_pool).await?;
+    for act in activations.iter() {
+        store_activation_request(&out_pool, act).await?;
+    }
+    for deact in deactivations.iter() {
+        store_deactivation_request(&out_pool, deact).await?;
+    }
+    out_pool.close().await;
+    eprintln!("Completed export of request(s) to {path}");
+    Ok(())
 }
 
-async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result<()> {
+pub async fn db_init(pool: &SqlitePool) -> Result<()> {
+    sqlx::query(ACTIVATION_REQUEST_SCHEMA).execute(pool).await?;
+    sqlx::query(DEACTIVATION_REQUEST_SCHEMA).execute(pool).await?;
+    sqlx::query(ACTIVATION_RESPONSE_SCHEMA).execute(pool).await?;
+    sqlx::query(DEACTIVATION_RESPONSE_SCHEMA).execute(pool).await?;
+    Ok(())
+}
+
+pub async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result<()> {
     let field_list = r#"
         (
             activation_key, deactivation_key, api_key, request_id, session_id, device_date,
@@ -289,7 +155,7 @@ async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result<()>
         .bind(&req.parsed_body.app_details.ngl_app_id)
         .bind(&req.parsed_body.app_details.ngl_app_version)
         .bind(&req.parsed_body.app_details.ngl_lib_version)
-        .bind(req.timestamp.to_storage())
+        .bind(Timestamp::to_storage(&req.timestamp))
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
@@ -297,7 +163,7 @@ async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result<()>
     Ok(())
 }
 
-async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Result<()> {
+pub async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Result<()> {
     let field_list = r#"
             (
                 deactivation_key, api_key, request_id, package_id,
@@ -322,7 +188,7 @@ async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Result
         .bind(req.params.enable_vdi_marker_exists)
         .bind(req.params.is_os_user_account_in_domain)
         .bind(req.params.is_virtual_environment)
-        .bind(req.timestamp.to_storage())
+        .bind(Timestamp::to_storage(&req.timestamp))
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
@@ -330,8 +196,7 @@ async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Result
     Ok(())
 }
 
-async fn store_activation_response(
-    mode: ProxyMode,
+pub async fn store_activation_response(
     pool: &SqlitePool,
     req: &ActReq,
     resp: &ActResp,
@@ -354,72 +219,65 @@ async fn store_activation_response(
         .bind(&a_key)
         .bind(&d_key)
         .bind(&body)
-        .bind(req.timestamp.to_storage())
+        .bind(Timestamp::to_storage(&req.timestamp))
         .execute(&mut tx)
         .await?;
     debug!("Stored activation response has rowid {}", result.last_insert_rowid());
-    if let ProxyMode::Forward = mode {
-        // if we are forwarding, then we just remember the response
-    } else {
-        // otherwise we remove all stored deactivation requests/responses as they are now invalid
-        let d_key = req.deactivation_id();
-        debug!("Removing deactivation requests with key: {}", d_key);
-        let d_str = "delete from deactivation_requests where deactivation_key = ?";
-        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-        debug!("Removing deactivation responses with key: {}", d_key);
-        let d_str = "delete from deactivation_responses where deactivation_key = ?";
-        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-    }
+    // remove all matching deactivation requests/responses as they are now invalid
+    let d_key = req.deactivation_id();
+    debug!("Removing deactivation requests with key: {}", d_key);
+    let d_str = "delete from deactivation_requests where deactivation_key = ?";
+    sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
+    debug!("Removing deactivation responses with key: {}", d_key);
+    let d_str = "delete from deactivation_responses where deactivation_key = ?";
+    sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
     tx.commit().await?;
     Ok(())
 }
 
-async fn store_deactivation_response(
-    mode: ProxyMode,
+pub async fn store_deactivation_response(
     pool: &SqlitePool,
     req: &DeactReq,
     resp: &DeactResp,
 ) -> Result<()> {
+    debug!("Caching successful deactivation with request ID {}", req.request_id);
     let mut tx = pool.begin().await?;
-    if let ProxyMode::Forward = mode {
-        // when we are forwarding, we store the response for later processing
-        let field_list = "(deactivation_key, body, timestamp)";
-        let value_list = "(?, ?, ?)";
-        let i_str = format!(
-            "insert or replace into deactivation_responses {} values {}",
-            field_list, value_list
-        );
-        let d_key = req.deactivation_id();
-        debug!("Storing deactivation response {} with key: {}", &req.request_id, &d_key);
-        let result = sqlx::query(&i_str)
-            .bind(&d_key)
-            .bind(&resp.body)
-            .bind(req.timestamp.to_storage())
-            .execute(&mut tx)
-            .await?;
-        debug!("Stored deactivation response has rowid {}", result.last_insert_rowid());
-    } else {
-        // when we are live, we remove all activation requests/responses as they are now invalid
-        let d_key = req.deactivation_id();
-        debug!("Removing activation requests with deactivation key: {}", d_key);
-        let d_str = "delete from activation_requests where deactivation_key = ?";
-        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-        debug!("Removing activation responses with deactivation key: {}", d_key);
-        let d_str = "delete from activation_responses where deactivation_key = ?";
-        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-        // Remove any pending deactivation requests & responses as they have been completed.
-        debug!("Removing deactivation requests with key: {}", d_key);
-        let d_str = "delete from deactivation_requests where deactivation_key = ?";
-        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-        debug!("Removing deactivation responses with key: {}", d_key);
-        let d_str = "delete from deactivation_responses where deactivation_key = ?";
-        sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
-    }
+    // first remove all earlier matching requests/responses as they are now invalid
+    let d_key = req.deactivation_id();
+    debug!("Removing activation requests with deactivation key: {}", d_key);
+    let d_str = "delete from activation_requests where deactivation_key = ?";
+    sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
+    debug!("Removing activation responses with deactivation key: {}", d_key);
+    let d_str = "delete from activation_responses where deactivation_key = ?";
+    sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
+    // Remove any pending deactivation requests & responses as they have been completed.
+    debug!("Removing deactivation requests with key: {}", d_key);
+    let d_str = "delete from deactivation_requests where deactivation_key = ?";
+    sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
+    debug!("Removing deactivation responses with key: {}", d_key);
+    let d_str = "delete from deactivation_responses where deactivation_key = ?";
+    sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
+    // then the response
+    let field_list = "(deactivation_key, body, timestamp)";
+    let value_list = "(?, ?, ?)";
+    let i_str = format!(
+        "insert or replace into deactivation_responses {} values {}",
+        field_list, value_list
+    );
+    let d_key = req.deactivation_id();
+    debug!("Storing deactivation response {} with key: {}", &req.request_id, &d_key);
+    let result = sqlx::query(&i_str)
+        .bind(&d_key)
+        .bind(&resp.body)
+        .bind(Timestamp::to_storage(&req.timestamp))
+        .execute(&mut tx)
+        .await?;
     tx.commit().await?;
+    debug!("Stored deactivation response has rowid {}", result.last_insert_rowid());
     Ok(())
 }
 
-async fn fetch_activation_response(
+pub async fn fetch_activation_response(
     pool: &SqlitePool,
     req: &ActReq,
 ) -> Result<Option<ActResp>> {
@@ -451,7 +309,7 @@ async fn fetch_activation_response(
     }
 }
 
-async fn fetch_deactivation_response(
+pub async fn fetch_deactivation_response(
     pool: &SqlitePool,
     req: &DeactReq,
 ) -> Result<Option<DeactResp>> {
@@ -482,15 +340,7 @@ async fn fetch_deactivation_response(
     }
 }
 
-async fn fetch_unanswered_requests(pool: &SqlitePool) -> Result<Vec<FrlRequest>> {
-    let mut activations = fetch_unanswered_activations(pool).await?;
-    let mut deactivations = fetch_unanswered_deactivations(pool).await?;
-    activations.append(&mut deactivations);
-    activations.sort_unstable_by(|r1, r2| r1.timestamp().cmp(r2.timestamp()));
-    Ok(activations)
-}
-
-async fn fetch_unanswered_activations(pool: &SqlitePool) -> Result<Vec<FrlRequest>> {
+async fn fetch_unanswered_activations(pool: &SqlitePool) -> Result<Vec<ActReq>> {
     let mut result = Vec::new();
     let q_str = r#"select * from activation_requests req where not exists
                     (select 1 from activation_responses where
@@ -499,35 +349,22 @@ async fn fetch_unanswered_activations(pool: &SqlitePool) -> Result<Vec<FrlReques
                     )"#;
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows.iter() {
-        result.push(FrlRequest::Activation(Box::new(request_from_activation_row(row))))
+        result.push(request_from_activation_row(row))
     }
     Ok(result)
 }
 
-async fn fetch_unanswered_deactivations(pool: &SqlitePool) -> Result<Vec<FrlRequest>> {
+async fn fetch_unanswered_deactivations(pool: &SqlitePool) -> Result<Vec<DeactReq>> {
     let mut result = Vec::new();
     let q_str = r#"select * from deactivation_requests"#;
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows.iter() {
-        result
-            .push(FrlRequest::Deactivation(Box::new(request_from_deactivation_row(row))))
+        result.push(request_from_deactivation_row(row))
     }
     Ok(result)
 }
 
-async fn fetch_forwarded_pairs(
-    pool: &SqlitePool,
-) -> Result<Vec<(FrlRequest, FrlResponse)>> {
-    let mut activations = fetch_forwarded_activations(pool).await?;
-    let mut deactivations = fetch_forwarded_deactivations(pool).await?;
-    activations.append(&mut deactivations);
-    activations.sort_unstable_by(|r1, r2| r1.0.timestamp().cmp(r2.0.timestamp()));
-    Ok(activations)
-}
-
-async fn fetch_forwarded_activations(
-    pool: &SqlitePool,
-) -> Result<Vec<(FrlRequest, FrlResponse)>> {
+async fn fetch_answered_activations(pool: &SqlitePool) -> Result<Vec<(ActReq, ActResp)>> {
     let mut result = Vec::new();
     let q_str = r#"
         select req.*, resp.body from activation_requests req 
@@ -535,17 +372,15 @@ async fn fetch_forwarded_activations(
             on req.activation_key = resp.activation_key"#;
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows.iter() {
-        result.push((
-            FrlRequest::Activation(Box::new(request_from_activation_row(row))),
-            FrlResponse::Activation(Box::new(response_from_activation_row(row)?)),
-        ))
+        result
+            .push((request_from_activation_row(row), response_from_activation_row(row)?));
     }
     Ok(result)
 }
 
-async fn fetch_forwarded_deactivations(
+async fn fetch_answered_deactivations(
     pool: &SqlitePool,
-) -> Result<Vec<(FrlRequest, FrlResponse)>> {
+) -> Result<Vec<(DeactReq, DeactResp)>> {
     let mut result = Vec::new();
     let q_str = r#"
         select req.*, resp.body from deactivation_requests req 
@@ -554,8 +389,8 @@ async fn fetch_forwarded_deactivations(
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows.iter() {
         result.push((
-            FrlRequest::Deactivation(Box::new(request_from_deactivation_row(row))),
-            FrlResponse::Deactivation(Box::new(response_from_deactivation_row(row)?)),
+            request_from_deactivation_row(row),
+            response_from_deactivation_row(row)?,
         ));
     }
     Ok(result)
