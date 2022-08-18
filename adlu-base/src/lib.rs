@@ -142,31 +142,48 @@ pub struct Timestamp(i64);
 
 impl Timestamp {
     pub fn from_millis(epoch_millis: i64) -> Self {
-        Timestamp(epoch_millis)
-    }
-
-    pub fn from_date(date_string: &str) -> Self {
-        Self::from_storage(date_string)
+        Self(epoch_millis)
     }
 
     pub fn now() -> Self {
         Self(Utc::now().timestamp_millis())
     }
 
-    /// When you need to store a timestamp as a string,
-    /// use this function.
-    pub fn to_storage(&self) -> String {
-        self.to_string()
+    pub fn to_millis(&self) -> i64 {
+        self.0
     }
 
-    /// An infallible parse, used for reading
-    /// timestamps that have been stored as strings
-    /// either in integer or datestamp form.
+    /// When you need to store a timestamp as a string.
+    pub fn to_storage(t: &Timestamp) -> String {
+        t.to_string()
+    }
+
+    /// When you need to store an optional timestamp as a string.
+    pub fn optional_to_storage(t: &Option<Timestamp>) -> String {
+        match t {
+            Some(timestamp) => timestamp.to_string(),
+            None => String::new(),
+        }
+    }
+
+    /// When you've stored a timestamp as a string and want it back.
+    /// This handles both millisecond storage and various forms of date
+    /// formatting, so it's backwards compatible with JSON storage
+    /// prepared by different front ends.
     pub fn from_storage(s: &str) -> Self {
         if let Ok(ts) = s.parse::<Self>() {
             ts
         } else {
             Timestamp(Utc::now().timestamp_millis())
+        }
+    }
+
+    /// When you've stored an optional timestamp as a string and want it back.
+    pub fn optional_from_storage(s: &str) -> Option<Self> {
+        if s.is_empty() {
+            None
+        } else {
+            Some(Self::from_storage(s))
         }
     }
 }
@@ -194,6 +211,8 @@ impl std::str::FromStr for Timestamp {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(val) = s.parse::<i64>() {
+            // for now we assume milliseconds
+            // TODO: figure out if it's seconds, milliseconds, or nanoseconds
             Ok(Timestamp(val))
         } else if let Ok(dt) = s.parse::<DateTime<Utc>>() {
             Ok(Timestamp(dt.timestamp_millis()))
