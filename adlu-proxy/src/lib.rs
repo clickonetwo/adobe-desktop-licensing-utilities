@@ -16,6 +16,12 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
+use eyre::{Result, WrapErr};
+use log::debug;
+
+use cli::{Command, ProxyArgs};
+use settings::Settings;
+
 pub mod cache;
 pub mod cli;
 pub mod logging;
@@ -24,12 +30,47 @@ pub mod settings;
 #[cfg(test)]
 pub mod testing;
 
+pub async fn run(settings: Settings, args: ProxyArgs) -> Result<()> {
+    logging::init(&settings)?;
+    debug!("Loaded config: {:?}", &settings);
+    let cache = cache::connect(&settings).await?;
+    let result = match args.cmd {
+        Command::Configure => {
+            settings::update_config_file(Some(&settings), &args.config_file)
+        }
+        Command::Serve { .. } => {
+            if settings.proxy.ssl {
+                proxy::serve_incoming_https_requests(&settings, &cache).await
+            } else {
+                proxy::serve_incoming_http_requests(&settings, &cache).await
+            }
+        }
+        Command::Forward => proxy::forward_stored_requests(&settings, &cache).await,
+        Command::Clear { yes } => {
+            cache.clear(yes).await.wrap_err("Failed to clear cache")
+        }
+        Command::Import { from_path: import_path } => cache
+            .import(&import_path)
+            .await
+            .wrap_err(format!("Failed to import from {}", &import_path)),
+        Command::Export { to_path: export_path } => cache
+            .export(&export_path)
+            .await
+            .wrap_err(format!("Failed to export to {}", &export_path)),
+        Command::Report { to_path: report_path } => cache
+            .report(&report_path)
+            .await
+            .wrap_err(format!("Failed to report to {}", &report_path)),
+    };
+    cache.close().await;
+    result
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{cache, logging, proxy};
-
     use super::settings::{Settings, SettingsVal};
     use super::testing as tg;
+    use super::{cache, logging, proxy};
 
     #[tokio::test]
     async fn test_activation_request() {
