@@ -62,6 +62,18 @@ pub struct Ssl {
     pub password: String,
 }
 
+impl Default for Ssl {
+    fn default() -> Self {
+        Ssl {
+            use_pfx: true,
+            pfx_path: "proxy-certkey".to_string(),
+            cert_path: "proxy-cert".to_string(),
+            key_path: "proxy-key".to_string(),
+            password: "".to_string(),
+        }
+    }
+}
+
 impl Debug for Ssl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ssl")
@@ -80,6 +92,18 @@ pub struct Logging {
     pub rotate_count: u32,
 }
 
+impl Default for Logging {
+    fn default() -> Self {
+        Logging {
+            level: LogLevel::Info,
+            destination: LogDestination::File,
+            file_path: "proxy-log.log".to_string(),
+            rotate_size_kb: 0,
+            rotate_count: 10,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Upstream {
     pub use_proxy: bool,
@@ -89,6 +113,20 @@ pub struct Upstream {
     pub use_basic_auth: bool,
     pub proxy_username: String,
     pub proxy_password: String,
+}
+
+impl Default for Upstream {
+    fn default() -> Self {
+        Upstream {
+            use_proxy: false,
+            proxy_protocol: "http".to_string(),
+            proxy_host: "127.0.0.1".to_string(),
+            proxy_port: "8888".to_string(),
+            use_basic_auth: false,
+            proxy_username: "".to_string(),
+            proxy_password: "".to_string(),
+        }
+    }
 }
 
 impl Debug for Upstream {
@@ -127,7 +165,7 @@ impl Default for Log {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SettingsVal {
     pub proxy: Proxy,
     pub ssl: Ssl,
@@ -168,35 +206,24 @@ pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()>
 impl SettingsVal {
     /// Create a new default config
     pub fn default_config() -> Self {
-        let base_str = include_str!("res/defaults.toml");
-        let builder = Config::builder()
-            .add_source(ConfigFile::from_str(base_str, FileFormat::Toml));
-        let conf: Self = builder
-            .build()
-            .expect("Can't build default configuration (please report a bug)")
-            .try_deserialize()
-            .expect("Can't create default configuration (please report a bug)");
-        conf
+        Default::default()
     }
 
     #[cfg(test)]
     pub fn test_config() -> Self {
-        let base_str = include_str!("res/testing.toml");
-        let builder = Config::builder()
-            .add_source(ConfigFile::from_str(base_str, FileFormat::Toml));
-        let conf: Self = builder
-            .build()
-            .expect("Can't build test configuration")
-            .try_deserialize()
-            .expect("Can't create test configuration");
-        conf
+        let mut config: SettingsVal = Default::default();
+        config.proxy.db_path = "test-cache.sqlite".to_string();
+        config.proxy.host = "127.0.0.1".to_string();
+        config.logging.level = LogLevel::Trace;
+        config.logging.destination = LogDestination::File;
+        config
     }
 
     /// Load an existing config file, returning its contained config
     pub fn load_config(args: &ProxyArgs) -> Result<Self> {
-        let base_str = include_str!("res/defaults.toml");
+        let default_str = toml::to_string(&Self::default_config()).unwrap();
         let builder = Config::builder()
-            .add_source(ConfigFile::from_str(base_str, FileFormat::Toml))
+            .add_source(ConfigFile::from_str(&default_str, FileFormat::Toml))
             .add_source(ConfigFile::new(&args.config_file, FileFormat::Toml))
             .add_source(Environment::with_prefix("adlu_proxy"));
         let mut settings: Self = builder.build()?.try_deserialize()?;
