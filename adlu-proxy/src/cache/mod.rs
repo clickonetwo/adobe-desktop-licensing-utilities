@@ -28,7 +28,7 @@ use sqlx::{
     ConnectOptions,
 };
 
-use adlu_parse::protocol::{Request, Response};
+use adlu_parse::protocol::{LogSession, Request, Response};
 
 use crate::settings::Settings;
 
@@ -45,14 +45,8 @@ pub async fn connect(settings: &Settings) -> Result<Cache> {
 }
 
 #[derive(Debug)]
-struct Db {
+pub struct Db {
     pool: SqlitePool,
-}
-
-impl Drop for Db {
-    fn drop(&mut self) {
-        self.close();
-    }
 }
 
 impl Db {
@@ -65,8 +59,7 @@ impl Db {
         Ok(Self { pool })
     }
 
-    #[tokio::main]
-    async fn close(&self) {
+    pub async fn close(&self) {
         self.pool.close().await;
     }
 
@@ -82,7 +75,7 @@ impl Db {
         if confirm {
             let pool = &self.pool;
             frl::clear(pool).await?;
-            eprintln!("Cache has been cleared.");
+            log::clear(pool).await?;
         }
         Ok(())
     }
@@ -93,6 +86,10 @@ impl Db {
 
     pub async fn export(&self, path: &str) -> Result<()> {
         frl::export(&self.pool, path).await
+    }
+
+    pub async fn report(&self, path: &str) -> Result<()> {
+        log::report(&self.pool, path).await
     }
 
     pub async fn store_request(&self, req: &Request) {
@@ -176,10 +173,18 @@ impl Db {
             Ok(val) => val,
         }
     }
+
+    pub async fn fetch_unanswered_requests(&self) -> Result<Vec<Request>> {
+        frl::fetch_unanswered_requests(&self.pool).await
+    }
+
+    pub async fn fetch_log_sessions(&self) -> Result<Vec<LogSession>> {
+        log::fetch_log_sessions(&self.pool).await
+    }
 }
 
 async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
-    let db_url = format!("file:{}?mode={}", db_name, mode);
+    let db_url = format!("sqlite:{}?mode={}", db_name, mode);
     let mut options: SqliteConnectOptions =
         SqliteConnectOptions::from_str(&db_url).map_err(|e| eyre!(e))?;
     if env::var("ADLU_PROXY_ENABLE_STATEMENT_LOGGING").is_err() {

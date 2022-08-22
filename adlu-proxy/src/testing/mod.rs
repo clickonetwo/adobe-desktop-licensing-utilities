@@ -26,8 +26,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum MockOutcome {
     Success,
-    StoreMode,
-    NetworkError,
+    Isolated,
+    Uncreachable,
     ParseFailure,
     ErrorStatus,
 }
@@ -225,8 +225,8 @@ pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Respons
                 mock_deactivation_response(req)
             }
         }
-        MockOutcome::StoreMode => panic!("request sent in StoreMode"),
-        MockOutcome::NetworkError => Err(eyre!("NetworkError - server not reachable")),
+        MockOutcome::Isolated => panic!("request sent in StoreMode"),
+        MockOutcome::Uncreachable => Err(eyre!("NetworkError - server not reachable")),
         MockOutcome::ParseFailure => mock_invalid_body_response(req),
         MockOutcome::ErrorStatus => mock_error_response(req),
     }

@@ -18,7 +18,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use adlu_base::Timestamp;
 use adlu_parse::protocol::{LogSession, LogUploadRequest, LogUploadResponse};
-use eyre::Result;
+use eyre::{eyre, Result};
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
@@ -30,6 +30,18 @@ pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
+pub async fn clear(pool: &SqlitePool) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    sqlx::query(CLEAR_ALL).execute(&mut tx).await?;
+    tx.commit().await?;
+    eprintln!("Log cache has been cleared.");
+    Ok(())
+}
+
+pub async fn report(_pool: &SqlitePool, _path: &str) -> Result<()> {
+    Err(eyre!("Reporting not yet implemented."))
+}
+
 pub async fn store_upload_request(
     pool: &SqlitePool,
     req: &LogUploadRequest,
@@ -39,7 +51,7 @@ pub async fn store_upload_request(
         if let Some(existing) = fetch_log_session(pool, &new.session_id).await? {
             store_log_session(pool, &existing.merge(new)?).await?;
         } else {
-            store_log_session(pool, &new).await?;
+            store_log_session(pool, new).await?;
         }
     }
     Ok(())
@@ -80,9 +92,24 @@ async fn fetch_log_session(
     }
 }
 
+pub(crate) async fn fetch_log_sessions(pool: &SqlitePool) -> Result<Vec<LogSession>> {
+    debug!("Fetching all log sessions");
+    let mut result = vec![];
+    let q_str = "select sessions";
+    let rows = sqlx::query(q_str).fetch_all(pool).await?;
+    for row in rows {
+        result.push(session_from_row(&row));
+    }
+    debug!("Fetched {} sessions", result.len());
+    Ok(result)
+}
+
 async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()> {
     fn optval(s: &Option<String>) -> String {
-        s.unwrap_or_default().clone()
+        match s {
+            Some(s) => s.clone(),
+            None => String::new(),
+        }
     }
     let field_list = r#"
         (
@@ -151,7 +178,7 @@ const SESSION_SCHEMA: &str = r#"
         ngl_version text not null,
         os_name text not null,
         os_version text not null,
-        user_id text not null,
+        user_id text not null
     );"#;
 
 const CLEAR_ALL: &str = r#"

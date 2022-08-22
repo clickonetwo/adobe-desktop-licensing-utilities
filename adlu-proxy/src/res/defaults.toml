@@ -1,10 +1,10 @@
 [proxy]
-mode = "cache"
+db_path = "proxy-cache.sqlite"
+mode = "connected"
 host = "0.0.0.0"
 port = "8080"
 ssl_port = "8443"
-remote_host = "https://lcs-cops.adobe.io"
-ssl = true
+ssl = false
 
 [ssl]
 use_pfx = true
@@ -14,19 +14,23 @@ key_path = "proxy-key"
 password = ""
 
 [logging]
-level = "info"
-destination = "file"
+level = "off"
+destination = "console"
 file_path = "proxy-log.log"
 rotate_size_kb = 0
 rotate_count = 10
 
-[cache]
-db_path = "proxy-cache.sqlite"
-
-[network]
+[upstream]
 use_proxy = false
+proxy_protocol = "http"
 proxy_host = "127.0.0.1"
 proxy_port = "8888"
 use_basic_auth = false
 proxy_username = ""
 proxy_password = ""
+
+[frl]
+remote_host = "https://lcs-cops.adobe.io"
+
+[log]
+remote_host = "https://lcs-ulecs.adobe.io"

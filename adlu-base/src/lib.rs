@@ -20,6 +20,7 @@ use std::collections::HashMap;
 
 use chrono::prelude::*;
 use eyre::{eyre, Result, WrapErr};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
@@ -137,7 +138,7 @@ pub fn json_from_file(path: &str) -> Result<JsonMap> {
 /// various integer and string forms, including datestamps.
 /// The debug representation is a datestamp, while the string version
 /// is the integer.  Either are acceptable for parsing.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Timestamp(i64);
 
 impl Timestamp {

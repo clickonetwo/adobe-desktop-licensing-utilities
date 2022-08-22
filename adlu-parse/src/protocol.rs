@@ -515,7 +515,8 @@ impl LogUploadRequest {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LogSession {
     pub session_id: String,
     pub initial_entry: Timestamp,
@@ -816,7 +817,7 @@ mod test {
 
     #[test]
     fn test_parse_complete_log_upload() {
-        let path = "../rsrc/logs/mac/NGLClient_PremierePro122.5.0.log";
+        let path = "../rsrc/logs/mac/NGLClient_PremierePro122.5.0.log.bin";
         let data = bytes::Bytes::from(read_to_string(path).unwrap());
         let sessions = super::parse_log_data(data);
         assert_eq!(sessions.len(), 1);
@@ -841,7 +842,7 @@ mod test {
 
     #[test]
     fn test_parse_partial_log_upload() {
-        let path = "../rsrc/logs/mac/NGLClient_AcrobatDC122.1.20169.7.log";
+        let path = "../rsrc/logs/mac/NGLClient_AcrobatDC122.1.20169.7.log.bin";
         let data = bytes::Bytes::from(read_to_string(path).unwrap());
         let sessions = super::parse_log_data(data);
         assert_eq!(sessions.len(), 1);
@@ -859,5 +860,30 @@ mod test {
         assert!(session.ngl_version.is_none());
         assert!(session.app_locale.is_none());
         assert!(session.user_id.is_none());
+    }
+
+    #[test]
+    fn test_parse_win_unterminated_log_upload() {
+        let path = "../rsrc/logs/win/NGLClient_Illustrator126.4.1.log.bin";
+        let data = bytes::Bytes::from(read_to_string(path).unwrap());
+        let sessions = super::parse_log_data(data);
+        assert_eq!(sessions.len(), 1);
+        let session = &sessions[0];
+        let session_id = "bc532766-d56c-43fe-aaba-eb5f4323a53c.1660495166236";
+        let start = Timestamp::from_storage("2022-08-14T09:39:26:236-0700");
+        let end = Timestamp::from_storage("2022-08-14T09:39:45:536-0700");
+        assert_eq!(session.session_id, session_id);
+        assert_eq!(session.initial_entry, start);
+        assert_eq!(session.session_start.as_ref().unwrap(), &session.initial_entry);
+        assert_eq!(session.final_entry, end);
+        assert!(session.session_end.is_none());
+        assert_eq!(session.app_id.as_ref().unwrap(), "Illustrator1");
+        assert_eq!(session.app_version.as_ref().unwrap(), "26.4.1");
+        assert_eq!(session.ngl_version.as_ref().unwrap(), "1.30.0.2");
+        assert_eq!(session.app_locale.as_ref().unwrap(), "en_US");
+        assert_eq!(
+            session.user_id.as_ref().unwrap(),
+            "9f22a90139cbb9f1676b0113e1fb574976dc550a"
+        );
     }
 }

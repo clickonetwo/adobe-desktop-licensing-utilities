@@ -20,67 +20,54 @@ use clap::Parser;
 use eyre::{Result, WrapErr};
 use log::debug;
 
-use adlu_proxy::cache::Cache;
-use adlu_proxy::cli::{Command, FrlProxy};
-use adlu_proxy::settings::{ProxyConfiguration, ProxyMode};
-use adlu_proxy::{logging, proxy, settings};
+use adlu_proxy::cli::{Command, ProxyArgs};
+use adlu_proxy::{cache, logging, proxy, settings};
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    openssl_probe::init_ssl_cert_env_vars();
-    let args: FrlProxy = FrlProxy::parse();
+async fn main() {
+    if let Err(err) = run().await {
+        eprintln!("Proxy failure: {}", err);
+        std::process::exit(1);
+    }
+}
 
+async fn run() -> Result<()> {
+    let args: ProxyArgs = ProxyArgs::parse();
     // if we have a valid config, proceed, else update the config
     if let Ok(settings) = settings::load_config_file(&args) {
+        logging::init(&settings)?;
         debug!("Loaded config: {:?}", &settings);
-        match args.cmd {
-            Command::Start { .. } => {
-                logging::init(&settings)?;
-                if let ProxyMode::Forward = settings.proxy.mode {
-                    let cache = Cache::from(&settings, false).await?;
-                    let conf = ProxyConfiguration::new(&settings, &cache)?;
-                    proxy::forward_stored_requests(conf).await?;
-                    cache.close().await;
+        let cache = cache::connect(&settings).await?;
+        let result = match args.cmd {
+            Command::Configure => {
+                settings::update_config_file(Some(&settings), &args.config_file)
+            }
+            Command::Serve { .. } => {
+                if settings.proxy.ssl {
+                    proxy::serve_incoming_https_requests(&settings, &cache).await
                 } else {
-                    let cache = Cache::from(&settings, true).await?;
-                    let conf = ProxyConfiguration::new(&settings, &cache)?;
-                    if settings.proxy.ssl {
-                        proxy::serve_incoming_https_requests(conf).await?;
-                    } else {
-                        proxy::serve_incoming_http_requests(conf).await?;
-                    }
-                    cache.close().await;
+                    proxy::serve_incoming_http_requests(&settings, &cache).await
                 }
             }
+            Command::Forward => proxy::forward_stored_requests(&settings, &cache).await,
             Command::Clear { yes } => {
-                logging::init(&settings)?;
-                let cache = Cache::from(&settings, true).await?;
-                cache.clear(yes).await.wrap_err("Failed to clear cache")?;
-                cache.close().await;
+                cache.clear(yes).await.wrap_err("Failed to clear cache")
             }
-            Command::Import { import_path } => {
-                logging::init(&settings)?;
-                let cache = Cache::from(&settings, true).await?;
-                cache
-                    .import(&import_path)
-                    .await
-                    .wrap_err(format!("Failed to import from {}", &import_path))?;
-                cache.close().await;
-            }
-            Command::Export { export_path } => {
-                logging::init(&settings)?;
-                let cache = Cache::from(&settings, false).await?;
-                cache
-                    .export(&export_path)
-                    .await
-                    .wrap_err(format!("Failed to export to {}", &export_path))?;
-                cache.close().await;
-            }
-            Command::Configure => {
-                // no logging on this path, because it might interfere with the interview
-                settings::update_config_file(Some(&settings), &args.config_file)?;
-            }
-        }
+            Command::Import { from_path: import_path } => cache
+                .import(&import_path)
+                .await
+                .wrap_err(format!("Failed to import from {}", &import_path)),
+            Command::Export { to_path: export_path } => cache
+                .export(&export_path)
+                .await
+                .wrap_err(format!("Failed to export to {}", &export_path)),
+            Command::Report { to_path: report_path } => cache
+                .report(&report_path)
+                .await
+                .wrap_err(format!("Failed to report to {}", &report_path)),
+        };
+        cache.close().await;
+        result?;
     } else {
         eprintln!("Couldn't read the configuration file, creating a new one...");
         settings::update_config_file(None, &args.config_file)

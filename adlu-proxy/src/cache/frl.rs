@@ -29,6 +29,7 @@ use adlu_parse::protocol::{
     FrlActivationResponse as ActResp, FrlActivationResponseBody, FrlAppDetails,
     FrlDeactivationQueryParams, FrlDeactivationRequest as DeactReq,
     FrlDeactivationResponse as DeactResp, FrlDeactivationResponseBody, FrlDeviceDetails,
+    Request,
 };
 
 pub async fn clear(pool: &SqlitePool) -> Result<()> {
@@ -111,6 +112,39 @@ pub async fn export(pool: &SqlitePool, path: &str) -> Result<()> {
     out_pool.close().await;
     eprintln!("Completed export of request(s) to {path}");
     Ok(())
+}
+
+pub async fn fetch_unanswered_requests(pool: &SqlitePool) -> Result<Vec<Request>> {
+    let mut result = vec![];
+    let activations = fetch_unanswered_activations(pool).await?;
+    let deactivations = fetch_unanswered_deactivations(pool).await?;
+    // now interleave them in timestamp order to make a list of requests
+    let mut acts = activations.iter();
+    let mut deacts = deactivations.iter();
+    let mut act = acts.next();
+    let mut deact = deacts.next();
+    loop {
+        if let Some(actr) = act {
+            if let Some(deactr) = deact {
+                if actr.timestamp <= deactr.timestamp {
+                    result.push(Request::Activation(Box::new(actr.clone())));
+                    act = acts.next();
+                } else {
+                    result.push(Request::Deactivation(Box::new(deactr.clone())));
+                    deact = deacts.next();
+                }
+            } else {
+                result.push(Request::Activation(Box::new(actr.clone())));
+                act = acts.next();
+            }
+        } else if let Some(deactr) = deact {
+            result.push(Request::Deactivation(Box::new(deactr.clone())));
+            deact = deacts.next();
+        } else {
+            break;
+        }
+    }
+    Ok(result)
 }
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {

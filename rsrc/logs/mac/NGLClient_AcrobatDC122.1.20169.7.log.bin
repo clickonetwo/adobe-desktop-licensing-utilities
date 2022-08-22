@@ -1,0 +1,6 @@
+SessionID=e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834 Timestamp=2022-08-08T09:25:33:720-0700 ThreadID=2397234 Component=ngl-lib_ NglIngestManager Description="MonitorSuccessEventsThread : Ingest Success Event Monitor - Finished"
+SessionID=e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834 Timestamp=2022-08-08T09:25:33:720-0700 ThreadID=2397233 Component=ngl-lib_ NglIngestManager Description="ProcessNglIngestEvents : Ingest Process - Finished"
+SessionID=e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834 Timestamp=2022-08-08T09:25:33:720-0700 ThreadID=2396990 Component=ngl-lib_ NglIngestManager Description="~NglIngestManager :  Ingest manager destroyed successfully."
+SessionID=e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834 Timestamp=2022-08-08T09:25:33:720-0700 ThreadID=2396990 Component=ngl-lib_ NglIngestManager Description="Shutdown :  Ingest manager shutdown."
+SessionID=e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834 Timestamp=2022-08-08T09:25:33:720-0700 ThreadID=2396990 Component=ngl-lib_HttpRequest Description="CancelAllRequests Invoked"
+SessionID=e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834 Timestamp=2022-08-08T09:25:33:720-0700 ThreadID=2396990 Component=ngl-lib_NglController Description="-------- Terminating session logs --------"

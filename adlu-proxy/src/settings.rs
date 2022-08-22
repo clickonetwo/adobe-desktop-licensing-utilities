@@ -28,89 +28,29 @@ use dialoguer::{Confirm, Input, Password, Select};
 use eyre::{eyre, Report, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 
-use adlu_base::{load_pem_files, load_pfx_file, CertificateData};
-
-use crate::cli::Command;
-use crate::cli::FrlProxy;
-
-#[derive(Debug, Clone)]
-pub struct ProxyConfiguration {
-    pub settings: Settings,
-    pub cache: crate::cache::Cache,
-    pub client: reqwest::Client,
-    pub adobe_server: String,
-}
-
-impl ProxyConfiguration {
-    pub fn new(settings: &Settings, cache: &crate::cache::Cache) -> Result<Self> {
-        let mut builder = reqwest::Client::builder();
-        builder = builder.timeout(std::time::Duration::new(59, 0));
-        if settings.network.use_proxy {
-            let proxy_host = format!(
-                "{}://{}:{}",
-                "http", settings.network.proxy_host, settings.network.proxy_port
-            );
-            let mut proxy = reqwest::Proxy::https(&proxy_host)
-                .wrap_err("Invalid proxy configuration")?;
-            if settings.network.use_basic_auth {
-                proxy = proxy.basic_auth(
-                    &settings.network.proxy_username,
-                    &settings.network.proxy_password,
-                );
-            }
-            builder = builder.proxy(proxy)
-        }
-        let client = builder.build().wrap_err("Can't initialize network")?;
-        let adobe_uri: http::Uri =
-            settings.proxy.remote_host.parse().wrap_err("Invalid Adobe endpoint")?;
-        Ok(ProxyConfiguration {
-            settings: settings.clone(),
-            cache: cache.clone(),
-            client,
-            adobe_server: adobe_uri.to_string(),
-        })
-    }
-
-    pub fn bind_addr(&self) -> Result<std::net::SocketAddr> {
-        let proxy_addr = if self.settings.proxy.ssl {
-            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.ssl_port)
-        } else {
-            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.port)
-        };
-        proxy_addr.parse().wrap_err("Invalid proxy host/port configuration")
-    }
-
-    pub fn cert_data(&self) -> Result<CertificateData> {
-        if self.settings.proxy.ssl {
-            load_cert_data(&self.settings).wrap_err("SSL configuration failure")
-        } else {
-            Err(eyre!("SSL is not enabled"))
-        }
-    }
-}
-
-fn load_cert_data(settings: &Settings) -> Result<CertificateData> {
-    if settings.ssl.use_pfx {
-        load_pfx_file(&settings.ssl.cert_path, &settings.ssl.password)
-            .wrap_err("Failed to load PKCS12 data:")
-    } else {
-        let key_pass = match settings.ssl.password.as_str() {
-            "" => None,
-            p => Some(p),
-        };
-        load_pem_files(&settings.ssl.key_path, &settings.ssl.cert_path, key_pass)
-            .wrap_err("Failed to load certificate and key files")
-    }
-}
+use crate::cli::{Command, ProxyArgs};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proxy {
+    pub db_path: String,
     pub mode: ProxyMode,
     pub host: String,
     pub port: String,
     pub ssl_port: String,
-    pub remote_host: String,
     pub ssl: bool,
+}
+
+impl Default for Proxy {
+    fn default() -> Self {
+        Proxy {
+            db_path: "proxy-cache.sqlite".to_string(),
+            mode: Default::default(),
+            host: "0.0.0.0".to_string(),
+            port: "8080".to_string(),
+            ssl_port: "8443".to_string(),
+            ssl: false,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -140,14 +80,10 @@ pub struct Logging {
     pub rotate_count: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Cache {
-    pub db_path: String,
-}
-
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Network {
+pub struct Upstream {
     pub use_proxy: bool,
+    pub proxy_protocol: String,
     pub proxy_host: String,
     pub proxy_port: String,
     pub use_basic_auth: bool,
@@ -155,42 +91,66 @@ pub struct Network {
     pub proxy_password: String,
 }
 
-impl Debug for Network {
+impl Debug for Upstream {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Network")
             .field("use_proxy", &self.use_proxy)
+            .field("proxy_protocol", &self.proxy_protocol)
             .field("proxy_host", &self.proxy_host)
             .field("proxy_port", &self.proxy_port)
             .field("use_proxy", &self.use_proxy)
             .field("proxy_username", &self.proxy_username)
-            .field("proxy_password", &String::from("[OBSCURED]"))
+            .field("proxy_password", &"[OBSCURED]")
             .finish()
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SettingsRef {
-    pub proxy: Proxy,
-    pub ssl: Ssl,
-    pub logging: Logging,
-    pub cache: Cache,
-    pub network: Network,
+pub struct Frl {
+    pub remote_host: String,
 }
 
-pub type Settings = Arc<SettingsRef>;
+impl Default for Frl {
+    fn default() -> Self {
+        Frl { remote_host: "https://lcs-cops.adobe.io".to_string() }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Log {
+    pub remote_host: String,
+}
+
+impl Default for Log {
+    fn default() -> Self {
+        Log { remote_host: "https://lcs-ulecs.adobe.io".to_string() }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SettingsVal {
+    pub proxy: Proxy,
+    pub ssl: Ssl,
+    pub frl: Frl,
+    pub log: Log,
+    pub upstream: Upstream,
+    pub logging: Logging,
+}
+
+pub type Settings = Arc<SettingsVal>;
 
 /// Load settings from the configuration file
-pub fn load_config_file(args: &FrlProxy) -> Result<Settings> {
-    Ok(Settings::new(SettingsRef::load_config(args)?))
+pub fn load_config_file(args: &ProxyArgs) -> Result<Settings> {
+    Ok(Settings::new(SettingsVal::load_config(args)?))
 }
 
 /// Update (or create) a configuration file after interviewing user
 /// No logging on this path, because it might interfere with the interview
 pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()> {
     // get the configuration
-    let mut conf: SettingsRef = match settings {
+    let mut conf: SettingsVal = match settings {
         Some(settings) => settings.as_ref().clone(),
-        None => SettingsRef::default_config(),
+        None => SettingsVal::default_config(),
     };
     // interview the user for updates
     conf.update_config().wrap_err("Configuration interview failed")?;
@@ -205,7 +165,7 @@ pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()>
     Ok(())
 }
 
-impl SettingsRef {
+impl SettingsVal {
     /// Create a new default config
     pub fn default_config() -> Self {
         let base_str = include_str!("res/defaults.toml");
@@ -221,7 +181,7 @@ impl SettingsRef {
 
     #[cfg(test)]
     pub fn test_config() -> Self {
-        let base_str = include_str!("res/defaults.toml");
+        let base_str = include_str!("res/testing.toml");
         let builder = Config::builder()
             .add_source(ConfigFile::from_str(base_str, FileFormat::Toml));
         let conf: Self = builder
@@ -233,17 +193,17 @@ impl SettingsRef {
     }
 
     /// Load an existing config file, returning its contained config
-    pub fn load_config(args: &FrlProxy) -> Result<Self> {
+    pub fn load_config(args: &ProxyArgs) -> Result<Self> {
         let base_str = include_str!("res/defaults.toml");
         let builder = Config::builder()
             .add_source(ConfigFile::from_str(base_str, FileFormat::Toml))
             .add_source(ConfigFile::new(&args.config_file, FileFormat::Toml))
-            .add_source(Environment::with_prefix("frl_proxy"));
+            .add_source(Environment::with_prefix("adlu_proxy"));
         let mut settings: Self = builder.build()?.try_deserialize()?;
         // Now process the args as overrides: global first, then command-specific
         match args.debug {
             1 => settings.logging.level = LogLevel::Debug,
-            2 => settings.logging.level = LogLevel::Trace,
+            n if n >= 2 => settings.logging.level = LogLevel::Trace,
             _ => {}
         }
         if let Some(log_to) = &args.log_to {
@@ -254,7 +214,7 @@ impl SettingsRef {
             settings.logging.destination = destination;
         }
         match &args.cmd {
-            Command::Start { mode, ssl } => {
+            Command::Serve { mode, ssl } => {
                 if let Some(mode) = mode {
                     settings.proxy.mode = mode.as_str().try_into()?;
                 }
@@ -262,10 +222,15 @@ impl SettingsRef {
                     settings.proxy.ssl = *ssl;
                 }
             }
-            Command::Clear { .. } | Command::Import { .. } | Command::Export { .. } => {
-                settings.proxy.mode = ProxyMode::Cache;
-                // log to file, because this command is interactive
-                settings.logging.destination = LogDestination::File;
+            Command::Clear { .. }
+            | Command::Import { .. }
+            | Command::Export { .. }
+            | Command::Report { .. }
+            | Command::Forward => {
+                // log to file, because these commands are interactive
+                if !matches!(settings.logging.level, LogLevel::Off) {
+                    settings.logging.destination = LogDestination::File
+                };
             }
             Command::Configure => {
                 // don't touch the settings, so they can be configured
@@ -277,33 +242,35 @@ impl SettingsRef {
     /// Update configuration settings by interviewing user
     /// No logging on this path, because it might interfere with the interview
     pub fn update_config(&mut self) -> Result<()> {
-        self.update_base_config()?;
-        self.update_adobe_config()?;
-        self.update_database_config()?;
+        self.update_proxy_config()?;
         self.update_ssl_config()?;
+        self.update_frl_config()?;
+        self.update_log_config()?;
         self.update_upstream_config()?;
         self.update_logging_config()?;
         Ok(())
     }
 
-    fn update_base_config(&mut self) -> Result<()> {
-        // update configuration file by interviewing user
-        eprintln!("The proxy has four modes: cache, store, forward, and passthrough.");
+    fn update_proxy_config(&mut self) -> Result<()> {
+        eprintln!("The proxy uses a database to keep track of requests and responses.");
+        eprintln!(
+            "This database will be created if it doesn't exist when the proxy starts."
+        );
+        self.proxy.db_path = Input::new()
+            .allow_empty(false)
+            .with_prompt("Name of (or path to) your database file")
+            .with_initial_text(&self.proxy.db_path)
+            .interact_text()?;
+        eprintln!("The proxy has three modes: transparent, connected, and isolated.");
         eprintln!("Read the user guide to understand which is right for each situation.");
-        let choices = vec!["cache", "store", "forward", "passthrough"];
-        let default = match self.proxy.mode {
-            ProxyMode::Cache => 0,
-            ProxyMode::Store => 1,
-            ProxyMode::Forward => 2,
-            ProxyMode::Passthrough => 3,
-        };
+        let choices = vec!["transparent", "connected", "isolated"];
+        let default = self.proxy.mode.clone() as usize;
         let choice = Select::new()
             .items(&choices)
             .default(default)
-            .with_prompt("Proxy mode")
+            .with_prompt("Proxy Mode")
             .interact()?;
-        let choice: ProxyMode = choices[choice].try_into().unwrap();
-        self.proxy.mode = choice;
+        self.proxy.mode = choices[choice].try_into().unwrap();
         eprintln!("You must specify a numeric IPv4 address for the proxy to listen on.");
         eprintln!("Use 0.0.0.0 to have the proxy listen on all available addresses.");
         let choice: String = Input::new()
@@ -321,31 +288,77 @@ impl SettingsRef {
         Ok(())
     }
 
-    fn update_database_config(&mut self) -> Result<()> {
-        if let ProxyMode::Cache | ProxyMode::Store | ProxyMode::Forward = self.proxy.mode
-        {
-            eprintln!("The proxy uses a SQLite database to keep track of requests and responses.");
-            eprintln!(
-                "The proxy will create this database if one does not already exist."
-            );
-            let choice: String = Input::new()
-                .allow_empty(false)
-                .with_prompt("Name of (or path to) your database file")
-                .with_initial_text(&self.cache.db_path)
-                .interact_text()?;
-            self.cache.db_path = choice;
+    fn update_ssl_config(&mut self) -> Result<()> {
+        self.proxy.ssl = Confirm::new()
+            .default(self.proxy.ssl)
+            .show_default(true)
+            .wait_for_newline(false)
+            .with_prompt("Use SSL?")
+            .interact()?;
+        if !self.proxy.ssl {
+            return Ok(());
+        }
+        self.proxy.ssl_port = Input::new()
+            .with_prompt("Host port for https mode")
+            .with_initial_text(&self.proxy.ssl_port)
+            .validate_with(port_validator)
+            .interact_text()?;
+        eprintln!("The proxy requires a certificate and matching key.");
+        eprintln!("You can either use separate certificate and key files, or");
+        eprintln!("you can use a combined PKCS12 (aka PFX) file that has both.");
+        eprintln!("The user guide has information or preparing these files.");
+        let choices = [
+            "Use a single PKCS12/PFX file (in DER format)",
+            "Use separate cert and key files (in PEM format)",
+        ];
+        let choice = Select::new()
+            .items(&choices)
+            .default(if self.ssl.use_pfx { 0 } else { 1 })
+            .with_prompt("How will you supply your certificate and key")
+            .interact()?;
+        if choice == 0 {
+            self.ssl.use_pfx = true;
+            self.ssl.pfx_path =
+                get_existing_file_path("PKCS12", &self.ssl.cert_path, "pfx")?;
+        } else {
+            self.ssl.use_pfx = false;
+            self.ssl.cert_path =
+                get_existing_file_path("certificate", &self.ssl.cert_path, "cert")?;
+            self.ssl.key_path = get_existing_file_path("key", &self.ssl.key_path, "key")?;
+        }
+        eprintln!("Files containing keys are usually encrypted with a password.");
+        eprintln!("Your proxy requires that password in order to function properly.");
+        eprintln!("You can keep your password either in your config file or");
+        eprintln!("in an environment variable named ADLU_PROXY_SSL.PASSWORD");
+        let prompt = if self.ssl.password.is_empty() {
+            "Do you want to store a password in your configuration file?"
+        } else {
+            "Do you want to update the password in your configuration file?"
+        };
+        let choice = Confirm::new()
+            .default(false)
+            .wait_for_newline(false)
+            .with_prompt(prompt)
+            .interact()?;
+        if choice {
+            let choice = Password::new()
+                .with_prompt("Enter password")
+                .with_confirmation("Confirm password", "Passwords don't match")
+                .allow_empty_password(true)
+                .interact()?;
+            self.ssl.password = choice;
         }
         Ok(())
     }
 
-    fn update_adobe_config(&mut self) -> Result<()> {
+    fn update_frl_config(&mut self) -> Result<()> {
         eprintln!("Your proxy server must contact one of two Adobe licensing servers.");
         eprintln!("Use the variable IP server unless your firewall doesn't permit it.");
         let choices = vec![
             "Variable IP server (lcs-cops.adobe.io)",
             "Fixed IP server (lcs-cops-proxy.adobe.com)",
         ];
-        let default = if self.proxy.remote_host == "https://lcs-cops-proxy.adobe.com" {
+        let default = if self.frl.remote_host == "https://lcs-cops-proxy.adobe.com" {
             1
         } else {
             0
@@ -355,7 +368,7 @@ impl SettingsRef {
             .default(default)
             .with_prompt("Adobe licensing server")
             .interact()?;
-        self.proxy.remote_host = if choice == 0usize {
+        self.frl.remote_host = if choice == 0usize {
             String::from("https://lcs-cops.adobe.io")
         } else {
             String::from("https://lcs-cops-proxy.adobe.com")
@@ -363,71 +376,8 @@ impl SettingsRef {
         Ok(())
     }
 
-    fn update_ssl_config(&mut self) -> Result<()> {
-        eprintln!("MacOS applications can only connect to the proxy via SSL.");
-        eprintln!("Windows applications can use SSL, but they don't require it.");
-        let choice = Confirm::new()
-            .default(self.proxy.ssl)
-            .show_default(true)
-            .wait_for_newline(false)
-            .with_prompt("Use SSL?")
-            .interact()?;
-        self.proxy.ssl = choice;
-        // update ssl settings
-        if self.proxy.ssl {
-            let choice: String = Input::new()
-                .with_prompt("Host port for https mode")
-                .with_initial_text(&self.proxy.ssl_port)
-                .validate_with(port_validator)
-                .interact_text()?;
-            self.proxy.ssl_port = choice;
-            eprintln!("The proxy requires a certificate and matching key.");
-            eprintln!("You can either use separate certificate and key files, or");
-            eprintln!("you can use a combined PKCS12 (aka PFX) file that has both.");
-            eprintln!("The user guide has information or preparing these files.");
-            let choices = [
-                "Use a single PKCS12/PFX file (in DER format)",
-                "Use separate cert and key files (in PEM format)",
-            ];
-            let choice = Select::new()
-                .items(&choices)
-                .default(if self.ssl.use_pfx { 0 } else { 1 })
-                .with_prompt("How will you supply your certificate and key")
-                .interact()?;
-            if choice == 0 {
-                self.ssl.use_pfx = true;
-                self.ssl.pfx_path =
-                    get_existing_file_path("PKCS12", &self.ssl.cert_path, "pfx")?;
-            } else {
-                self.ssl.use_pfx = false;
-                self.ssl.cert_path =
-                    get_existing_file_path("certificate", &self.ssl.cert_path, "cert")?;
-                self.ssl.key_path =
-                    get_existing_file_path("key", &self.ssl.key_path, "key")?;
-            }
-            eprintln!("Files containing keys are usually encrypted with a password.");
-            eprintln!("Your proxy requires that password in order to function properly.");
-            eprintln!("You can keep your password either in your config file or");
-            eprintln!("in an environment variable named FRL_PROXY_SSL.CERT_PASSWORD.");
-            let prompt = if self.ssl.password.is_empty() {
-                "Do you want to store a password in your configuration file?"
-            } else {
-                "Do you want to update the password in your configuration file?"
-            };
-            let choice = Confirm::new()
-                .default(false)
-                .wait_for_newline(false)
-                .with_prompt(prompt)
-                .interact()?;
-            if choice {
-                let choice = Password::new()
-                    .with_prompt("Enter password")
-                    .with_confirmation("Confirm password", "Passwords don't match")
-                    .allow_empty_password(true)
-                    .interact()?;
-                self.ssl.password = choice;
-            }
-        }
+    fn update_log_config(&mut self) -> Result<()> {
+        self.log.remote_host = String::from("https://lcs-ulecs.adobe.io");
         Ok(())
     }
 
@@ -435,40 +385,40 @@ impl SettingsRef {
         // update network settings
         let prompt = "Does your network require this proxy to use an upstream proxy?";
         let choice = Confirm::new()
-            .default(self.network.use_proxy)
+            .default(self.upstream.use_proxy)
             .wait_for_newline(false)
             .with_prompt(prompt)
             .interact()?;
-        self.network.use_proxy = choice;
+        self.upstream.use_proxy = choice;
         if choice {
             let choice: String = Input::new()
                 .with_prompt("Proxy host")
-                .with_initial_text(&self.network.proxy_host)
+                .with_initial_text(&self.upstream.proxy_host)
                 .interact_text()?;
-            self.network.proxy_host = choice;
+            self.upstream.proxy_host = choice;
             let choice: String = Input::new()
                 .with_prompt("Proxy port")
-                .with_initial_text(&self.network.proxy_port)
+                .with_initial_text(&self.upstream.proxy_port)
                 .interact_text()?;
-            self.network.proxy_port = choice;
+            self.upstream.proxy_port = choice;
             let prompt = "Does your upstream proxy require (basic) authentication?";
             let choice = Confirm::new()
-                .default(self.network.use_basic_auth)
+                .default(self.upstream.use_basic_auth)
                 .wait_for_newline(false)
                 .with_prompt(prompt)
                 .interact()?;
-            self.network.use_basic_auth = choice;
+            self.upstream.use_basic_auth = choice;
             if choice {
                 let choice: String = Input::new()
                     .with_prompt("Proxy username")
-                    .with_initial_text(&self.network.proxy_username)
+                    .with_initial_text(&self.upstream.proxy_username)
                     .interact_text()?;
-                self.network.proxy_username = choice;
+                self.upstream.proxy_username = choice;
                 let choice: String = Input::new()
                     .with_prompt("Proxy password")
-                    .with_initial_text(&self.network.proxy_password)
+                    .with_initial_text(&self.upstream.proxy_password)
                     .interact_text()?;
-                self.network.proxy_password = choice;
+                self.upstream.proxy_password = choice;
             }
         }
         Ok(())
@@ -644,15 +594,14 @@ fn get_existing_file_path(
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProxyMode {
-    Cache,
-    Store,
-    Forward,
-    Passthrough,
+    Transparent,
+    Connected,
+    Isolated,
 }
 
 impl Default for ProxyMode {
     fn default() -> Self {
-        ProxyMode::Cache
+        ProxyMode::Connected
     }
 }
 
@@ -661,17 +610,15 @@ impl TryFrom<&str> for ProxyMode {
 
     fn try_from(s: &str) -> Result<Self> {
         let sl = s.to_ascii_lowercase();
-        if "cache".starts_with(&sl) {
-            Ok(ProxyMode::Cache)
-        } else if "store".starts_with(&sl) {
-            Ok(ProxyMode::Store)
-        } else if "forward".starts_with(&sl) {
-            Ok(ProxyMode::Forward)
-        } else if "passthrough".starts_with(&sl) {
-            Ok(ProxyMode::Passthrough)
+        if "transparent".starts_with(&sl) {
+            Ok(ProxyMode::Transparent)
+        } else if "connected".starts_with(&sl) {
+            Ok(ProxyMode::Connected)
+        } else if "isolated".starts_with(&sl) {
+            Ok(ProxyMode::Isolated)
         } else {
             Err(eyre!(
-                "proxy mode '{}' must be a prefix of cache, store, forward or passthrough",
+                "FRL mode '{}' must be a prefix of transparent, connected, or isolated",
                 s
             ))
         }

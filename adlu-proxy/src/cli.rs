@@ -16,16 +16,16 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[clap(about = "A caching, store/forward, reverse proxy for Adobe FRL licensing")]
-pub struct FrlProxy {
+#[clap(author, version, about, long_about = None)]
+pub struct ProxyArgs {
     #[clap(short, long, default_value = "proxy-conf.toml")]
     /// Path to config file.
     pub config_file: String,
 
-    #[clap(short, parse(from_occurrences))]
+    #[clap(short, long, action = clap::ArgAction::Count)]
     /// Specify once to force log level to debug.
     /// Specify twice to force log level to trace.
     pub debug: u8,
@@ -39,30 +39,36 @@ pub struct FrlProxy {
     pub cmd: Command,
 }
 
-#[derive(Parser, Debug)]
-/// FRL Proxy
+#[derive(Subcommand, Debug)]
+/// Proxy commands
 pub enum Command {
+    /// Interactively create the config file
+    Configure,
     /// Start the proxy server
-    Start {
+    Serve {
         #[clap(short, long)]
-        /// Mode to run the proxy in, one of passthrough, cache, store, or forward.
-        /// You can use any prefix of these names (minimally p, c, s, or f)
+        /// Handle requests in transparent, connected, or isolated mode.
+        /// You can use any prefix of these names (minimally t, c, or i).
+        /// Overrides the config file setting.
         mode: Option<String>,
 
         #[clap(long, parse(try_from_str))]
-        /// Enable SSL? (true or false)
+        /// Enable SSL? (true or false).
+        /// Overrides the config file setting.
         ssl: Option<bool>,
     },
-    /// Interactively create the config file
-    Configure,
     /// Clear the cache (requires confirmation)
     Clear {
         #[clap(short, long)]
         /// Bypass confirmation prompt
         yes: bool,
     },
-    /// Import stored responses from a forwarder
-    Import { import_path: String },
-    /// Export stored requests for a forwarder
-    Export { export_path: String },
+    /// Forward un-answered requests
+    Forward,
+    /// Import from other proxy's database
+    Import { from_path: String },
+    /// Export to other proxy's database
+    Export { to_path: String },
+    /// Report on database contents
+    Report { to_path: String },
 }
