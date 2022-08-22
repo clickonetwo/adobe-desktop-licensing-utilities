@@ -516,7 +516,7 @@ impl LogUploadRequest {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub struct LogSession {
     pub session_id: String,
     pub initial_entry: Timestamp,

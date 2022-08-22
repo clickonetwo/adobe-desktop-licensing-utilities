@@ -18,7 +18,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use adlu_base::Timestamp;
 use adlu_parse::protocol::{LogSession, LogUploadRequest, LogUploadResponse};
-use eyre::{eyre, Result};
+use eyre::Result;
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
@@ -38,8 +38,13 @@ pub async fn clear(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
-pub async fn report(_pool: &SqlitePool, _path: &str) -> Result<()> {
-    Err(eyre!("Reporting not yet implemented."))
+pub async fn report(pool: &SqlitePool, path: &str) -> Result<()> {
+    let mut writer = csv::WriterBuilder::new().from_path(path)?;
+    let sessions = fetch_log_sessions(pool).await?;
+    for session in sessions.iter() {
+        writer.serialize(session)?;
+    }
+    Ok(())
 }
 
 pub async fn store_upload_request(
