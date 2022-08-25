@@ -27,7 +27,7 @@ use eyre::{eyre, Report, Result, WrapErr};
 use log::{debug, error, info};
 use warp::{reply, Filter, Rejection, Reply};
 
-use adlu_base::{get_first_interrupt, load_pem_files, load_pfx_file, CertificateData};
+use adlu_base::{load_pem_files, load_pfx_file, CertificateData};
 use adlu_parse::protocol::{Request, Response};
 
 use crate::cache::Cache;
@@ -112,17 +112,16 @@ fn load_cert_data(settings: &Settings) -> Result<CertificateData> {
 pub async fn serve_incoming_https_requests(
     settings: &Settings,
     cache: &Cache,
+    stop_signal: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     let conf = Config::new(settings.clone(), cache.clone())?;
     let routes = routes(conf.clone());
     let bind_addr = conf.bind_addr()?;
     openssl_probe::init_ssl_cert_env_vars();
     let cert_data = conf.cert_data()?;
-    let (addr, server) = warp::serve(routes)
-        .tls()
-        .cert(cert_data.cert_pem())
-        .key(cert_data.key_pem())
-        .bind_with_graceful_shutdown(bind_addr, get_first_interrupt());
+    let server =
+        warp::serve(routes).tls().cert(cert_data.cert_pem()).key(cert_data.key_pem());
+    let (addr, server) = server.bind_with_graceful_shutdown(bind_addr, stop_signal);
     info!("Serving HTTPS requests on {:?}...", addr);
     match tokio::task::spawn(server).await {
         Ok(_) => info!("HTTPS server terminated normally"),
@@ -134,12 +133,13 @@ pub async fn serve_incoming_https_requests(
 pub async fn serve_incoming_http_requests(
     settings: &Settings,
     cache: &Cache,
+    stop_signal: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     let conf = Config::new(settings.clone(), cache.clone())?;
     let routes = routes(conf.clone());
     let bind_addr = conf.bind_addr()?;
     let (addr, server) =
-        warp::serve(routes).bind_with_graceful_shutdown(bind_addr, get_first_interrupt());
+        warp::serve(routes).bind_with_graceful_shutdown(bind_addr, stop_signal);
     info!("Serving HTTP requests on {:?}...", addr);
     match tokio::task::spawn(server).await {
         Ok(_) => info!("HTTP server terminated normally"),

@@ -177,6 +177,11 @@ pub struct SettingsVal {
 
 pub type Settings = Arc<SettingsVal>;
 
+/// Obtain default settings
+pub fn default_config() -> Settings {
+    Settings::new(SettingsVal::default_config())
+}
+
 /// Load settings from the configuration file
 pub fn load_config_file(args: &ProxyArgs) -> Result<Settings> {
     Ok(Settings::new(SettingsVal::load_config(args)?))
@@ -207,16 +212,6 @@ impl SettingsVal {
     /// Create a new default config
     pub fn default_config() -> Self {
         Default::default()
-    }
-
-    #[cfg(test)]
-    pub fn test_config() -> Self {
-        let mut config: SettingsVal = Default::default();
-        config.proxy.db_path = "test-cache.sqlite".to_string();
-        config.proxy.host = "127.0.0.1".to_string();
-        config.logging.level = LogLevel::Trace;
-        config.logging.destination = LogDestination::File;
-        config
     }
 
     /// Load an existing config file, returning its contained config

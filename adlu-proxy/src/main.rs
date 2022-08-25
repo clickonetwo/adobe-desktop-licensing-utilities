@@ -19,6 +19,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 use clap::Parser;
 use eyre::Result;
 
+use adlu_base::get_first_interrupt;
 use adlu_proxy::cli::{Command, ProxyArgs};
 use adlu_proxy::settings::Settings;
 use adlu_proxy::{cache, logging, proxy, settings};
@@ -28,7 +29,8 @@ async fn main() {
     let args: ProxyArgs = ProxyArgs::parse();
     // if we have a valid config, proceed, else update the config
     if let Ok(settings) = settings::load_config_file(&args) {
-        if let Err(err) = adlu_proxy::run(settings, args).await {
+        let stop_signal = get_first_interrupt();
+        if let Err(err) = adlu_proxy::run(settings, args, stop_signal).await {
             eprintln!("Proxy failure: {}", err);
             std::process::exit(1);
         }

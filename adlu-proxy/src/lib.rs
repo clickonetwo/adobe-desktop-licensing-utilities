@@ -30,7 +30,11 @@ pub mod settings;
 #[cfg(test)]
 pub mod testing;
 
-pub async fn run(settings: Settings, args: ProxyArgs) -> Result<()> {
+pub async fn run(
+    settings: Settings,
+    args: ProxyArgs,
+    stop_signal: impl std::future::Future<Output = ()> + Send + 'static,
+) -> Result<()> {
     logging::init(&settings)?;
     debug!("Loaded config: {:?}", &settings);
     let cache = cache::connect(&settings).await?;
@@ -40,9 +44,9 @@ pub async fn run(settings: Settings, args: ProxyArgs) -> Result<()> {
         }
         Command::Serve { .. } => {
             if settings.proxy.ssl {
-                proxy::serve_incoming_https_requests(&settings, &cache).await
+                proxy::serve_incoming_https_requests(&settings, &cache, stop_signal).await
             } else {
-                proxy::serve_incoming_http_requests(&settings, &cache).await
+                proxy::serve_incoming_http_requests(&settings, &cache, stop_signal).await
             }
         }
         Command::Forward => proxy::forward_stored_requests(&settings, &cache).await,
@@ -68,28 +72,40 @@ pub async fn run(settings: Settings, args: ProxyArgs) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::settings::{Settings, SettingsVal};
-    use super::testing as tg;
-    use super::{cache, logging, proxy};
+    use super::proxy;
+    use super::testing::*;
 
     #[tokio::test]
-    async fn test_activation_request() {
-        let config_dir = format!("{}/../rsrc/configurations", env!("CARGO_MANIFEST_DIR"));
-        std::env::set_current_dir(config_dir).expect("Can't change directory");
-        let settings = Settings::new(SettingsVal::test_config());
-        let cache = cache::connect(&settings).await.unwrap();
-        logging::init(&settings).unwrap();
-        let conf = proxy::Config::new(settings.clone(), cache.clone()).unwrap();
+    async fn test_mock_requests() {
+        let conf = test_config("proxy-mock-requests").await;
+        tokio::join!(
+            test_activation_request_success(conf.clone()),
+            test_deactivation_request_success(conf.clone()),
+            test_log_upload_request_success(conf.clone()),
+        );
+    }
+
+    async fn test_activation_request_success(conf: proxy::Config) {
         let filter = proxy::activate_route(conf);
         let mut builder = warp::test::request();
-        builder = builder.method("POST").path("/asnp/frl_connected/values/v2");
-        builder = tg::mock_activation_request(
-            "test_request_1",
-            &tg::MockOutcome::Success,
-            builder,
-        );
+        builder = mock_activation_request(&MockOutcome::Success, builder);
         let response = builder.reply(&filter).await;
-        cache.close().await;
+        assert_eq!(response.status().as_u16(), 200);
+    }
+
+    async fn test_deactivation_request_success(conf: proxy::Config) {
+        let filter = proxy::deactivate_route(conf);
+        let mut builder = warp::test::request();
+        builder = mock_deactivation_request(&MockOutcome::Success, builder);
+        let response = builder.reply(&filter).await;
+        assert_eq!(response.status().as_u16(), 200);
+    }
+
+    async fn test_log_upload_request_success(conf: proxy::Config) {
+        let filter = proxy::upload_route(conf);
+        let mut builder = warp::test::request();
+        builder = mock_log_upload_request(&MockOutcome::Success, builder);
+        let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
     }
 }

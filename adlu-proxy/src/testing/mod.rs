@@ -16,12 +16,48 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use eyre::{eyre, Result, WrapErr};
-use http::HeaderValue;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::RwLock;
+
+use eyre::{eyre, Result, WrapErr};
 use uuid::Uuid;
+
+pub use frl::{mock_activation_request, mock_deactivation_request};
+
+use crate::settings::{ProxyMode, SettingsVal};
+use crate::Settings;
+
+use super::{cache, logging, proxy, settings};
+
+pub use self::log::mock_log_upload_request;
+
+mod frl;
+mod log;
+
+pub async fn test_config(name: &str) -> proxy::Config {
+    test_config_with_mode(name, &ProxyMode::Connected).await
+}
+
+pub async fn test_config_with_mode(name: &str, mode: &ProxyMode) -> proxy::Config {
+    let mut settings = SettingsVal::default_config();
+    settings.proxy.mode = mode.clone();
+    let tempdir = std::env::temp_dir().join(name);
+    if std::fs::metadata(&tempdir).is_err() {
+        std::fs::create_dir(&tempdir).expect("Test directory couldn't be created");
+    }
+    settings.proxy.db_path =
+        tempdir.join("proxy-cache.sqlite").to_str().unwrap().to_string();
+    settings.proxy.host = "127.0.0.1".to_string();
+    settings.logging.file_path =
+        tempdir.join("proxy-log.log").to_str().unwrap().to_string();
+    settings.logging.level = settings::LogLevel::Debug;
+    settings.logging.destination = settings::LogDestination::File;
+    let settings = Settings::new(settings);
+    logging::init(&settings).unwrap();
+    let cache = cache::connect(&settings).await.unwrap();
+    proxy::Config::new(settings, cache).unwrap()
+}
 
 #[derive(Debug, Clone)]
 pub enum MockOutcome {
@@ -32,18 +68,18 @@ pub enum MockOutcome {
     ErrorStatus,
 }
 
-impl Default for MockOutcome {
-    fn default() -> Self {
-        MockOutcome::Success
-    }
+#[derive(Debug, Clone)]
+enum MockRequestType {
+    Activation,
+    Deactivation,
+    LogUpload,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct MockInfo {
-    pub request_name: String,
-    pub request_id: String,
-    pub session_id: String,
-    pub outcome: MockOutcome,
+#[derive(Debug, Clone)]
+struct MockInfo {
+    rtype: MockRequestType,
+    uuid: String,
+    outcome: MockOutcome,
 }
 
 lazy_static::lazy_static! {
@@ -51,89 +87,47 @@ lazy_static::lazy_static! {
 }
 
 impl MockInfo {
-    pub fn new(name: &str) -> Self {
-        Self::new_with_outcome(name, &MockOutcome::Success)
-    }
-
-    pub fn new_with_outcome(name: &str, outcome: &MockOutcome) -> Self {
+    pub fn with_type_and_outcome(rtype: &MockRequestType, outcome: &MockOutcome) -> Self {
+        let rtype = rtype.clone();
         let uuid = Uuid::new_v4().hyphenated().to_string();
-        let request_id = uuid.clone();
-        let session_id = format!("{}.{}", uuid, chrono::Local::now().timestamp_millis());
-        let mi = MockInfo {
-            request_name: name.to_string(),
-            request_id,
-            session_id,
-            outcome: outcome.clone(),
-        };
+        let outcome = outcome.clone();
+        let mi = MockInfo { rtype, uuid, outcome };
         let mut map = MOCK_INFO_MAP.write().unwrap();
-        map.borrow_mut().insert(mi.request_id.clone(), mi.clone());
+        map.borrow_mut().insert(mi.uuid.clone(), mi.clone());
         mi
     }
-}
 
-impl From<Option<&HeaderValue>> for MockInfo {
-    fn from(hdr: Option<&HeaderValue>) -> Self {
-        if let Some(hdr) = hdr {
-            if let Ok(val) = hdr.to_str() {
-                let map = MOCK_INFO_MAP.read().unwrap();
-                return match map.get(val) {
-                    Some(mi) => mi.clone(),
-                    None => MockInfo::default(),
-                };
-            }
-        }
-        MockInfo::default()
+    pub fn request_id(&self) -> String {
+        self.uuid.clone()
+    }
+
+    pub fn session_id(&self) -> String {
+        format!("{}.{}", self.uuid, chrono::Local::now().timestamp_millis())
+    }
+
+    pub fn authorization(&self) -> String {
+        self.uuid.clone()
     }
 }
 
-pub fn mock_activation_request(
-    name: &str,
-    ask: &MockOutcome,
-    builder: warp::test::RequestBuilder,
-) -> warp::test::RequestBuilder {
-    let headers = vec![
-        ("Accept-Encoding", "gzip, deflate, br"),
-        ("X-Api-Key", "ngl_photoshop1"),
-        ("Content-Type", "application/json"),
-        ("Accept", "application/json"),
-        ("User-Agent", "NGL Client/1.30.0.1 (MAC/12.4.0) [2022-06-28T17:08:01.895-0700]"),
-        ("Accept-Language", "en-us"),
-    ];
-    let body = r#"
-        {
-            "appDetails" :
-            {
-                "currentAsnpId" : "",
-                "nglAppId" : "Photoshop1",
-                "nglAppVersion" : "23.4.1",
-                "nglLibVersion" : "1.30.0.1"
-            },
-            "asnpTemplateId" : "WXpRNVptSXdPVFl0TkRjME55MDBNR001TFdKaE5HUXRNekZoWmpGaU9ERXpNR1V6e302Y2JjYTViYy01NTZjLTRhNTYtYjgwNy05ZjNjMWFhM2VhZjc",
-            "deviceDetails" :
-            {
-                "currentDate" : "2022-06-28T17:08:01.736-0700",
-                "deviceId" : "2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa",
-                "enableVdiMarkerExists" : false,
-                "isOsUserAccountInDomain" : false,
-                "isVirtualEnvironment" : false,
-                "osName" : "MAC",
-                "osUserId" : "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d",
-                "osVersion" : "12.4.0"
-            },
-            "npdId" : "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz",
-            "npdPrecedence" : 80
-        }"#;
-    let mi = MockInfo::new_with_outcome(name, ask);
-    let mut builder = builder
-        .header("X-Request-Id", &mi.request_id)
-        .header("X-Session-Id", &mi.session_id);
-    for (key, val) in headers {
-        builder = builder.header(key, val)
+impl From<&reqwest::Request> for MockInfo {
+    fn from(req: &reqwest::Request) -> Self {
+        let headers = req.headers();
+        let val = if let Some(hdr) = headers.get("X-Request-Id") {
+            hdr.to_str().unwrap()
+        } else {
+            headers
+                .get("Authorization")
+                .expect("No Authorization header")
+                .to_str()
+                .unwrap()
+        };
+        let map = MOCK_INFO_MAP.read().unwrap();
+        map.get(val).unwrap().clone()
     }
-    builder.body(body)
 }
 
-pub fn mock_error_response(req: reqwest::Request) -> Result<reqwest::Response> {
+pub fn mock_error_status_response(req: reqwest::Request) -> Result<reqwest::Response> {
     let body = r#"{"error": "Error response requested"}"#.as_bytes();
     let mut builder = http::Response::builder()
         .status(400)
@@ -148,7 +142,7 @@ pub fn mock_error_response(req: reqwest::Request) -> Result<reqwest::Response> {
     Ok(resp.into())
 }
 
-pub fn mock_invalid_body_response(req: reqwest::Request) -> Result<reqwest::Response> {
+pub fn mock_parse_failure_response(req: reqwest::Request) -> Result<reqwest::Response> {
     let body = r#"{"invalid key": "invalid body"}"#.as_bytes();
     let mut builder = http::Response::builder()
         .status(200)
@@ -161,73 +155,19 @@ pub fn mock_invalid_body_response(req: reqwest::Request) -> Result<reqwest::Resp
     Ok(resp.into())
 }
 
-pub fn mock_activation_response(req: reqwest::Request) -> Result<reqwest::Response> {
-    let body = r#"{
-        "adobeCertSignedValues": {
-            "signatures": {
-                "signature1": "laj2sLb...elided...Oi9zqEy12olv6M",
-                "signature2": "aSAqFfd...elided...XkbpwFzAWgoLQ"
-            },
-            "values": {
-                "licenseExpiryTimestamp": "1750060801000",
-                "enigmaData": "...elided...",
-                "graceTime": "8553600000",
-                "createdForVdi": "false",
-                "profileStatus": "PROFILE_AVAILABLE",
-                "effectiveEndTimestamp": "1741507201000",
-                "licenseExpiryWarningStartTimestamp": "1749456001000",
-                "nglLibRefreshInterval": "86400000",
-                "licenseId": "8A935605037F4F02B7BA",
-                "licensedFeatures": "...elided...",
-                "appRefreshInterval": "86400000",
-                "appEntitlementStatus": "SUBSCRIPTION"
-            }
-        },
-        "customerCertSignedValues": {
-            "signatures": {
-                "customerSignature2": "LV5a3B2I...elided...jtolQDSI",
-                "customerSignature1": "mmzlAlEc...elided...PXZI3oYY"
-            },
-            "values": "eyJucGRJZCI6Ill6UTVabUl3T1RZdE5EYzBOeTAwTUdNNUxXSmhOR1F0TXpGaFpqRmlPREV6TUdVeiIsImFzbnBJZCI6IjIyMWJmYWQ1LTBhZTMtNDY4MC05Mjc1LWY3ZDVjYTFjMjNmZiIsImNyZWF0aW9uVGltZXN0YW1wIjoxNjU2NDYxMjgyMDA5LCJjYWNoZUxpZmV0aW1lIjo5MzU5OTUxODk5MSwicmVzcG9uc2VUeXBlIjoiRlJMX0lOSVRJQUwiLCJjYWNoZUV4cGlyeVdhcm5pbmdDb250cm9sIjp7Indhcm5pbmdTdGFydFRpbWVzdGFtcCI6MTc0OTQ1NjAwMTAwMCwid2FybmluZ0ludGVydmFsIjo4NjQwMDAwMH0sInByZXZpb3VzQXNucElkIjoiIiwiZGV2aWNlSWQiOiIyYzkzYzg3OThhYTJiNjI1M2M2NTFlNmVmZDVmZTQ2OTQ1OTVhOGRhZDgyZGMzZDM1ZGUyMzNkZjU5MjhjMmZhIiwib3NVc2VySWQiOiJiNjkzYmUzNTZhYzUyNDExMzg5YTZjMDZlZWRlOGI0ZTQ3ZTU4MzgxODM4NGNkZGM2MmFmZjc4YzNlY2UwODRkIiwiZGV2aWNlRGF0ZSI6IjIwMjItMDYtMjhUMTc6MDg6MDEuNzM2LTA3MDAiLCJzZXNzaW9uSWQiOiJiOWQ1NDM4OS1mZGM0LTQzMjctYTc3My0xY2FmYTY5NmE1MzEuMTY1NjQ2MTI4MTMxMi9TVUJTRVFVRU5UIn0"
-        }
-    }"#.as_bytes();
-    let mut builder = http::Response::builder()
-        .status(200)
-        .header("Content-Type", "application/json;encoding=utf-8");
-    builder = match req.headers().get("X-Request-Id") {
-        None => builder,
-        Some(val) => builder.header("X-Request-Id", val),
-    };
-    let resp = builder.body(body).wrap_err("Can't build mock response")?;
-    Ok(resp.into())
-}
-
-pub fn mock_deactivation_response(req: reqwest::Request) -> Result<reqwest::Response> {
-    let body = r#"{"invalidationSuccessful": true}"#.as_bytes();
-    let mut builder = http::Response::builder()
-        .status(200)
-        .header("Content-Type", "application/json;encoding=utf-8");
-    builder = match req.headers().get("X-Request-Id") {
-        None => builder,
-        Some(val) => builder.header("X-Request-Id", val),
-    };
-    let resp = builder.body(body).wrap_err("Can't build mock response")?;
-    Ok(resp.into())
-}
-
 pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Response> {
-    let mi: MockInfo = req.headers().get("X-Request-Id").into();
+    let mi: MockInfo = (&req).into();
     match mi.outcome {
-        MockOutcome::Success => {
-            if req.method() == "POST" {
-                mock_activation_response(req)
-            } else {
-                mock_deactivation_response(req)
-            }
-        }
+        MockOutcome::Success => match mi.rtype {
+            MockRequestType::Activation => Ok(frl::mock_activation_response(req)),
+            MockRequestType::Deactivation => Ok(frl::mock_deactivation_response(req)),
+            MockRequestType::LogUpload => Ok(log::mock_log_response(req)),
+        },
         MockOutcome::Isolated => panic!("request sent in StoreMode"),
-        MockOutcome::Uncreachable => Err(eyre!("NetworkError - server not reachable")),
-        MockOutcome::ParseFailure => mock_invalid_body_response(req),
-        MockOutcome::ErrorStatus => mock_error_response(req),
+        MockOutcome::Uncreachable => {
+            Err(eyre!("NetworkError - server not reachable requested"))
+        }
+        MockOutcome::ParseFailure => mock_parse_failure_response(req),
+        MockOutcome::ErrorStatus => mock_error_status_response(req),
     }
 }
