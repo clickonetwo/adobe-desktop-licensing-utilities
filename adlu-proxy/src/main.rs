@@ -17,12 +17,10 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use clap::Parser;
-use eyre::Result;
 
 use adlu_base::get_first_interrupt;
-use adlu_proxy::cli::{Command, ProxyArgs};
-use adlu_proxy::settings::Settings;
-use adlu_proxy::{cache, logging, proxy, settings};
+use adlu_proxy::cli::ProxyArgs;
+use adlu_proxy::settings;
 
 #[tokio::main]
 async fn main() {
