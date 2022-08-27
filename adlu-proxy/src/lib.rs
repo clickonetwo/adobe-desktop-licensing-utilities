@@ -35,9 +35,9 @@ pub async fn run(
     args: ProxyArgs,
     stop_signal: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
-    logging::init(&settings)?;
+    logging::init(&settings.logging)?;
     debug!("Loaded config: {:?}", &settings);
-    let cache = cache::connect(&settings).await?;
+    let cache = cache::connect(&settings.proxy.db_path).await?;
     let result = match args.cmd {
         Command::Configure => {
             settings::update_config_file(Some(&settings), &args.config_file)
@@ -73,39 +73,39 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::proxy;
+    use super::settings::ProxyMode;
     use super::testing::*;
 
     #[tokio::test]
-    async fn test_mock_requests() {
-        let conf = test_config("proxy-mock-requests").await;
-        tokio::join!(
-            test_activation_request_success(conf.clone()),
-            test_deactivation_request_success(conf.clone()),
-            test_log_upload_request_success(conf.clone()),
-        );
-    }
-
-    async fn test_activation_request_success(conf: proxy::Config) {
-        let filter = proxy::activate_route(conf);
+    async fn test_activation_request_success() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let filter = proxy::activate_route(conf.clone());
         let mut builder = warp::test::request();
         builder = mock_activation_request(&MockOutcome::Success, builder);
         let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
+        release_test_config(conf).await;
     }
 
-    async fn test_deactivation_request_success(conf: proxy::Config) {
-        let filter = proxy::deactivate_route(conf);
+    #[tokio::test]
+    async fn test_deactivation_request_success() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let filter = proxy::deactivate_route(conf.clone());
         let mut builder = warp::test::request();
         builder = mock_deactivation_request(&MockOutcome::Success, builder);
         let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
+        release_test_config(conf).await;
     }
 
-    async fn test_log_upload_request_success(conf: proxy::Config) {
-        let filter = proxy::upload_route(conf);
+    #[tokio::test]
+    async fn test_log_upload_request_success() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let filter = proxy::upload_route(conf.clone());
         let mut builder = warp::test::request();
         builder = mock_log_upload_request(&MockOutcome::Success, builder);
         let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
+        release_test_config(conf).await;
     }
 }

@@ -23,9 +23,10 @@ use std::sync::RwLock;
 use eyre::{eyre, Result, WrapErr};
 use uuid::Uuid;
 
+use crate::cache::Cache;
 pub use frl::{mock_activation_request, mock_deactivation_request};
 
-use crate::settings::{ProxyMode, SettingsVal};
+use crate::settings::{LogLevel, ProxyMode, SettingsVal};
 use crate::Settings;
 
 use super::{cache, logging, proxy, settings};
@@ -35,28 +36,70 @@ pub use self::log::mock_log_upload_request;
 mod frl;
 mod log;
 
-pub async fn test_config(name: &str) -> proxy::Config {
-    test_config_with_mode(name, &ProxyMode::Connected).await
+#[derive(Default)]
+struct SharedCache {
+    count: usize,
+    log_initialized: bool,
+    cache: Option<Cache>,
 }
 
-pub async fn test_config_with_mode(name: &str, mode: &ProxyMode) -> proxy::Config {
+lazy_static::lazy_static! {
+    static ref SHARED_CACHE: RwLock<SharedCache> = RwLock::new(Default::default());
+}
+
+async fn init_logging_and_cache() -> Cache {
+    let mut shared_cache = SHARED_CACHE.write().unwrap();
+    if shared_cache.count == 0 {
+        // initialize logging and create the cache
+        let tempdir = std::env::temp_dir().join("adlu-proxy-test");
+        if std::fs::metadata(&tempdir).is_err() {
+            std::fs::create_dir(&tempdir).expect("Test directory couldn't be created");
+        }
+        if !shared_cache.log_initialized {
+            let logging = settings::Logging {
+                level: LogLevel::Debug,
+                destination: settings::LogDestination::File,
+                file_path: tempdir.join("proxy-log.log").to_str().unwrap().to_string(),
+                rotate_size_kb: 0,
+                rotate_count: 0,
+            };
+            logging::init(&logging).unwrap();
+            shared_cache.log_initialized = true;
+        }
+        let path = tempdir.join("proxy-cache.sqlite").to_str().unwrap().to_string();
+        let cache = cache::connect(&path).await.expect("Cache initialization failed");
+        shared_cache.cache = Some(cache);
+        shared_cache.count = 1;
+    } else {
+        // increase the refcount on the existing cache
+        shared_cache.count += 1;
+    }
+    shared_cache.cache.clone().unwrap()
+}
+
+async fn release_cache() {
+    let mut shared_cache = SHARED_CACHE.write().unwrap();
+    if shared_cache.count == 0 {
+        panic!("Tried to release cache before creating it!");
+    }
+    shared_cache.count -= 1;
+    if shared_cache.count == 0 {
+        // release the cache
+        shared_cache.cache.as_ref().unwrap().close().await;
+        shared_cache.cache = None;
+    }
+}
+
+pub async fn get_test_config(mode: &ProxyMode) -> proxy::Config {
+    let cache = init_logging_and_cache().await;
     let mut settings = SettingsVal::default_config();
     settings.proxy.mode = mode.clone();
-    let tempdir = std::env::temp_dir().join(name);
-    if std::fs::metadata(&tempdir).is_err() {
-        std::fs::create_dir(&tempdir).expect("Test directory couldn't be created");
-    }
-    settings.proxy.db_path =
-        tempdir.join("proxy-cache.sqlite").to_str().unwrap().to_string();
-    settings.proxy.host = "127.0.0.1".to_string();
-    settings.logging.file_path =
-        tempdir.join("proxy-log.log").to_str().unwrap().to_string();
-    settings.logging.level = settings::LogLevel::Debug;
-    settings.logging.destination = settings::LogDestination::File;
     let settings = Settings::new(settings);
-    logging::init(&settings).unwrap();
-    let cache = cache::connect(&settings).await.unwrap();
     proxy::Config::new(settings, cache).unwrap()
+}
+
+pub async fn release_test_config(_config: proxy::Config) {
+    release_cache().await;
 }
 
 #[derive(Debug, Clone)]
