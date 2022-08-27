@@ -48,17 +48,17 @@ pub fn mock_log_upload_request(
         ("User-Agent", "Illustrator/26.4.1 CFNetwork/1335.0.3 Darwin/21.6.0"),
         ("Accept-Language", "en-us"),
     ];
-    let body = r##"SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:03:985-0700 ThreadID=4466787 Component=ngl-lib_HTTPRequestMac Description=\"SendHttpRequestSyncInternal: Calling endpoint https://cc-api-data.adobe.io/ingest\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:04:244-0700 ThreadID=4468005 Component=ngl-lib_HttpRequestDelegate Description=\"Received Response with status 200\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:04:244-0700 ThreadID=4467217 Component=ngl-lib_HttpRequestDelegate Description=\"Got empty response\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:04:244-0700 ThreadID=4466787 Component=ngl-lib_HttpRestConnectorForPost Description=\"SendHttpRequestSync: Request complete\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:627-0700 ThreadID=4466789 Component=ngl-lib_NglCommonLib Description=\"ImsCachedAccessToken - Cached access token fetch status: IMSConnectorStatus:0\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:630-0700 ThreadID=4466789 Component=ngl-lib_HttpRestConnectorForPost Description=\"SendHttpRequestSync: Request about to start\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:630-0700 ThreadID=4466789 Component=ngl-lib_HTTPRequestMac Description=\"SendHttpRequestSyncInternal: Calling endpoint https://lcs-ulecs.adobe.io/ulecs/v1\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:996-0700 ThreadID=4468007 Component=ngl-lib_HttpRequestDelegate Description=\"Received Response with status 200\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:996-0700 ThreadID=4468007 Component=ngl-lib_HttpRequestDelegate Description=\"Got empty response\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:996-0700 ThreadID=4466789 Component=ngl-lib_HttpRestConnectorForPost Description=\"SendHttpRequestSync: Request complete\"
-SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T10:01:00:953-0700 ThreadID=4466787 Component=ngl-lib_HttpRestConnectorForPost Description=\"SendHttpRequestSync: Request about to start\"
+    let body = r##"SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:03:985-0700 ThreadID=4466787 Component=ngl-lib_HTTPRequestMac Description="SendHttpRequestSyncInternal: Calling endpoint https://cc-api-data.adobe.io/ingest"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:04:244-0700 ThreadID=4468005 Component=ngl-lib_HttpRequestDelegate Description="Received Response with status 200"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:04:244-0700 ThreadID=4467217 Component=ngl-lib_HttpRequestDelegate Description="Got empty response"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:51:04:244-0700 ThreadID=4466787 Component=ngl-lib_HttpRestConnectorForPost Description="SendHttpRequestSync: Request complete"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:627-0700 ThreadID=4466789 Component=ngl-lib_NglCommonLib Description="ImsCachedAccessToken - Cached access token fetch status: IMSConnectorStatus:0"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:630-0700 ThreadID=4466789 Component=ngl-lib_HttpRestConnectorForPost Description="SendHttpRequestSync: Request about to start"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:630-0700 ThreadID=4466789 Component=ngl-lib_HTTPRequestMac Description="SendHttpRequestSyncInternal: Calling endpoint https://lcs-ulecs.adobe.io/ulecs/v1"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:996-0700 ThreadID=4468007 Component=ngl-lib_HttpRequestDelegate Description="Received Response with status 200"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:996-0700 ThreadID=4468007 Component=ngl-lib_HttpRequestDelegate Description="Got empty response"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T09:56:01:996-0700 ThreadID=4466789 Component=ngl-lib_HttpRestConnectorForPost Description="SendHttpRequestSync: Request complete"
+SessionID=8be2322f-1774-47c7-88ef-b71cfc5a3fb8.1660322760908 Timestamp=2022-08-12T10:01:00:953-0700 ThreadID=4466787 Component=ngl-lib_HttpRestConnectorForPost Description="SendHttpRequestSync: Request about to start"
 "##;
     let mi = MockInfo::with_type_and_outcome(&MockRequestType::LogUpload, ask);
     let mut builder = builder.method("POST").path("/ulecs/v1");
