@@ -30,8 +30,6 @@ use sqlx::{
 
 use adlu_parse::protocol::{LogSession, Request, Response};
 
-use crate::settings::Settings;
-
 mod frl;
 mod log;
 
@@ -40,8 +38,8 @@ mod log;
 /// This cache uses an SQLite v3 database accessed asynchronously via `sqlx`.
 pub type Cache = Arc<Db>;
 
-pub async fn connect(settings: &Settings) -> Result<Cache> {
-    Ok(Arc::new(Db::from(settings).await?))
+pub async fn connect(path: &str) -> Result<Cache> {
+    Ok(Arc::new(Db::from(path).await?))
 }
 
 #[derive(Debug)]
@@ -50,12 +48,11 @@ pub struct Db {
 }
 
 impl Db {
-    async fn from(settings: &Settings) -> Result<Self> {
-        let db_name = &settings.proxy.db_path;
-        let pool = db_init(db_name, "rwc")
+    async fn from(path: &str) -> Result<Self> {
+        let pool = db_init(path, "rwc")
             .await
-            .wrap_err(format!("Can't connect to cache db: {}", db_name))?;
-        info!("Valid cache database: {}", &db_name);
+            .wrap_err(format!("Can't connect to cache db: {}", path))?;
+        info!("Valid cache database: {}", &path);
         Ok(Self { pool })
     }
 
