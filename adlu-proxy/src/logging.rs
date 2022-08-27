@@ -31,13 +31,13 @@ use log4rs::{
     encode::pattern::PatternEncoder,
 };
 
-use crate::settings::{LogDestination, LogLevel, Settings};
+use crate::settings::{LogDestination, LogLevel, Logging};
 
-pub fn init(settings: &Settings) -> Result<()> {
+pub fn init(logging: &Logging) -> Result<()> {
     let pattern = "{d([%Y-%m-%d][%H:%M:%S])}[{t}][{l}] {m}{n}";
     let encoder = PatternEncoder::new(pattern);
-    let filter = log_level(&settings.logging.level);
-    let appender = if let LogDestination::Console = &settings.logging.destination {
+    let filter = log_level(&logging.level);
+    let appender = if let LogDestination::Console = &logging.destination {
         Appender::builder().build(
             "logger",
             Box::new(
@@ -47,13 +47,13 @@ pub fn init(settings: &Settings) -> Result<()> {
                     .build(),
             ),
         )
-    } else if settings.logging.rotate_size_kb > 0 {
-        let window_size = settings.logging.rotate_count;
-        let pattern = roll_pattern(&settings.logging.file_path);
+    } else if logging.rotate_size_kb > 0 {
+        let window_size = logging.rotate_count;
+        let pattern = roll_pattern(&logging.file_path);
         let fixed_window_roller = FixedWindowRoller::builder()
             .build(&pattern, window_size)
             .map_err(|err| eyre!("Can't build log rotation config: {:?}", err))?;
-        let size_limit = 1024 * settings.logging.rotate_size_kb;
+        let size_limit = 1024 * logging.rotate_size_kb;
         let size_trigger = SizeTrigger::new(size_limit as u64);
         let compound_policy =
             CompoundPolicy::new(Box::new(size_trigger), Box::new(fixed_window_roller));
@@ -62,7 +62,7 @@ pub fn init(settings: &Settings) -> Result<()> {
             Box::new(
                 RollingFileAppender::builder()
                     .encoder(Box::new(encoder))
-                    .build(&settings.logging.file_path, Box::new(compound_policy))
+                    .build(&logging.file_path, Box::new(compound_policy))
                     .wrap_err("Can't create log file configuration")?,
             ),
         )
@@ -72,7 +72,7 @@ pub fn init(settings: &Settings) -> Result<()> {
             Box::new(
                 FileAppender::builder()
                     .encoder(Box::new(encoder))
-                    .build(&settings.logging.file_path)
+                    .build(&logging.file_path)
                     .wrap_err("Can't create log file configuration")?,
             ),
         )
