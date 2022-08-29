@@ -78,8 +78,12 @@ impl Config {
     }
 
     #[cfg(test)]
-    pub fn update_mode(&mut self, mode: &ProxyMode) {
-        self.settings.proxy.mode = mode.clone();
+    pub fn clone_with_mode(&self, mode: &ProxyMode) -> Self {
+        let mut new_settings = self.settings.as_ref().clone();
+        new_settings.proxy.mode = mode.clone();
+        let mut new_config = self.clone();
+        new_config.settings = Settings::new(new_settings);
+        new_config
     }
 
     pub fn bind_addr(&self) -> Result<std::net::SocketAddr> {
@@ -315,6 +319,11 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
 }
 
 async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response> {
+    let method = match req {
+        Request::Activation(_) => http::Method::POST,
+        Request::Deactivation(_) => http::Method::DELETE,
+        Request::LogUpload(_) => http::Method::POST,
+    };
     let endpoint = match req {
         Request::Activation(_) => {
             format!("{}/{}", &conf.frl_server, "asnp/frl_connected/values/v2")
@@ -326,18 +335,18 @@ async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response
             format!("{}/{}", &conf.log_server, "ulecs/v1")
         }
     };
-    let method = match req {
-        Request::Activation(_) => http::Method::POST,
-        Request::Deactivation(_) => http::Method::DELETE,
-        Request::LogUpload(_) => http::Method::POST,
+    let response_type = match req {
+        Request::Activation(_) => "application/json",
+        Request::Deactivation(_) => "application/json",
+        Request::LogUpload(_) => "*/*",
     };
     let builder = conf
         .client
         .request(method, endpoint)
         .header("User-Agent", agent())
-        // .header("Accept-Encoding", "gzip, deflate, br")
-        // .header("Accept", "application/json")
-        ;
+        .header("Accept-Encoding", "gzip, deflate, br")
+        .header("Accept", response_type)
+        .header("Accept-Language", "en-us");
     let request =
         req.to_network(builder).build().wrap_err("Failure building network request")?;
     if cfg!(test) {

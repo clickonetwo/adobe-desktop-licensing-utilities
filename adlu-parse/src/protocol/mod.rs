@@ -20,17 +20,16 @@ use eyre::Result;
 use warp::{Filter, Reply};
 
 use adlu_base::Timestamp;
+pub use frl::{
+    FrlActivationRequest, FrlActivationRequestBody, FrlActivationResponse,
+    FrlActivationResponseBody, FrlAppDetails, FrlDeactivationQueryParams,
+    FrlDeactivationRequest, FrlDeactivationResponse, FrlDeactivationResponseBody,
+    FrlDeviceDetails,
+};
+pub use log::{parse_log_data, LogSession, LogUploadRequest, LogUploadResponse};
 
 mod frl;
 mod log;
-
-use crate::protocol::frl::{
-    FrlActivationRequestBody, FrlActivationResponse, FrlDeactivationQueryParams,
-    FrlDeactivationResponse,
-};
-use crate::protocol::log::{parse_log_data, LogUploadResponse};
-use frl::{FrlActivationRequest, FrlDeactivationRequest};
-use log::LogUploadRequest;
 
 /// There are two kinds of requests and responses: activation
 /// and deactivation.  But pretty much all the actions you

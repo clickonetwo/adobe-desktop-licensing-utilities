@@ -81,7 +81,7 @@ mod tests {
         let conf = get_test_config(&ProxyMode::Connected).await;
         let filter = proxy::activate_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_activation_request(&MockOutcome::Success, builder);
+        builder = mock_activation_request(&MockOutcome::Success, "test1", builder);
         let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
         release_test_config(conf).await;
@@ -92,7 +92,7 @@ mod tests {
         let conf = get_test_config(&ProxyMode::Connected).await;
         let filter = proxy::deactivate_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_deactivation_request(&MockOutcome::Success, builder);
+        builder = mock_deactivation_request(&MockOutcome::Success, "test1", builder);
         let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
         release_test_config(conf).await;
@@ -103,7 +103,7 @@ mod tests {
         let conf = get_test_config(&ProxyMode::Connected).await;
         let filter = proxy::upload_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_log_upload_request(&MockOutcome::Success, builder);
+        builder = mock_log_upload_request(&MockOutcome::Success, "test1", builder);
         let response = builder.reply(&filter).await;
         assert_eq!(response.status().as_u16(), 200);
         release_test_config(conf).await;

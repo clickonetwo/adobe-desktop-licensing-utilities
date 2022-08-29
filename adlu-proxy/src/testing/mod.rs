@@ -96,10 +96,6 @@ pub async fn get_test_config(mode: &ProxyMode) -> proxy::Config {
     proxy::Config::new(settings, cache).unwrap()
 }
 
-pub async fn update_test_config_mode(config: proxy::Config, mode: &ProxyMode) -> proxy::Config {
-    
-}
-
 pub async fn release_test_config(_config: proxy::Config) {
     release_cache().await;
 }
@@ -152,6 +148,10 @@ impl MockInfo {
 
     pub fn authorization(&self) -> String {
         self.uuid.clone()
+    }
+
+    pub fn api_key(&self) -> String {
+        String::from("ngl_mock1")
     }
 }
 
