@@ -189,7 +189,7 @@ pub async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result
         .bind(&req.parsed_body.app_details.ngl_app_id)
         .bind(&req.parsed_body.app_details.ngl_app_version)
         .bind(&req.parsed_body.app_details.ngl_lib_version)
-        .bind(Timestamp::to_storage(&req.timestamp))
+        .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
@@ -222,7 +222,7 @@ pub async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Re
         .bind(req.params.enable_vdi_marker_exists)
         .bind(req.params.is_os_user_account_in_domain)
         .bind(req.params.is_virtual_environment)
-        .bind(Timestamp::to_storage(&req.timestamp))
+        .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
@@ -253,7 +253,7 @@ pub async fn store_activation_response(
         .bind(&a_key)
         .bind(&d_key)
         .bind(&body)
-        .bind(Timestamp::to_storage(&req.timestamp))
+        .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
     debug!("Stored activation response has rowid {}", result.last_insert_rowid());
@@ -303,7 +303,7 @@ pub async fn store_deactivation_response(
     let result = sqlx::query(&i_str)
         .bind(&d_key)
         .bind(&resp.body)
-        .bind(Timestamp::to_storage(&req.timestamp))
+        .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
@@ -331,7 +331,7 @@ pub async fn fetch_activation_response(
                 };
             Ok(Some(ActResp {
                 request_id: req.request_id.clone(),
-                timestamp: Timestamp::from_storage(row.get("timestamp")),
+                timestamp: Timestamp::from_db(row.get("timestamp")),
                 body,
                 parsed_body,
             }))
@@ -362,7 +362,7 @@ pub async fn fetch_deactivation_response(
                 };
             Ok(Some(DeactResp {
                 request_id: req.request_id.clone(),
-                timestamp: Timestamp::from_storage(row.get("timestamp")),
+                timestamp: Timestamp::from_db(row.get("timestamp")),
                 body,
                 parsed_body,
             }))
@@ -458,14 +458,14 @@ fn request_from_activation_row(row: &SqliteRow) -> ActReq {
         api_key: row.get("api_key"),
         request_id: row.get("request_id"),
         session_id: row.get("session_id"),
-        timestamp: Timestamp::from_storage(row.get("timestamp")),
+        timestamp: Timestamp::from_db(row.get("timestamp")),
         parsed_body,
     }
 }
 
 fn request_from_deactivation_row(row: &SqliteRow) -> DeactReq {
     DeactReq {
-        timestamp: Timestamp::from_storage(row.get("timestamp")),
+        timestamp: Timestamp::from_db(row.get("timestamp")),
         api_key: row.get("api_key"),
         request_id: row.get("request_id"),
         params: FrlDeactivationQueryParams {
@@ -489,7 +489,7 @@ fn response_from_activation_row(row: &SqliteRow) -> Result<ActResp> {
         };
     Ok(ActResp {
         request_id: row.get("request_id"),
-        timestamp: Timestamp::from_storage(row.get("timestamp")),
+        timestamp: Timestamp::from_db(row.get("timestamp")),
         body,
         parsed_body,
     })
@@ -505,7 +505,7 @@ fn response_from_deactivation_row(row: &SqliteRow) -> Result<DeactResp> {
         };
     Ok(DeactResp {
         request_id: row.get("request_id"),
-        timestamp: Timestamp::from_storage(row.get("timestamp")),
+        timestamp: Timestamp::from_db(row.get("timestamp")),
         body,
         parsed_body,
     })

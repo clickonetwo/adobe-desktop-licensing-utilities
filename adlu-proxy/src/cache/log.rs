@@ -128,10 +128,10 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
         .bind(&session.session_id)
-        .bind(Timestamp::to_storage(&session.initial_entry))
-        .bind(Timestamp::to_storage(&session.final_entry))
-        .bind(Timestamp::optional_to_storage(&session.session_start))
-        .bind(Timestamp::optional_to_storage(&session.session_end))
+        .bind(session.initial_entry.to_db())
+        .bind(session.final_entry.to_db())
+        .bind(Timestamp::optional_to_db(&session.session_start))
+        .bind(Timestamp::optional_to_db(&session.session_end))
         .bind(optval(&session.app_id))
         .bind(optval(&session.app_version))
         .bind(optval(&session.app_locale))
@@ -156,10 +156,10 @@ fn session_from_row(row: &SqliteRow) -> LogSession {
     }
     LogSession {
         session_id: row.get("session_id"),
-        initial_entry: Timestamp::from_storage(row.get("initial_entry")),
-        final_entry: Timestamp::from_storage(row.get("final_entry")),
-        session_start: Timestamp::optional_from_storage(row.get("session_start")),
-        session_end: Timestamp::optional_from_storage(row.get("session_end")),
+        initial_entry: Timestamp::from_db(row.get("initial_entry")),
+        final_entry: Timestamp::from_db(row.get("final_entry")),
+        session_start: Timestamp::optional_from_db(row.get("session_start")),
+        session_end: Timestamp::optional_from_db(row.get("session_end")),
         app_id: optval(row.get("app_id")),
         app_version: optval(row.get("app_version")),
         app_locale: optval(row.get("app_locale")),

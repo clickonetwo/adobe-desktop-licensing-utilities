@@ -77,6 +77,11 @@ impl Config {
         })
     }
 
+    #[cfg(test)]
+    pub fn update_mode(&mut self, mode: &ProxyMode) {
+        self.settings.proxy.mode = mode.clone();
+    }
+
     pub fn bind_addr(&self) -> Result<std::net::SocketAddr> {
         let proxy_addr = if self.settings.proxy.ssl {
             format!("{}:{}", self.settings.proxy.host, self.settings.proxy.ssl_port)

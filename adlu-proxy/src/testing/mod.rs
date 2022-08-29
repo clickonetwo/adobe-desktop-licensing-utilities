@@ -16,9 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use std::sync::RwLock;
 
 use eyre::{eyre, Result, WrapErr};
 use uuid::Uuid;
@@ -44,11 +42,11 @@ struct SharedCache {
 }
 
 lazy_static::lazy_static! {
-    static ref SHARED_CACHE: RwLock<SharedCache> = RwLock::new(Default::default());
+    static ref SHARED_CACHE: tokio::sync::RwLock<SharedCache> = tokio::sync::RwLock::new(Default::default());
 }
 
 async fn init_logging_and_cache() -> Cache {
-    let mut shared_cache = SHARED_CACHE.write().unwrap();
+    let mut shared_cache = SHARED_CACHE.write().await;
     if shared_cache.count == 0 {
         // initialize logging and create the cache
         let tempdir = std::env::temp_dir().join("adlu-proxy-test");
@@ -78,7 +76,7 @@ async fn init_logging_and_cache() -> Cache {
 }
 
 async fn release_cache() {
-    let mut shared_cache = SHARED_CACHE.write().unwrap();
+    let mut shared_cache = SHARED_CACHE.write().await;
     if shared_cache.count == 0 {
         panic!("Tried to release cache before creating it!");
     }
@@ -96,6 +94,10 @@ pub async fn get_test_config(mode: &ProxyMode) -> proxy::Config {
     settings.proxy.mode = mode.clone();
     let settings = Settings::new(settings);
     proxy::Config::new(settings, cache).unwrap()
+}
+
+pub async fn update_test_config_mode(config: proxy::Config, mode: &ProxyMode) -> proxy::Config {
+    
 }
 
 pub async fn release_test_config(_config: proxy::Config) {
@@ -126,7 +128,7 @@ struct MockInfo {
 }
 
 lazy_static::lazy_static! {
-    static ref MOCK_INFO_MAP: RwLock<HashMap<String, MockInfo>> = RwLock::new(HashMap::new());
+    static ref MOCK_INFO_MAP: std::sync::RwLock<HashMap<String, MockInfo>> = std::sync::RwLock::new(HashMap::new());
 }
 
 impl MockInfo {
@@ -136,7 +138,7 @@ impl MockInfo {
         let outcome = outcome.clone();
         let mi = MockInfo { rtype, uuid, outcome };
         let mut map = MOCK_INFO_MAP.write().unwrap();
-        map.borrow_mut().insert(mi.uuid.clone(), mi.clone());
+        map.insert(mi.uuid.clone(), mi.clone());
         mi
     }
 

@@ -30,12 +30,8 @@ pub fn mock_activation_request(
         ("User-Agent", "NGL Client/1.30.0.1 (MAC/12.4.0) [2022-06-28T17:08:01.895-0700]"),
         ("Accept-Language", "en-us"),
     ];
-    let body = r#"
-        {
-            "appDetails" :
-            {
-                "currentAsnpId" : "",
-                "nglAppId" : "Photoshop1",
+    let body_front = r#"
+        {"appDetails": {"currentAsnpId" : "", "nglAppId" : "Photoshop1",
                 "nglAppVersion" : "23.4.1",
                 "nglLibVersion" : "1.30.0.1"
             },
