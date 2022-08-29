@@ -421,6 +421,16 @@ pub struct FrlDeactivationResponseBody {
     invalidation_successful: bool,
 }
 
+impl FrlDeactivationResponseBody {
+    pub fn mock_from_device_id(_device_id: &str) -> Self {
+        FrlDeactivationResponseBody { invalidation_successful: true }
+    }
+
+    pub fn to_body_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod test {
     #[test]
@@ -520,10 +530,36 @@ mod test {
     }
 
     #[test]
+    fn test_parse_deactivation_request() {
+        let query = "npdId=YzQ5ZmIw...elided...zMGUz&deviceId=2c93c879...elided...28c2fa&osUserId=b693be35...elided...e084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0";
+        let body: super::FrlDeactivationQueryParams =
+            serde_urlencoded::from_str(query).unwrap();
+        assert_eq!(body.npd_id, "YzQ5ZmIw...elided...zMGUz");
+        assert_eq!(body.os_user_id, "b693be35...elided...e084d");
+    }
+
+    #[test]
+    fn test_parse_mock_deactivation_request() {
+        let params = super::FrlDeactivationQueryParams::mock_from_device_id("test-id");
+        let body: super::FrlDeactivationQueryParams =
+            serde_urlencoded::from_str(&params.to_query_params()).unwrap();
+        assert_eq!(body.npd_id, "YzQ5ZmIw...elided...jFiOD");
+        assert_eq!(body.device_id, "test-id");
+    }
+
+    #[test]
     fn test_parse_deactivation_response() {
         let response_str = r#"{"invalidationSuccessful":true}"#;
         let response: super::FrlDeactivationResponseBody =
             serde_json::from_str(response_str).unwrap();
+        assert!(response.invalidation_successful);
+    }
+
+    #[test]
+    fn test_parse_mock_deactivation_response() {
+        let mock = super::FrlDeactivationResponseBody::mock_from_device_id("test-id");
+        let response: super::FrlDeactivationResponseBody =
+            serde_json::from_str(&mock.to_body_string()).unwrap();
         assert!(response.invalidation_successful);
     }
 }
