@@ -154,13 +154,26 @@ impl Timestamp {
         self.0
     }
 
-    /// When you need to store a timestamp as a string.
-    pub fn to_storage(t: &Timestamp) -> String {
-        t.to_string()
+    /// When you need to write a timestamp to an NGL log.
+    pub fn to_log(&self) -> String {
+        Utc.timestamp_millis(self.0).format("%Y-%m-%dT%H:%M:%S:%3f%z").to_string()
     }
 
-    /// When you need to store an optional timestamp as a string.
-    pub fn optional_to_storage(t: &Option<Timestamp>) -> String {
+    /// When you've read a timestamp from a log and want it back.
+    pub fn from_log(s: &str) -> Self {
+        match DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S:%3f%z") {
+            Ok(ts) => Self::from_millis(ts.timestamp_millis()),
+            Err(_) => Self::now(),
+        }
+    }
+
+    /// When you need to store a timestamp as a string field in a database.
+    pub fn to_db(&self) -> String {
+        self.to_string()
+    }
+
+    /// When you need to store an optional timestamp as a string field in a database.
+    pub fn optional_to_db(t: &Option<Self>) -> String {
         match t {
             Some(timestamp) => timestamp.to_string(),
             None => String::new(),
@@ -171,20 +184,19 @@ impl Timestamp {
     /// This handles both millisecond storage and various forms of date
     /// formatting, so it's backwards compatible with JSON storage
     /// prepared by different front ends.
-    pub fn from_storage(s: &str) -> Self {
-        if let Ok(ts) = s.parse::<Self>() {
-            ts
-        } else {
-            Timestamp(Utc::now().timestamp_millis())
+    pub fn from_db(s: &str) -> Self {
+        match s.parse::<Self>() {
+            Ok(ts) => ts,
+            Err(_) => Self::now(),
         }
     }
 
     /// When you've stored an optional timestamp as a string and want it back.
-    pub fn optional_from_storage(s: &str) -> Option<Self> {
+    pub fn optional_from_db(s: &str) -> Option<Self> {
         if s.is_empty() {
             None
         } else {
-            Some(Self::from_storage(s))
+            Some(Self::from_db(s))
         }
     }
 }
@@ -293,9 +305,9 @@ mod tests {
     #[test]
     fn test_timestamp_from_storage() {
         let ts1 = Timestamp(0);
-        let ts2 = Timestamp::from_storage("1970-01-01T00:00:00.000+00:00");
+        let ts2 = Timestamp::from_db("1970-01-01T00:00:00.000+00:00");
         assert_eq!(&ts1, &ts2);
-        let ts3 = Timestamp::from_storage("1970-01-01T00:00:00:000+00:00");
+        let ts3 = Timestamp::from_db("1970-01-01T00:00:00:000+00:00");
         assert_eq!(&ts1, &ts3);
     }
 }
