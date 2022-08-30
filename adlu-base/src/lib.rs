@@ -209,13 +209,17 @@ impl Default for Timestamp {
 
 impl std::fmt::Debug for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Local.timestamp_millis(self.0).format("%Y-%m-%dT%H:%M:%S%.3f%z").fmt(f)
+        Local
+            .timestamp_millis(self.0)
+            .format("%Y-%m-%dT%H:%M:%S%.3f%z")
+            .to_string()
+            .fmt(f)
     }
 }
 
 impl std::fmt::Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        Utc.timestamp_millis(self.0).format("%Y-%m-%dT%H:%M:%S%.3f%z").to_string().fmt(f)
     }
 }
 

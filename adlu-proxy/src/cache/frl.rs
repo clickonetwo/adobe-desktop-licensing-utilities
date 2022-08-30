@@ -348,7 +348,8 @@ pub async fn fetch_deactivation_response(
     req: &DeactReq,
 ) -> Result<Option<DeactResp>> {
     let d_key = req.deactivation_id();
-    let q_str = "select body from deactivation_responses where deactivation_key = ?";
+    let q_str =
+        "select body, timestamp from deactivation_responses where deactivation_key = ?";
     debug!("Finding deactivation response with key: {}", &d_key);
     let result = sqlx::query(q_str).bind(&d_key).fetch_optional(pool).await?;
     match result {

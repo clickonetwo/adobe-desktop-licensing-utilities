@@ -66,6 +66,7 @@ async fn init_logging_and_cache() -> Cache {
         }
         let path = tempdir.join("proxy-cache.sqlite").to_str().unwrap().to_string();
         let cache = cache::connect(&path).await.expect("Cache initialization failed");
+        cache.clear(true).await.expect("Cache clear failed");
         shared_cache.cache = Some(cache);
         shared_cache.count = 1;
     } else {
@@ -104,7 +105,7 @@ pub async fn release_test_config(_config: proxy::Config) {
 pub enum MockOutcome {
     Success,
     Isolated,
-    Uncreachable,
+    Unreachable,
     ParseFailure,
     ErrorStatus,
 }
@@ -208,8 +209,8 @@ pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Respons
             MockRequestType::Deactivation => Ok(frl::mock_deactivation_response(req)),
             MockRequestType::LogUpload => Ok(log::mock_log_response(req)),
         },
-        MockOutcome::Isolated => panic!("request sent in StoreMode"),
-        MockOutcome::Uncreachable => {
+        MockOutcome::Isolated => panic!("request sent in Isolated mode"),
+        MockOutcome::Unreachable => {
             Err(eyre!("NetworkError - server not reachable requested"))
         }
         MockOutcome::ParseFailure => mock_parse_failure_response(req),

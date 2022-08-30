@@ -76,36 +76,104 @@ mod tests {
     use super::settings::ProxyMode;
     use super::testing::*;
 
-    #[tokio::test]
-    async fn test_activation_request_success() {
-        let conf = get_test_config(&ProxyMode::Connected).await;
+    async fn send_activation(
+        conf: &proxy::Config,
+        outcome: &MockOutcome,
+        device_id: &str,
+    ) -> u16 {
         let filter = proxy::activate_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_activation_request(&MockOutcome::Success, "test1", builder);
+        builder = mock_activation_request(outcome, device_id, builder);
         let response = builder.reply(&filter).await;
-        assert_eq!(response.status().as_u16(), 200);
-        release_test_config(conf).await;
+        response.status().as_u16()
     }
 
-    #[tokio::test]
-    async fn test_deactivation_request_success() {
-        let conf = get_test_config(&ProxyMode::Connected).await;
+    async fn send_deactivation(
+        conf: &proxy::Config,
+        outcome: &MockOutcome,
+        device_id: &str,
+    ) -> u16 {
         let filter = proxy::deactivate_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_deactivation_request(&MockOutcome::Success, "test1", builder);
+        builder = mock_deactivation_request(outcome, device_id, builder);
         let response = builder.reply(&filter).await;
-        assert_eq!(response.status().as_u16(), 200);
+        response.status().as_u16()
+    }
+
+    async fn send_log_upload(
+        conf: &proxy::Config,
+        outcome: &MockOutcome,
+        session_id: &str,
+    ) -> u16 {
+        let filter = proxy::upload_route(conf.clone());
+        let mut builder = warp::test::request();
+        builder = mock_log_upload_request(outcome, session_id, builder);
+        let response = builder.reply(&filter).await;
+        response.status().as_u16()
+    }
+
+    #[tokio::test]
+    async fn test_activation_request() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let result = send_activation(&conf, &MockOutcome::Success, "ar1").await;
+        assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 
     #[tokio::test]
-    async fn test_log_upload_request_success() {
+    async fn test_activation_cache() {
+        let conf = get_test_config(&ProxyMode::Isolated).await;
+        let result = send_activation(&conf, &MockOutcome::Isolated, "ac1").await;
+        assert_eq!(result, 502);
+        let conf = conf.clone_with_mode(&ProxyMode::Connected);
+        let result = send_activation(&conf, &MockOutcome::Success, "ac1").await;
+        assert_eq!(result, 200);
+        let conf = conf.clone_with_mode(&ProxyMode::Isolated);
+        let result = send_activation(&conf, &MockOutcome::Isolated, "ac1").await;
+        assert_eq!(result, 200);
+        release_test_config(conf).await;
+    }
+
+    #[tokio::test]
+    async fn test_deactivation_request() {
         let conf = get_test_config(&ProxyMode::Connected).await;
-        let filter = proxy::upload_route(conf.clone());
-        let mut builder = warp::test::request();
-        builder = mock_log_upload_request(&MockOutcome::Success, "test1", builder);
-        let response = builder.reply(&filter).await;
-        assert_eq!(response.status().as_u16(), 200);
+        let result = send_deactivation(&conf, &MockOutcome::Success, "dr1").await;
+        assert_eq!(result, 200);
+        release_test_config(conf).await;
+    }
+
+    #[tokio::test]
+    async fn test_deactivation_cache() {
+        let conf = get_test_config(&ProxyMode::Isolated).await;
+        let result = send_deactivation(&conf, &MockOutcome::Isolated, "dc1").await;
+        assert_eq!(result, 502);
+        let conf = conf.clone_with_mode(&ProxyMode::Connected);
+        let result = send_deactivation(&conf, &MockOutcome::Success, "dc1").await;
+        assert_eq!(result, 200);
+        let conf = conf.clone_with_mode(&ProxyMode::Isolated);
+        let result = send_deactivation(&conf, &MockOutcome::Isolated, "dc1").await;
+        assert_eq!(result, 200);
+        release_test_config(conf).await;
+    }
+
+    #[tokio::test]
+    async fn test_activation_deactivation_sequence() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let result = send_activation(&conf, &MockOutcome::Success, "ads1").await;
+        assert_eq!(result, 200);
+        let result = send_deactivation(&conf, &MockOutcome::Success, "ads1").await;
+        assert_eq!(result, 200);
+        let conf = conf.clone_with_mode(&ProxyMode::Isolated);
+        let result = send_activation(&conf, &MockOutcome::Isolated, "ads1").await;
+        assert_eq!(result, 502);
+        release_test_config(conf).await;
+    }
+
+    #[tokio::test]
+    async fn test_log_upload_request() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let result = send_log_upload(&conf, &MockOutcome::Success, "lr1").await;
+        assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 }
