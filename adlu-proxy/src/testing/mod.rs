@@ -49,10 +49,7 @@ async fn init_logging_and_cache() -> Cache {
     let mut shared_cache = SHARED_CACHE.write().await;
     if shared_cache.count == 0 {
         // initialize logging and create the cache
-        let tempdir = std::env::temp_dir().join("adlu-proxy-test");
-        if std::fs::metadata(&tempdir).is_err() {
-            std::fs::create_dir(&tempdir).expect("Test directory couldn't be created");
-        }
+        let tempdir = get_test_directory();
         if !shared_cache.log_initialized {
             let logging = settings::Logging {
                 level: LogLevel::Debug,
@@ -87,6 +84,14 @@ async fn release_cache() {
         shared_cache.cache.as_ref().unwrap().close().await;
         shared_cache.cache = None;
     }
+}
+
+pub fn get_test_directory() -> std::path::PathBuf {
+    let tempdir = std::env::temp_dir().join("adlu-proxy-test");
+    if std::fs::metadata(&tempdir).is_err() {
+        std::fs::create_dir(&tempdir).expect("Test directory couldn't be created");
+    }
+    tempdir
 }
 
 pub async fn get_test_config(mode: &ProxyMode) -> proxy::Config {

@@ -18,9 +18,10 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use std::collections::HashMap;
 
-use chrono::prelude::*;
+use chrono::{DateTime, Local, TimeZone, Utc};
 use eyre::{eyre, Result, WrapErr};
-use serde::{Deserialize, Serialize};
+use log::warn;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
@@ -97,12 +98,10 @@ pub mod base64_encoded_json {
 }
 
 pub mod template_json {
-    use serde::{Deserializer, Serialize, Serializer};
+    use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
     // This module implements serialization and deserialization from
     // a JSON string.  It's intended for embedding JSON as
     // a field value inside of a template data structure
-    use serde::de::DeserializeOwned;
-    use serde::Deserialize;
 
     pub fn serialize<S, T>(val: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -138,32 +137,58 @@ pub fn json_from_file(path: &str) -> Result<JsonMap> {
 /// various integer and string forms, including datestamps.
 /// The debug representation is a datestamp, while the string version
 /// is the integer.  Either are acceptable for parsing.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Timestamp(i64);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Timestamp {
+    pub millis: i64,
+}
+
+impl Serialize for Timestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let s = self.to_string();
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for Timestamp {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
 
 impl Timestamp {
     pub fn from_millis(epoch_millis: i64) -> Self {
-        Self(epoch_millis)
+        Self { millis: epoch_millis }
     }
 
     pub fn now() -> Self {
-        Self(Utc::now().timestamp_millis())
+        Self { millis: Utc::now().timestamp_millis() }
     }
 
     pub fn to_millis(&self) -> i64 {
-        self.0
+        self.millis
     }
 
     /// When you need to write a timestamp to an NGL log.
     pub fn to_log(&self) -> String {
-        Utc.timestamp_millis(self.0).format("%Y-%m-%dT%H:%M:%S:%3f%z").to_string()
+        Utc.timestamp_millis(self.millis).format("%Y-%m-%dT%H:%M:%S:%3f%z").to_string()
     }
 
-    /// When you've read a timestamp from a log and want it back.
+    /// When you've read a timestamp from a log and want it back.  This attempts to be
+    /// tolerant of format changes, so if log date format changes it still works.
     pub fn from_log(s: &str) -> Self {
         match DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S:%3f%z") {
             Ok(ts) => Self::from_millis(ts.timestamp_millis()),
-            Err(_) => Self::now(),
+            Err(_) => {
+                warn!("Unexpected time format in log: {}", s);
+                Self::from_db(s)
+            }
         }
     }
 
@@ -207,19 +232,12 @@ impl Default for Timestamp {
     }
 }
 
-impl std::fmt::Debug for Timestamp {
+impl std::fmt::Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Local
-            .timestamp_millis(self.0)
+        Utc.timestamp_millis(self.millis)
             .format("%Y-%m-%dT%H:%M:%S%.3f%z")
             .to_string()
             .fmt(f)
-    }
-}
-
-impl std::fmt::Display for Timestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Utc.timestamp_millis(self.0).format("%Y-%m-%dT%H:%M:%S%.3f%z").to_string().fmt(f)
     }
 }
 
@@ -230,18 +248,18 @@ impl std::str::FromStr for Timestamp {
         if let Ok(val) = s.parse::<i64>() {
             // for now we assume milliseconds
             // TODO: figure out if it's seconds, milliseconds, or nanoseconds
-            Ok(Timestamp(val))
+            Ok(Self { millis: val })
         } else if let Ok(dt) = s.parse::<DateTime<Utc>>() {
-            Ok(Timestamp(dt.timestamp_millis()))
+            Ok(Self { millis: dt.timestamp_millis() })
         } else if let Ok(dt) = DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S:%3f%z") {
-            Ok(Timestamp(dt.timestamp_millis()))
+            Ok(Self { millis: dt.timestamp_millis() })
         } else if let Ok(dt) = DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S:%3f%:z") {
-            Ok(Timestamp(dt.timestamp_millis()))
+            Ok(Self { millis: dt.timestamp_millis() })
         } else if let Ok(dt) = DateTime::parse_from_rfc2822(s) {
-            Ok(Timestamp(dt.timestamp_millis()))
+            Ok(Self { millis: dt.timestamp_millis() })
         } else {
             match DateTime::parse_from_rfc3339(s) {
-                Ok(dt) => Ok(Timestamp(dt.timestamp_millis())),
+                Ok(dt) => Ok(Self { millis: dt.timestamp_millis() }),
                 Err(err) => Err(err),
             }
         }
@@ -308,10 +326,12 @@ mod tests {
 
     #[test]
     fn test_timestamp_from_storage() {
-        let ts1 = Timestamp(0);
+        let ts1 = Timestamp { millis: 0 };
         let ts2 = Timestamp::from_db("1970-01-01T00:00:00.000+00:00");
         assert_eq!(&ts1, &ts2);
         let ts3 = Timestamp::from_db("1970-01-01T00:00:00:000+00:00");
         assert_eq!(&ts1, &ts3);
+        let ts4 = Timestamp::from_db("0000");
+        assert_eq!(&ts1, &ts4);
     }
 }

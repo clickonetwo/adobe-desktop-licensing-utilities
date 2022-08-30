@@ -242,8 +242,8 @@ pub async fn status(conf: Config) -> reply::Response {
 }
 
 pub async fn process_web_request(req: Request, conf: Config) -> reply::Response {
-    info!("Received activation request id: {}", req.request_id());
-    debug!("Received activation request: {:?}", &req);
+    info!("Received request id: {}", req.request_id());
+    debug!("Received request: {:?}", &req);
     if !matches!(conf.settings.proxy.mode, ProxyMode::Isolated) {
         conf.cache.store_request(&req).await;
     }
@@ -303,7 +303,7 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
                 }
             }
             Err(err) => {
-                info!("Network failure on activation call for request ID {}", id);
+                info!("Network failure sending request ID {}", id);
                 SendOutcome::Unreachable(err)
             }
         }

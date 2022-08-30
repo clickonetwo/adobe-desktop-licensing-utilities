@@ -87,6 +87,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sys-info",
+ "tempfile",
  "tokio",
  "tokio-native-tls",
  "toml",

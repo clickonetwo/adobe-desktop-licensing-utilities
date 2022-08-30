@@ -176,4 +176,16 @@ mod tests {
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
+
+    #[tokio::test]
+    async fn test_log_upload_report() {
+        let tempdir = get_test_directory();
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let result = send_log_upload(&conf, &MockOutcome::Success, "lrr1").await;
+        assert_eq!(result, 200);
+        let path = tempdir.join("test-report1.csv");
+        conf.cache.report(path.to_str().unwrap()).await.expect("Report failed");
+        let content = std::fs::read_to_string(&path).expect("Can't read report");
+        assert!(content.contains("lrr1"));
+    }
 }

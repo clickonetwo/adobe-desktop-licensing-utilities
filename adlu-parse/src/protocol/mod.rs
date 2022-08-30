@@ -125,7 +125,7 @@ impl Request {
             .map(|authorization: String, api_key: String, log_data: bytes::Bytes| {
                 let session_data = parse_log_data(log_data.clone());
                 let timestamp = Timestamp::now();
-                let request_id = format!("{}.{}", api_key, timestamp);
+                let request_id = format!("{}.{}", api_key, timestamp.to_millis());
                 Request::LogUpload(Box::new(LogUploadRequest {
                     timestamp,
                     request_id,

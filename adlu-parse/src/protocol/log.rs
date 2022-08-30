@@ -149,7 +149,7 @@ impl LogSession {
             ngl_version: Some("1.26.0.5".to_string()),
             os_name: Some("MAC".to_string()),
             os_version: Some("10.12.5".to_string()),
-            user_id: Some("...elided...".to_string()),
+            user_id: Some("02a34c7e...elided...b9cf7".to_string()),
         }
     }
 
@@ -161,12 +161,14 @@ impl LogSession {
             if at_start {
                 format!(
                     "SessionID={} Timestamp={} ...elided... Description=",
-                    session_id, start_time
+                    session_id,
+                    start_time.to_log()
                 )
             } else {
                 format!(
                     "SessionID={} Timestamp={} ...elided... Description=",
-                    session_id, end_time
+                    session_id,
+                    end_time.to_log()
                 )
             }
         };
@@ -236,20 +238,24 @@ lazy_static! {
         map.insert("end", Regex::new(r"(?-u)Terminating session logs").unwrap());
         map.insert(
             "os",
-            Regex::new(r"(?-u)SetConfig:.+OS Name=([^,]+), OS Version=([^\s]+)").unwrap(),
+            Regex::new(r"(?-u)SetConfig:.+OS Name=([^\s,]+), OS Version=([^\s,]+)")
+                .unwrap(),
         );
         map.insert(
             "app",
-            Regex::new(r"(?-u)SetConfig:.+AppID=([^,]+), AppVersion=([^,]+)").unwrap(),
+            Regex::new(r"(?-u)SetConfig:.+AppID=([^,]+), AppVersion=([^\s,]+)").unwrap(),
         );
-        map.insert("ngl", Regex::new(r"(?-u)SetConfig:.+NGLLibVersion=([^,]+)").unwrap());
+        map.insert(
+            "ngl",
+            Regex::new(r"(?-u)SetConfig:.+NGLLibVersion=([^\s,]+)").unwrap(),
+        );
         map.insert(
             "locale",
-            Regex::new(r"(?-u)SetAppRuntimeConfig:.+AppLocale=([a-zA-Z_]+)").unwrap(),
+            Regex::new(r"(?-u)SetAppRuntimeConfig:.+AppLocale=([^\s,]+)").unwrap(),
         );
         map.insert(
             "user",
-            Regex::new(r"(?-u)LogCurrentUser:.+UserID=([a-z0-9]{40})").unwrap(),
+            Regex::new(r"(?-u)LogCurrentUser:.+UserID=([^\s,]+)").unwrap(),
         );
         map
     };
@@ -442,6 +448,7 @@ mod test {
         assert!(session.app_version.is_some());
         assert!(session.app_locale.is_some());
         assert!(session.ngl_version.is_some());
+        assert!(session.user_id.is_some());
         assert_eq!(session.final_entry, session.session_end.clone().unwrap());
     }
 }

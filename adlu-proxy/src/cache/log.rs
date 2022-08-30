@@ -83,7 +83,7 @@ async fn fetch_log_session(
     session_id: &str,
 ) -> Result<Option<LogSession>> {
     debug!("Finding log session with id: {}", session_id);
-    let q_str = "select sessions where session_id = ?";
+    let q_str = "select * from log_sessions where session_id = ?";
     let result = sqlx::query(q_str).bind(session_id).fetch_optional(pool).await?;
     match result {
         Some(row) => {
@@ -100,7 +100,7 @@ async fn fetch_log_session(
 pub(crate) async fn fetch_log_sessions(pool: &SqlitePool) -> Result<Vec<LogSession>> {
     debug!("Fetching all log sessions");
     let mut result = vec![];
-    let q_str = "select sessions";
+    let q_str = "select * from log_sessions";
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows {
         result.push(session_from_row(&row));
@@ -122,8 +122,10 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
             app_id, app_version, app_locale, ngl_version, os_name, os_version, user_id
         )"#;
     let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    let i_str =
-        format!("insert or replace into sessions {} values {}", field_list, value_list);
+    let i_str = format!(
+        "insert or replace into log_sessions {} values {}",
+        field_list, value_list
+    );
     debug!("Storing log session with id: {}", &session.session_id);
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
@@ -142,7 +144,7 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
-    debug!("Stored activation request has rowid {}", result.last_insert_rowid());
+    debug!("Stored log upload request has rowid {}", result.last_insert_rowid());
     Ok(())
 }
 
@@ -171,7 +173,7 @@ fn session_from_row(row: &SqliteRow) -> LogSession {
 }
 
 const SESSION_SCHEMA: &str = r#"
-    create table if not exists sessions (
+    create table if not exists log_sessions (
         session_id text not null unique,
         initial_entry text not null,
         final_entry text not null,
@@ -187,5 +189,5 @@ const SESSION_SCHEMA: &str = r#"
     );"#;
 
 const CLEAR_ALL: &str = r#"
-    delete from sessions;
+    delete from log_sessions;
     "#;
