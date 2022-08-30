@@ -1,4 +1,4 @@
-name: Publish executables
+name: publish
 
 on:
   push:
@@ -10,20 +10,32 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        arch: [x86_64-apple-darwin, aarch64-apple-darwin, x86_64-pc-windows-msvc]
+        arch: [x86_64-unknown-linux-gnu, x86_64-apple-darwin, aarch64-apple-darwin, x86_64-pc-windows-msvc]
         include:
+          - arch: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            decoder_executable_name: adlu-decoder
+            decoder_posted_name: adlu-decoder.ubuntu_x86_64
+            proxy_executable_name: adlu-proxy
+            proxy_posted_name: adlu-proxy.ubuntu_x86_64
           - arch: x86_64-pc-windows-msvc
             os: windows-latest
-            executable_name: adlu-decoder.exe
-            posted_name: adlu-decoder.windows_x86_64.exe
+            decoder_executable_name: adlu-decoder.exe
+            decoder_posted_name: adlu-decoder.windows_x86_64.exe
+            proxy_executable_name: adlu-proxy.exe
+            proxy_posted_name: adlu-proxy.windows_x86_64.exe
           - arch: x86_64-apple-darwin
             os: macos-latest
-            executable_name: adlu-decoder
-            posted_name: adlu-decoder.mac_x86_64
+            decoder_executable_name: adlu-decoder
+            decoder_posted_name: adlu-decoder.mac_x86_64
+            proxy_executable_name: adlu-proxy
+            proxy_posted_name: adlu-proxy.mac_x86_64
           - arch: aarch64-apple-darwin
             os: macos-latest
-            executable_name: adlu-decoder
-            posted_name: adlu-decoder.mac_arm64
+            decoder_executable_name: adlu-decoder
+            decoder_posted_name: adlu-decoder.mac_arm64
+            proxy_executable_name: adlu-proxy
+            proxy_posted_name: adlu-proxy.mac_arm64
 
     steps:
       - name: upgrade XCode
@@ -34,8 +46,8 @@ jobs:
 
       - name: XCode build target to aarch64-apple-darwin
         run: |
-          echo SDKROOT=$(xcrun -sdk macosx11.1 --show-sdk-path) >> $GITHUB_ENV
-          echo MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx11.1 --show-sdk-platform-version) >> $GITHUB_ENV
+          echo SDKROOT=$(xcrun --show-sdk-path) >> $GITHUB_ENV
+          echo MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version) >> $GITHUB_ENV
         if: ${{ matrix.arch == 'aarch64-apple-darwin' }}
 
       - name: fetch head
@@ -48,16 +60,32 @@ jobs:
           target: ${{ matrix.arch }}
           toolchain: stable
 
-      - name: Build release locked
+      - name: Build release adlu-proxy (all platforms)
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args:  --target ${{ matrix.arch }} --release --locked
+          args: --target ${{ matrix.arch }} --package adlu-proxy  --release --locked
 
-      - name: Post release executable
+      - name: Build release adlu-decoder (mac only for now, until windows libngl is built)
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.arch != 'x86_64-unknown-linux-gnu' }}
+        with:
+          command: build
+          args: --target ${{ matrix.arch }} --package adlu-decoder --release --locked
+
+      - name: Post decoder executable
+        uses: svenstaro/upload-release-action@v2
+        if: ${{ matrix.arch != 'x86_64-unknown-linux-gnu' }}
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/${{ matrix.arch }}/release/${{ matrix.decoder_executable_name }}
+          asset_name: ${{ matrix.decoder_posted_name }}
+          tag: ${{ github.ref }}
+
+      - name: Post proxy executable
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/${{ matrix.arch }}/release/${{ matrix.executable_name }}
-          asset_name: ${{ matrix.posted_name }}
+          file: target/${{ matrix.arch }}/release/${{ matrix.proxy_executable_name }}
+          asset_name: ${{ matrix.proxy_posted_name }}
           tag: ${{ github.ref }}

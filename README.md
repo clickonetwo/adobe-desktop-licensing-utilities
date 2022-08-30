@@ -1,14 +1,15 @@
 # Adobe Desktop License Utilities
 
-[![Rust CI (stable)](https://github.com/adobe/adobe-desktop-licensing-utilities/workflows/Rust%20CI%20(stable)/badge.svg)](https://github.com/adobe/adobe-desktop-licensing-utilities/actions?query=workflow%3A%22Rust+CI+%28stable%29%22)
+[![CI](https://github.com/clickonetwo/adobe-desktop-licensing-utilities/workflows/ci/badge.svg)](https://github.com/clickonetwo/adobe-desktop-licensing-utilities/actions?query=workflow%3Aci)
 
-Adobe provides three forms of desktop application licensing: Named User Licensing (NUL), Feature Restricted Licensing (FRL), and Shared Device Licensing (SDL).  This project provides a number of utilities which can help administrators manage the deployment and use of their device-based licenses:
+Adobe provides three forms of desktop application licensing: Named User Licensing (NUL), Feature Restricted Licensing (FRL), and Shared Device Licensing (SDL).  This project provides utilities which can help administrators manage the deployment and use of their Adobe desktop licenses:
 
 - The `adlu-decoder` is a command-line tool for discovering and reporting on the "operating configuration" files that control both FRL and SDL.
-- The `adlu-proxy` is a web service that facilitates the use of FRL licensing in LAN environments that are either intermittently connected to or fully isolated from the internet.
-- The `adlu-log-collector` is a web service that facilitates the collection and analysis of usage logs from NUL-licensed applications.
+- The `adlu-proxy` is a web service that both:
+    - facilitates the use of FRL licensing in LAN environments that are either intermittently connected to or fully isolated from the internet, and
+    - facilitates the collection and analysis of usage logs from NUL-licensed applications.
 
-Each of these utilities has their own project.  See the README files in each of their projects for more info.
+Each of these utilities has their own crate inside this workspace.  See the [adlu-decoder README file](adlu-decoder/README.md) and the [adlu-proxy README file](adlu-proxy/README.md) for more info on each.
 
 ## Support
 

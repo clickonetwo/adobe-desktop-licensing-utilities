@@ -1,8 +1,6 @@
 # adlu-decoder
 
-[![Rust CI (stable)](https://github.com/clickonetwo/adobe-device-licensing-utilities/workflows/Rust%20CI%20(stable)/badge.svg)](https://github.com/clickonetwo/adobe-device-licensing-utilities/actions?query=workflow%3A%22Rust+CI+%28stable%29%22)
-
-Anyone who has worked with FRL or SDL licensing is familiar with the adobe-licensing-toolkit command-line tool for Mac and Windows.  This tool runs on client machines in the context of a particular user account and provides information about the state of FRL and SDL licenses that are installed on the machine, including: 
+Anyone who has worked with FRL or SDL licensing is familiar with the `adobe-licensing-toolkit` command-line tool for Mac and Windows.  This tool runs on client machines in the context of a particular user account and provides information about the state of FRL and SDL licenses that are installed on the machine, including: 
 
 - the so-called "npdId" (also known as the "package id") of the license;
 - whether the license is activated for the given user; and
