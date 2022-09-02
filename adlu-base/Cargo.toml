@@ -2,7 +2,7 @@
 name = "adlu-base"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 license = "AGPLv3"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 edition = "2021"
 
 [features]

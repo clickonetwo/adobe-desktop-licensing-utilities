@@ -3,7 +3,7 @@ name = "adlu-proxy"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 description = "A protocol-aware, caching, store/forward reverse proxy for Adobe desktop licensing servers"
 license = "AGPLv3"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 edition = "2021"
 
 [features]
@@ -34,7 +34,8 @@ tokio = { version = "1", features = ["full"] }
 tokio-native-tls = "0.3"
 toml = "0.5.9"
 url = "2.1.1"
-warp = { version = "0.3.2", features = ["tls"] }
+#warp = { version = "0.3.2", features = ["tls"] }
+warp = { git = "https://github.com/brotskydotcom/warp", branch = "ignore-empty-path-segments", features = ["tls", "ignore-empty-path-segments"] }
 
 [dev-dependencies]
 uuid = { version = "1.1", features = ["v4"]}

@@ -30,7 +30,7 @@ pub fn mock_activation_request(
 ) -> warp::test::RequestBuilder {
     let mi = MockInfo::with_type_and_outcome(&MockRequestType::Activation, ask);
     let body = FrlActivationRequestBody::mock_from_device_id(device_id);
-    let mut builder = builder.method("POST").path("/asnp/frl_connected/values/v2");
+    let mut builder = builder.method("POST").path("//asnp/frl_connected/values/v2");
     builder = builder
         .header("X-Request-Id", &mi.request_id())
         .header("X-Session-Id", &mi.session_id())
@@ -61,7 +61,7 @@ pub fn mock_deactivation_request(
 ) -> warp::test::RequestBuilder {
     let mi = MockInfo::with_type_and_outcome(&MockRequestType::Deactivation, ask);
     let params = FrlDeactivationQueryParams::mock_from_device_id(device_id);
-    let path = format!("/asnp/frl_connected/v1?{}", params.to_query_params());
+    let path = format!("//asnp/frl_connected/v1?{}", params.to_query_params());
     let mut builder = builder.method("DELETE").path(&path);
     builder = builder
         .header("X-Request-Id", &mi.request_id())
