@@ -515,6 +515,15 @@ mod test {
     }
 
     #[test]
+    fn test_parse_valid_activation_request() {
+        let body = super::FrlActivationRequestBody::valid_from_device_id("test-id");
+        let request: super::FrlActivationRequestBody =
+            serde_json::from_str(body.to_body_string().as_str()).unwrap();
+        assert_eq!(request.device_details.device_id, "test-id");
+        assert_eq!(request.app_details.ngl_app_id, "Photoshop1");
+    }
+
+    #[test]
     fn test_parse_activation_response() {
         let response_str = r#"
         {
@@ -583,6 +592,15 @@ mod test {
         let body: super::FrlDeactivationQueryParams =
             serde_urlencoded::from_str(&params.to_query_params()).unwrap();
         assert_eq!(body.npd_id, "YzQ5ZmIw...elided...jFiOD");
+        assert_eq!(body.device_id, "test-id");
+    }
+
+    #[test]
+    fn test_parse_valid_deactivation_request() {
+        let params = super::FrlDeactivationQueryParams::valid_from_device_id("test-id");
+        let body: super::FrlDeactivationQueryParams =
+            serde_urlencoded::from_str(&params.to_query_params()).unwrap();
+        assert_eq!(body.npd_id, "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz");
         assert_eq!(body.device_id, "test-id");
     }
 
