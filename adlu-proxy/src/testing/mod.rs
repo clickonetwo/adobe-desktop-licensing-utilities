@@ -21,12 +21,9 @@ use std::collections::HashMap;
 use eyre::{eyre, Result, WrapErr};
 use uuid::Uuid;
 
-use crate::cache::Cache;
 pub use frl::{mock_activation_request, mock_deactivation_request};
 
-use crate::settings::{LogLevel, ProxyMode, SettingsVal};
-use crate::Settings;
-
+use super::settings::{LogLevel, ProxyMode, Settings, SettingsVal};
 use super::{cache, logging, proxy, settings};
 
 pub use self::log::mock_log_upload_request;
@@ -38,18 +35,18 @@ mod log;
 struct SharedCache {
     count: usize,
     log_initialized: bool,
-    cache: Option<Cache>,
+    cache: Option<cache::Cache>,
 }
 
 lazy_static::lazy_static! {
     static ref SHARED_CACHE: tokio::sync::RwLock<SharedCache> = tokio::sync::RwLock::new(Default::default());
 }
 
-async fn init_logging_and_cache() -> Cache {
+async fn init_logging_and_cache() -> cache::Cache {
     let mut shared_cache = SHARED_CACHE.write().await;
     if shared_cache.count == 0 {
         // initialize logging and create the cache
-        let tempdir = get_test_directory();
+        let tempdir = get_test_directory().await;
         if !shared_cache.log_initialized {
             let logging = settings::Logging {
                 level: LogLevel::Debug,
@@ -86,12 +83,30 @@ async fn release_cache() {
     }
 }
 
-pub fn get_test_directory() -> std::path::PathBuf {
-    let tempdir = std::env::temp_dir().join("adlu-proxy-test");
-    if std::fs::metadata(&tempdir).is_err() {
-        std::fs::create_dir(&tempdir).expect("Test directory couldn't be created");
+#[derive(Debug, Default)]
+struct Tempdir {
+    exists: bool,
+    path: std::path::PathBuf,
+}
+
+lazy_static::lazy_static! {
+    static ref SHARED_DIRECTORY: tokio::sync::RwLock<Tempdir> = tokio::sync::RwLock::new(Default::default());
+}
+
+pub async fn get_test_directory() -> std::path::PathBuf {
+    // this is a critical section, because it interacts with the file system
+    let mut tempdir = SHARED_DIRECTORY.write().await;
+    if tempdir.exists {
+        tempdir.path.clone()
+    } else {
+        let path = std::env::temp_dir().join("adlu-proxy-test");
+        if std::fs::metadata(&path).is_err() {
+            std::fs::create_dir(&path).expect("Test directory couldn't be created");
+        }
+        tempdir.path = path;
+        tempdir.exists = true;
+        tempdir.path.clone()
     }
-    tempdir
 }
 
 pub async fn get_test_config(mode: &ProxyMode) -> proxy::Config {
@@ -113,6 +128,7 @@ pub enum MockOutcome {
     Unreachable,
     ParseFailure,
     ErrorStatus,
+    FromAdobe,
 }
 
 #[derive(Debug, Clone)]
@@ -145,7 +161,7 @@ impl MockInfo {
     }
 
     pub fn request_id(&self) -> String {
-        self.uuid.clone()
+        format!("Req-Id-{}", &self.uuid)
     }
 
     pub fn session_id(&self) -> String {
@@ -157,7 +173,15 @@ impl MockInfo {
     }
 
     pub fn api_key(&self) -> String {
-        String::from("ngl_mock1")
+        if matches!(self.outcome, MockOutcome::FromAdobe) {
+            if matches!(self.rtype, MockRequestType::Deactivation) {
+                "adobe_licensing_toolkit".to_string()
+            } else {
+                "ngl_photoshop1".to_string()
+            }
+        } else {
+            "ngl_mock1".to_string()
+        }
     }
 }
 
@@ -165,16 +189,17 @@ impl From<&reqwest::Request> for MockInfo {
     fn from(req: &reqwest::Request) -> Self {
         let headers = req.headers();
         let val = if let Some(hdr) = headers.get("X-Request-Id") {
-            hdr.to_str().unwrap()
+            hdr.to_str().unwrap()[7..].to_string()
         } else {
             headers
                 .get("Authorization")
                 .expect("No Authorization header")
                 .to_str()
                 .unwrap()
+                .to_string()
         };
         let map = MOCK_INFO_MAP.read().unwrap();
-        map.get(val).unwrap().clone()
+        map.get(val.as_str()).unwrap().clone()
     }
 }
 
@@ -206,7 +231,10 @@ pub fn mock_parse_failure_response(req: reqwest::Request) -> Result<reqwest::Res
     Ok(resp.into())
 }
 
-pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Response> {
+pub async fn mock_adobe_server(
+    conf: &proxy::Config,
+    req: reqwest::Request,
+) -> Result<reqwest::Response> {
     let mi: MockInfo = (&req).into();
     match mi.outcome {
         MockOutcome::Success => match mi.rtype {
@@ -220,5 +248,9 @@ pub async fn mock_adobe_server(req: reqwest::Request) -> Result<reqwest::Respons
         }
         MockOutcome::ParseFailure => mock_parse_failure_response(req),
         MockOutcome::ErrorStatus => mock_error_status_response(req),
+        MockOutcome::FromAdobe => {
+            let result = conf.client.execute(req).await;
+            result.wrap_err("Network error sending request to Adobe")
+        }
     }
 }

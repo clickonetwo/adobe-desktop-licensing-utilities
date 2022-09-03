@@ -127,6 +127,19 @@ impl FrlDeactivationQueryParams {
         }
     }
 
+    pub fn valid_from_device_id(device_id: &str) -> Self {
+        Self {
+            npd_id: "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz".to_string(),
+            device_id: device_id.to_string(),
+            os_user_id:
+                "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d"
+                    .to_string(),
+            enable_vdi_marker_exists: 0,
+            is_virtual_environment: 0,
+            is_os_user_account_in_domain: 0,
+        }
+    }
+
     pub fn to_query_params(&self) -> String {
         serde_urlencoded::to_string(self).unwrap()
     }
@@ -165,6 +178,32 @@ impl FrlActivationRequestBody {
             },
             npd_id: "YzQ5ZmIw...elided...jFiOD".to_string(),
             npd_precedence: Some(80),
+        }
+    }
+
+    pub fn valid_from_device_id(device_id: &str) -> Self {
+        let timestamp = Timestamp::now();
+        let device_date = timestamp.to_device_date();
+        Self {
+            app_details: FrlAppDetails {
+                current_asnp_id: "".to_string(),
+                ngl_app_id: "Photoshop1".to_string(),
+                ngl_app_version: "23.5.0".to_string(),
+                ngl_lib_version: "1.30.0.1".to_string(),
+            },
+            asnp_template_id: "WXpRNVptSXdPVFl0TkRjME55MDBNR001TFdKaE5HUXRNekZoWmpGaU9ERXpNR1V6e302Y2JjYTViYy01NTZjLTRhNTYtYjgwNy05ZjNjMWFhM2VhZjc".to_string(),
+            device_details: FrlDeviceDetails {
+                current_date: device_date,
+                device_id: device_id.to_string(),
+                enable_vdi_marker_exists: false,
+                is_os_user_account_in_domain: false,
+                is_virtual_environment: false,
+                os_name: "MAC".to_string(),
+                os_user_id: "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d".to_string(),
+                os_version: "12.5.1".to_string(),
+            },
+            npd_id: "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz".to_string(),
+            npd_precedence: Some(80)
         }
     }
 

@@ -192,6 +192,22 @@ impl Timestamp {
         }
     }
 
+    /// When you need a date as an NGL device date in a request.
+    pub fn to_device_date(&self) -> String {
+        Local.timestamp_millis(self.millis).format("%Y-%m-%dT%H:%M:%S.%3f%z").to_string()
+    }
+
+    /// When you need a timestamp from an NGL device date in a request.
+    pub fn from_device_date(s: &str) -> Self {
+        match DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S.%3f%z") {
+            Ok(ts) => Self::from_millis(ts.timestamp_millis()),
+            Err(_) => {
+                warn!("Unexpected time format in device date: {}", s);
+                Self::from_db(s)
+            }
+        }
+    }
+
     /// When you need to store a timestamp as a string field in a database.
     pub fn to_db(&self) -> String {
         self.to_string()

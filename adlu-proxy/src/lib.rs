@@ -121,6 +121,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_activation_to_adobe() {
+        // this device_id is the sha256 of the NIST test string "abc"
+        let device_id =
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let conf = get_test_config(&ProxyMode::Transparent).await;
+        let result = send_activation(&conf, &MockOutcome::FromAdobe, device_id).await;
+        assert_eq!(result, 200);
+        let result = send_deactivation(&conf, &MockOutcome::FromAdobe, device_id).await;
+        assert_eq!(result, 200);
+        release_test_config(conf).await;
+    }
+
+    #[tokio::test]
     async fn test_activation_cache() {
         let conf = get_test_config(&ProxyMode::Isolated).await;
         let result = send_activation(&conf, &MockOutcome::Isolated, "ac1").await;
@@ -179,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_log_upload_report() {
-        let tempdir = get_test_directory();
+        let tempdir = get_test_directory().await;
         let conf = get_test_config(&ProxyMode::Connected).await;
         let result = send_log_upload(&conf, &MockOutcome::Success, "lrr1").await;
         assert_eq!(result, 200);
