@@ -23,7 +23,7 @@ _N.B._ Note that, since you are creating a certificate for an `adobe.io` host, y
 
 ## Transfer the configuration files
 
-Copy the three files [adlu-proxy.conf](adlu-proxy.conf), [adlu-proxy.service](adlu-proxy.service), and [install-adlu-proxy-release.sh](install-adlu-proxy-release.sh) from this repository directory to the `/home/adlu` directory so you can access them in later steps.
+Copy the three files [adlu-proxy.conf](adlu-proxy.conf), [adlu-proxy.service](adlu-proxy.service), and [install-adlu-proxy-release.sh](install-adlu-proxy-release.sh) from this repository directory to the `/home/adlu` directory, so you can access them in later steps.
 
 ## Install the proxy
 
@@ -43,7 +43,7 @@ This step is performed logged in as `adlu` on the target machine.
 3. To start the proxy service, run the command `sudo systemctl start adlu-proxy`.
 4. To check on the proxy service, run the command `systemctl status adlu-proxy` (or `sudo systemctl status adlu-proxy`, if you want to see the boot-time start journal).
 5. To stop the proxy service, run the command `sudo systemctl stop adlu-proxy`.
-6. To unregister the proxy service so it does not start at boot, run the command `sudo systemctl disable adlu-proxy`.
+6. To unregister the proxy service, so it does not start at boot, run the command `sudo systemctl disable adlu-proxy`.
 
 ## Configure nginx
 
