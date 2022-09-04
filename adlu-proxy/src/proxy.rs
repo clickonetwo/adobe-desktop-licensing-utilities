@@ -357,12 +357,15 @@ async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response
 }
 
 #[cfg(test)]
-async fn mock_adobe_server(conf: &Config, request: reqwest::Request) -> Result<reqwest::Response> {
+async fn mock_adobe_server(
+    conf: &Config,
+    request: reqwest::Request,
+) -> Result<reqwest::Response> {
     crate::testing::mock_adobe_server(conf, request).await
 }
 
 #[cfg(not(test))]
-async fn mock_adobe_server(_: reqwest::Request) -> Result<reqwest::Response> {
+async fn mock_adobe_server(_: &Config, _: reqwest::Request) -> Result<reqwest::Response> {
     Err(eyre!("Can't mock except in testing"))
 }
 
