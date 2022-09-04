@@ -121,7 +121,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_activation_to_adobe() {
+    async fn test_activation_deactivation_to_adobe() {
         // this device_id is the sha256 of the NIST test string "abc"
         let device_id =
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
