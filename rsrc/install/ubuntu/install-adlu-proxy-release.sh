@@ -13,20 +13,20 @@ then
   echo You must specify a release tag to download, such as v1.0.0
   exit 1
 fi
-echo "WARNING: This will forcibly remove any existing adlu-proxy directory."
+echo "WARNING: This will forcibly replace any existing adlu-proxy."
 read -p "Proceed? " -n 1 -r
 echo    # move to a new line
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
-  rm -rf adlu-proxy
-  mkdir adlu-proxy
-  if cd adlu-proxy
+  mkdir -p /home/adlu/adlu-proxy
+  if cd /home/adlu/adlu-proxy
   then
     echo "Downloading proxy..."
   else
     echo "Couldn't create and change to adlu-proxy directory"
     exit 1
   fi
+  rm -f adlu-proxy.ubuntu_x86_64
   wget -o /tmp/wget.log https://github.com/clickonetwo/adobe-desktop-licensing-utilities/releases/download/$1/adlu-proxy.ubuntu_x86_64
   if [ -f adlu-proxy.ubuntu_x86_64 ]
   then
