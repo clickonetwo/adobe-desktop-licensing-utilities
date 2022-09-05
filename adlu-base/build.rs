@@ -29,11 +29,11 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=CoreFoundation");
         println!("cargo:rustc-link-lib=framework=IOKit");
     } else if target_os == "windows" {
-        // // on Windows, rust only does x86_64, so there's only one library
-        // println!("cargo:rustc-link-lib=static=ngl");
-        // // provide the library location
-        // println!("cargo:rustc-link-search=native=windows");
-        // // ngl requires some system-provided libraries
-        // println!("cargo:rustc-link-lib=dylib=libcpmt");
+        // on Windows, rust only does x86_64, so there's only one library
+        println!("cargo:rustc-link-lib=static=ngl");
+        // provide the library location
+        println!("cargo:rustc-link-search=native=rsrc/libraries/windows");
+        // ngl requires some system-provided libraries
+        println!("cargo:rustc-link-lib=dylib=libcpmt");
     }
 }

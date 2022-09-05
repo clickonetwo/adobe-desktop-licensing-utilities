@@ -2,7 +2,7 @@
 name = "adlu-decoder"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 license = "AGPLv3"
-version = "1.0.0-alpha.2"
+version = "1.0.0-beta.1"
 edition = "2021"
 
 [[bin]]

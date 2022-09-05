@@ -10,7 +10,7 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "adlu-base"
-version = "1.0.0-alpha.2"
+version = "1.0.0-beta.1"
 dependencies = [
  "base64",
  "bytes",
@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "adlu-decoder"
-version = "1.0.0-alpha.2"
+version = "1.0.0-beta.1"
 dependencies = [
  "adlu-base",
  "adlu-parse",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "adlu-parse"
-version = "1.0.0-alpha.2"
+version = "1.0.0-beta.1"
 dependencies = [
  "adlu-base",
  "bytes",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "adlu-proxy"
-version = "1.0.0-alpha.3"
+version = "1.0.0-beta.1"
 dependencies = [
  "adlu-base",
  "adlu-parse",
@@ -139,9 +139,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.63"
+version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a26fa4d7e3f2eebadf743988fc8aec9fa9a9e82611acafd77c1462ed6262440a"
+checksum = "b9a8f622bcf6ff3df478e9deba3e03e4e04b300f8e6a139e192c05fa3490afc7"
 
 [[package]]
 name = "arc-swap"
@@ -235,9 +235,9 @@ dependencies = [
 
 [[package]]
 name = "block-buffer"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bf7fe51849ea569fd452f37822f606a5cabb684dc918707a0193fd4664ff324"
+checksum = "69cce20737498f97b993470a6e536b8523f0af7892a4f928cceb1ac5e52ebe7e"
 dependencies = [
  "generic-array",
 ]
@@ -594,7 +594,7 @@ version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
 dependencies = [
- "block-buffer 0.10.2",
+ "block-buffer 0.10.3",
  "crypto-common",
  "subtle",
 ]
