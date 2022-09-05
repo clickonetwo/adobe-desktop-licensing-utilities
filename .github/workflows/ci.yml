@@ -67,7 +67,7 @@ jobs:
           command: build
           args: --target ${{ matrix.arch }} --package adlu-proxy  --release --locked
 
-      - name: Build release adlu-decoder (mac only for now, until windows libngl is built)
+      - name: Build release adlu-decoder (mac and win only)
         uses: actions-rs/cargo@v1
         if: ${{ matrix.arch != 'x86_64-unknown-linux-gnu' }}
         with:
