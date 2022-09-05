@@ -25,12 +25,10 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
-#[cfg(target_os = "macos")]
 pub use ngl::get_adobe_device_id;
 pub use signal::get_first_interrupt;
 
 mod certificate;
-#[cfg(target_os = "macos")]
 mod ngl;
 mod signal;
 
@@ -334,7 +332,6 @@ mod tests {
     use super::Timestamp;
 
     #[test]
-    #[cfg(target_os = "macos")]
     fn test_get_device_id() {
         let id = super::get_adobe_device_id();
         println!("The test machine's Adobe device ID is '{}'", id);
