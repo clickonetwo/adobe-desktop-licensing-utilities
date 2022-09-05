@@ -1,0 +1,18 @@
+[Unit]
+Description=ADLU Proxy for FRL Activation and NUL log collection
+Requires=network.target
+After=network.target
+StartLimitIntervalSec=6
+StartLimitBurst=3
+
+[Service]
+User=adlu
+Type=simple
+Restart=always
+RestartSec=1
+WorkingDirectory=/home/adlu/adlu-proxy
+ExecStart=/home/adlu/adlu-proxy/adlu-proxy serve
+ExecStop=killall -SIGINT adlu-proxy
+
+[Install]
+WantedBy=multi-user.target

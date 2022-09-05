@@ -350,19 +350,22 @@ async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response
     let request =
         req.to_network(builder).build().wrap_err("Failure building network request")?;
     if cfg!(test) {
-        mock_adobe_server(request).await.wrap_err("Error mocking network request")
+        mock_adobe_server(conf, request).await.wrap_err("Error mocking network request")
     } else {
         conf.client.execute(request).await.wrap_err("Error executing network request")
     }
 }
 
 #[cfg(test)]
-async fn mock_adobe_server(request: reqwest::Request) -> Result<reqwest::Response> {
-    crate::testing::mock_adobe_server(request).await
+async fn mock_adobe_server(
+    conf: &Config,
+    request: reqwest::Request,
+) -> Result<reqwest::Response> {
+    crate::testing::mock_adobe_server(conf, request).await
 }
 
 #[cfg(not(test))]
-async fn mock_adobe_server(_: reqwest::Request) -> Result<reqwest::Response> {
+async fn mock_adobe_server(_: &Config, _: reqwest::Request) -> Result<reqwest::Response> {
     Err(eyre!("Can't mock except in testing"))
 }
 

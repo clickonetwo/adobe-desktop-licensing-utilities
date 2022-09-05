@@ -29,7 +29,11 @@ pub fn mock_activation_request(
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
     let mi = MockInfo::with_type_and_outcome(&MockRequestType::Activation, ask);
-    let body = FrlActivationRequestBody::mock_from_device_id(device_id);
+    let body = if matches!(ask, MockOutcome::FromAdobe) {
+        FrlActivationRequestBody::valid_from_device_id(device_id)
+    } else {
+        FrlActivationRequestBody::mock_from_device_id(device_id)
+    };
     let mut builder = builder.method("POST").path("//asnp/frl_connected/values/v2");
     builder = builder
         .header("X-Request-Id", &mi.request_id())
@@ -60,7 +64,11 @@ pub fn mock_deactivation_request(
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
     let mi = MockInfo::with_type_and_outcome(&MockRequestType::Deactivation, ask);
-    let params = FrlDeactivationQueryParams::mock_from_device_id(device_id);
+    let params = if matches!(ask, MockOutcome::FromAdobe) {
+        FrlDeactivationQueryParams::valid_from_device_id(device_id)
+    } else {
+        FrlDeactivationQueryParams::mock_from_device_id(device_id)
+    };
     let path = format!("//asnp/frl_connected/v1?{}", params.to_query_params());
     let mut builder = builder.method("DELETE").path(&path);
     builder = builder
