@@ -67,6 +67,18 @@ pub struct LogSession {
 }
 
 impl LogSession {
+    pub fn has_info(&self) -> bool {
+        self.session_start.is_some()
+            || self.session_end.is_some()
+            || self.app_id.is_some()
+            || self.app_version.is_some()
+            || self.app_locale.is_some()
+            || self.ngl_version.is_some()
+            || self.os_name.is_some()
+            || self.os_version.is_some()
+            || self.user_id.is_some()
+    }
+
     pub fn merge(&self, other: &LogSession) -> Result<Self> {
         if self.session_id != other.session_id {
             Err(eyre!("Can't merge sessions with different IDs"))
@@ -450,5 +462,41 @@ mod test {
         assert!(session.ngl_version.is_some());
         assert!(session.user_id.is_some());
         assert_eq!(session.final_entry, session.session_end.clone().unwrap());
+    }
+
+    #[test]
+    fn test_has_info_and_merge() {
+        fn path(s: &str) -> String {
+            format!("../rsrc/logs/mac/NGLClient_AcrobatDC122.1.20169.7 {}.log.bin", s)
+        }
+        let dates = vec![
+            "2022-08-06 10-29-50-833",
+            "2022-08-06 15-59-29-579",
+            "2022-08-07 06-16-59-994",
+            "2022-08-07 10-17-51-574",
+            "2022-08-07 10-17-51-576",
+            "2022-08-07 22-55-02-818",
+            "2022-08-08 05-58-47-733",
+            "2022-08-08 09-25-33-719",
+            "2022-08-08 09-25-33-720",
+        ];
+        let mut sessions: Vec<LogSession> = vec![];
+        for date in dates {
+            let data = bytes::Bytes::from(read_to_string(path(date)).unwrap());
+            sessions.append(&mut super::parse_log_data(data));
+        }
+        sessions.reverse();
+        let mut result = sessions.pop().unwrap();
+        assert!(result.has_info(), "No info in initial session");
+        while sessions.len() > 1 {
+            let next = sessions.pop().unwrap();
+            assert!(!next.has_info(), "Info in intermediate session");
+            result = result.merge(&next).expect("Couldn't merge");
+            assert!(result.session_end.is_none(), "Found session end");
+        }
+        let next = sessions.pop().unwrap();
+        assert!(next.has_info(), "No session end in last session");
+        result = result.merge(&next).expect("Couldn't merge");
+        assert!(result.session_end.is_some(), "No session end in merge of last!");
     }
 }
