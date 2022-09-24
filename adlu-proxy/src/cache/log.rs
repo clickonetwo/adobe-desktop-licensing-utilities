@@ -38,9 +38,9 @@ pub async fn clear(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
-pub async fn report(pool: &SqlitePool, path: &str) -> Result<()> {
+pub async fn report(pool: &SqlitePool, path: &str, info_only: bool) -> Result<()> {
     let mut writer = csv::WriterBuilder::new().from_path(path)?;
-    let sessions = fetch_log_sessions(pool).await?;
+    let sessions = fetch_log_sessions(pool, info_only).await?;
     for session in sessions.iter() {
         writer.serialize(session)?;
     }
@@ -97,13 +97,19 @@ async fn fetch_log_session(
     }
 }
 
-pub(crate) async fn fetch_log_sessions(pool: &SqlitePool) -> Result<Vec<LogSession>> {
+pub(crate) async fn fetch_log_sessions(
+    pool: &SqlitePool,
+    info_only: bool,
+) -> Result<Vec<LogSession>> {
     debug!("Fetching all log sessions");
     let mut result = vec![];
     let q_str = "select * from log_sessions";
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
     for row in rows {
-        result.push(session_from_row(&row));
+        let session = session_from_row(&row);
+        if !info_only || session.has_info() {
+            result.push(session);
+        }
     }
     debug!("Fetched {} sessions", result.len());
     Ok(result)

@@ -29,7 +29,7 @@ Copy the three files [adlu-proxy.conf](adlu-proxy.conf), [adlu-proxy.service](ad
 
 This step is performed logged in as `adlu` on the target machine.
 
-1. Give the command `./install-adlu-proxy-release.sh tagname`, where _tagname_ is one of the released tags on GitHub (e.g., `v1.0.0-beta.1`).  This will create an `adlu-proxy` subdirectory and install the Ubuntu build from that release into that directory.  It will then prompt you to configure your proxy.
+1. Give the command `./install-adlu-proxy-release.sh tagname`, where _tagname_ is one of the released tags on GitHub (e.g., `v1.0.0`).  This will create an `adlu-proxy` subdirectory and install the Ubuntu build from that release into that directory.  It will then prompt you to configure your proxy.
 2. Configure the proxy to use plain HTTP on 127.0.0.1 (localhost) port 8080, because that's where nginx will direct the incoming traffic.  Do not have the proxy listen to external addresses.
 
 _N.B._ If you have previously installed an earlier version of the proxy, your existing configuration file will not be disturbed, so you can just accept all the same options you had set before during the configuration process.
