@@ -28,7 +28,7 @@ use sqlx::{
     ConnectOptions,
 };
 
-use adlu_parse::protocol::{LogSession, Request, Response};
+use adlu_parse::protocol::{Request, Response};
 
 mod frl;
 mod log;
@@ -85,8 +85,8 @@ impl Db {
         frl::export(&self.pool, path).await
     }
 
-    pub async fn report(&self, path: &str) -> Result<()> {
-        log::report(&self.pool, path).await
+    pub async fn report(&self, path: &str, info_only: bool) -> Result<()> {
+        log::report(&self.pool, path, info_only).await
     }
 
     pub async fn store_request(&self, req: &Request) {
@@ -173,10 +173,6 @@ impl Db {
 
     pub async fn fetch_unanswered_requests(&self) -> Result<Vec<Request>> {
         frl::fetch_unanswered_requests(&self.pool).await
-    }
-
-    pub async fn fetch_log_sessions(&self) -> Result<Vec<LogSession>> {
-        log::fetch_log_sessions(&self.pool).await
     }
 }
 
