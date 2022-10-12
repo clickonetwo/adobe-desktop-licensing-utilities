@@ -61,8 +61,8 @@ pub async fn run(
             .export(&export_path)
             .await
             .wrap_err(format!("Failed to export to {}", &export_path)),
-        Command::Report { to_path: report_path } => cache
-            .report(&report_path, true)
+        Command::Report { empty, timezone, rfc3339, to_path: report_path } => cache
+            .report(&report_path, empty, timezone, rfc3339)
             .await
             .wrap_err(format!("Failed to report to {}", &report_path)),
     };
@@ -197,7 +197,10 @@ mod tests {
         let result = send_log_upload(&conf, &MockOutcome::Success, "lrr1").await;
         assert_eq!(result, 200);
         let path = tempdir.join("test-report1.csv");
-        conf.cache.report(path.to_str().unwrap(), true).await.expect("Report failed");
+        conf.cache
+            .report(path.to_str().unwrap(), false, false, false)
+            .await
+            .expect("Report failed");
         let content = std::fs::read_to_string(&path).expect("Can't read report");
         assert!(content.contains("lrr1"));
     }

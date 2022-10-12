@@ -240,6 +240,27 @@ impl Timestamp {
             Some(Self::from_db(s))
         }
     }
+
+    /// When you want it as an ISO-8601 date
+    pub fn format_iso_8601(&self, timezone: bool) -> String {
+        if timezone {
+            Utc.timestamp_millis(self.millis)
+                .format("%Y-%m-%dT%H:%M:%S%.3f%z")
+                .to_string()
+        } else {
+            Utc.timestamp_millis(self.millis).format("%Y-%m-%dT%H:%M:%S%.3f").to_string()
+        }
+    }
+
+    /// When you want it as an RFC-3339 date
+    /// (Without timezone, we use space as separator)
+    pub fn format_rfc_3339(&self, timezone: bool) -> String {
+        if timezone {
+            Utc.timestamp_millis(self.millis).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+        } else {
+            Utc.timestamp_millis(self.millis).format("%Y-%m-%d %H:%M:%S%.3f").to_string()
+        }
+    }
 }
 
 impl Default for Timestamp {
