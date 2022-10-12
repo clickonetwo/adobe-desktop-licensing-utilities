@@ -85,8 +85,14 @@ impl Db {
         frl::export(&self.pool, path).await
     }
 
-    pub async fn report(&self, path: &str, info_only: bool) -> Result<()> {
-        log::report(&self.pool, path, info_only).await
+    pub async fn report(
+        &self,
+        path: &str,
+        empty: bool,
+        timezone: bool,
+        rfc3339: bool,
+    ) -> Result<()> {
+        log::report(&self.pool, path, empty, timezone, rfc3339).await
     }
 
     pub async fn store_request(&self, req: &Request) {

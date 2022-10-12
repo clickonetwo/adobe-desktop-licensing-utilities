@@ -38,13 +38,72 @@ pub async fn clear(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
-pub async fn report(pool: &SqlitePool, path: &str, info_only: bool) -> Result<()> {
+pub async fn report(
+    pool: &SqlitePool,
+    path: &str,
+    empty: bool,
+    timezone: bool,
+    rfc3339: bool,
+) -> Result<()> {
     let mut writer = csv::WriterBuilder::new().from_path(path)?;
-    let sessions = fetch_log_sessions(pool, info_only).await?;
+    writer.write_record(report_headers(timezone))?;
+    let sessions = fetch_log_sessions(pool, !empty).await?;
     for session in sessions.iter() {
-        writer.serialize(session)?;
+        let record = report_record(session, timezone, rfc3339);
+        writer.write_record(record)?;
     }
     Ok(())
+}
+
+fn report_headers(timezone: bool) -> Vec<String> {
+    let time_suffix = if timezone { "" } else { " (UTC)" };
+    let mut result = vec![];
+    result.push("Session ID".to_string());
+    result.push(format!("Initial Entry{time_suffix}"));
+    result.push(format!("Final Entry{time_suffix}"));
+    result.push(format!("Session Start{time_suffix}"));
+    result.push(format!("Session End{time_suffix}"));
+    result.push("App ID".to_string());
+    result.push("App Version".to_string());
+    result.push("App Locale".to_string());
+    result.push("NGL Version".to_string());
+    result.push("OS Name".to_string());
+    result.push("OS Version".to_string());
+    result.push("User ID".to_string());
+    result
+}
+
+fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<String> {
+    let empty = "".to_string();
+    let format_ts = |ts: &Timestamp| -> String {
+        if rfc3339 {
+            ts.format_rfc_3339(timezone)
+        } else {
+            ts.format_iso_8601(timezone)
+        }
+    };
+    let format_ots = |ots: &Option<Timestamp>| -> String {
+        if let Some(ts) = ots {
+            format_ts(ts)
+        } else {
+            empty.clone()
+        }
+    };
+    let result = vec![
+        session.session_id.clone(),
+        format_ts(&session.initial_entry),
+        format_ts(&session.final_entry),
+        format_ots(&session.session_start),
+        format_ots(&session.session_end),
+        session.app_id.as_ref().unwrap_or(&empty).clone(),
+        session.app_version.as_ref().unwrap_or(&empty).clone(),
+        session.app_locale.as_ref().unwrap_or(&empty).clone(),
+        session.ngl_version.as_ref().unwrap_or(&empty).clone(),
+        session.os_name.as_ref().unwrap_or(&empty).clone(),
+        session.os_version.as_ref().unwrap_or(&empty).clone(),
+        session.user_id.as_ref().unwrap_or(&empty).clone(),
+    ];
+    result
 }
 
 pub async fn store_upload_request(
@@ -116,7 +175,7 @@ pub(crate) async fn fetch_log_sessions(
 }
 
 async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()> {
-    fn optval(s: &Option<String>) -> String {
+    fn opt_val(s: &Option<String>) -> String {
         match s {
             Some(s) => s.clone(),
             None => String::new(),
@@ -140,13 +199,13 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
         .bind(session.final_entry.to_db())
         .bind(Timestamp::optional_to_db(&session.session_start))
         .bind(Timestamp::optional_to_db(&session.session_end))
-        .bind(optval(&session.app_id))
-        .bind(optval(&session.app_version))
-        .bind(optval(&session.app_locale))
-        .bind(optval(&session.ngl_version))
-        .bind(optval(&session.os_name))
-        .bind(optval(&session.os_version))
-        .bind(optval(&session.user_id))
+        .bind(opt_val(&session.app_id))
+        .bind(opt_val(&session.app_version))
+        .bind(opt_val(&session.app_locale))
+        .bind(opt_val(&session.ngl_version))
+        .bind(opt_val(&session.os_name))
+        .bind(opt_val(&session.os_version))
+        .bind(opt_val(&session.user_id))
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
@@ -155,7 +214,7 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
 }
 
 fn session_from_row(row: &SqliteRow) -> LogSession {
-    fn optval(s: String) -> Option<String> {
+    fn opt_val(s: String) -> Option<String> {
         if s.is_empty() {
             None
         } else {
@@ -168,13 +227,13 @@ fn session_from_row(row: &SqliteRow) -> LogSession {
         final_entry: Timestamp::from_db(row.get("final_entry")),
         session_start: Timestamp::optional_from_db(row.get("session_start")),
         session_end: Timestamp::optional_from_db(row.get("session_end")),
-        app_id: optval(row.get("app_id")),
-        app_version: optval(row.get("app_version")),
-        app_locale: optval(row.get("app_locale")),
-        ngl_version: optval(row.get("ngl_version")),
-        os_name: optval(row.get("os_name")),
-        os_version: optval(row.get("os_version")),
-        user_id: optval(row.get("user_id")),
+        app_id: opt_val(row.get("app_id")),
+        app_version: opt_val(row.get("app_version")),
+        app_locale: opt_val(row.get("app_locale")),
+        ngl_version: opt_val(row.get("ngl_version")),
+        os_name: opt_val(row.get("os_name")),
+        os_version: opt_val(row.get("os_version")),
+        user_id: opt_val(row.get("user_id")),
     }
 }
 

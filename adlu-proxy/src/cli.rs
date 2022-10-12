@@ -70,5 +70,20 @@ pub enum Command {
     /// Export to other proxy's database
     Export { to_path: String },
     /// Report on database contents
-    Report { to_path: String },
+    Report {
+        #[clap(short, long)]
+        // Show sessions that are empty (devoid of data)
+        empty: bool,
+
+        #[clap(short, long)]
+        /// Include timezone in report dates (off by default)
+        /// (Note: reported dates and times are always in UTC)
+        timezone: bool,
+
+        #[clap(short, long)]
+        /// Use RFC-3339 dates (ISO-8601 by default)
+        rfc3339: bool,
+
+        to_path: String,
+    },
 }
