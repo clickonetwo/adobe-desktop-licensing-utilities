@@ -16,7 +16,11 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use eyre::Result;
+mod frl;
+mod log;
+mod nul;
+
+use eyre::{eyre, Result, WrapErr};
 use warp::{Filter, Reply};
 
 use adlu_base::Timestamp;
@@ -27,9 +31,11 @@ pub use frl::{
     FrlDeviceDetails,
 };
 pub use log::{parse_log_data, LogSession, LogUploadRequest, LogUploadResponse};
-
-mod frl;
-mod log;
+pub use nul::{
+    NulActivationRequest, NulActivationRequestBody, NulActivationResponse,
+    NulActivationResponseBody, NulAppDetails, NulDeactivationRequest,
+    NulDeactivationResponse, NulDeactivationResponseBody, NulDeviceDetails,
+};
 
 /// There are two kinds of requests and responses: activation
 /// and deactivation.  But pretty much all the actions you
@@ -196,5 +202,12 @@ impl From<Response> for warp::reply::Response {
 impl Reply for Response {
     fn into_response(self) -> warp::reply::Response {
         self.into()
+    }
+}
+
+fn get_response_id(response: &reqwest::Response) -> Result<String> {
+    match response.headers().get("X-Request-Id") {
+        None => Err(eyre!("No request-id")),
+        Some(val) => Ok(val.to_str().wrap_err("Invalid request-id")?.to_string()),
     }
 }

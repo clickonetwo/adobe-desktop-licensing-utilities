@@ -21,6 +21,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 Provides the top-level proxy framework, both insecure and secure.  This includes a status endpoint
 that can be used to ensure the proxy is up and find out which services it is providing.
  */
+use std::collections::HashMap;
 use std::convert::Infallible;
 
 use eyre::{eyre, Report, Result, WrapErr};
@@ -197,6 +198,8 @@ pub fn routes(
         .or(activate_route(conf.clone()))
         .or(deactivate_route(conf.clone()))
         .or(upload_route(conf))
+        .or(record_post_route())
+        .or(record_delete_route())
         .with(warp::log("route::summary"))
 }
 
@@ -210,6 +213,20 @@ pub fn status_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get().and(warp::path("status")).and(with_conf(conf)).then(status)
+}
+
+pub fn record_post_route() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone
+{
+    warp::post()
+        .and(warp::path::full())
+        .and(warp::body::content_length_limit(32_000_000))
+        .and(warp::body::bytes())
+        .then(record_post)
+}
+
+pub fn record_delete_route(
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::delete().and(warp::path::full()).and(warp::query()).then(record_delete)
 }
 
 pub fn activate_route(
@@ -248,6 +265,27 @@ pub async fn status(conf: Config) -> reply::Response {
     let body =
         serde_json::json!({"statusCode": 200, "version": &agent(), "status": &status});
     proxy_reply(200, reply::json(&body))
+}
+
+pub async fn record_post(
+    path: warp::path::FullPath,
+    body: bytes::Bytes,
+) -> reply::Response {
+    let path = path.as_str().to_string();
+    info!("POST request to path: {}", &path);
+    let content = String::from_utf8_lossy(&body);
+    debug!("Request body is: {}", content);
+    proxy_offline_reply()
+}
+
+pub async fn record_delete(
+    path: warp::path::FullPath,
+    query: HashMap<String, String>,
+) -> reply::Response {
+    let path = path.as_str().to_string();
+    info!("DELETE request to path: {}", &path);
+    debug!("Query is: {:?}", query);
+    proxy_offline_reply()
 }
 
 pub async fn process_web_request(req: Request, conf: Config) -> reply::Response {

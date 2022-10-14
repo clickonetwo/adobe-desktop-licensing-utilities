@@ -1,0 +1,70 @@
+Premiere as of 2022-10-12:
+Endpoint: /asnp/nud/v4
+Body:
+{
+	"appDetails" : 
+	{
+		"appNameForLocale" : "Premiere Pro",
+		"appVersionForLocale" : "2022",
+		"currentAsnpId" : "57ba50f3-e5d8-4509-8718-cadfd8b22286",
+		"eTag" : "_9tdZvyiUM8CC_nKU4s98fVIDBc74U1Vh8r2J_XKjXn7AIqaH48IfvM7ZkWGl-g9".to_string(),
+		"locale" : "en_US",
+		"nglAppId" : "PremierePro1",
+		"nglAppLaunchState" : "WORKFLOW_STATE",
+		"nglAppProfileScope" : "",
+		"nglAppVersion" : "22.6.2",
+		"nglLibRuntimeMode" : "NAMED_USER_ONLINE",
+		"nglLibVersion" : "1.30.0.1"
+	},
+	"deviceDetails" : 
+	{
+		"currentDate" : "2022-10-13T00:52:53.058-0400",
+		"currentTimestamp" : 1665636773396,
+		"deviceId" : "2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa",
+		"deviceName" : "dan",
+		"embeddedBrowserVersion" : "WK-17613.3.9.1.16",
+		"enableVdiMarkerExists" : false,
+		"isOsUserAccountInDomain" : false,
+		"isVirtualEnvironment" : false,
+		"osName" : "MAC",
+		"osUserId" : "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d",
+		"osVersion" : "12.6.0"
+	},
+	"deviceTokenHash" : "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b"
+}
+
+Illustrator as of 2022-10-13:
+Endpoint: /asnp/nud/v4
+Body:
+{
+	"appDetails" : 
+	{
+		"appNameForLocale" : "Illustrator",
+		"appVersionForLocale" : "2022",
+		"currentAsnpId" : "4b5d1875-49f8-4f0d-83ff-01fab719e0fe",
+		"eTag" : "x2SvaKQKFMLphykNqlaYmH3tApkaH0pwFjjSQDN3qaZCDMTVFgQQQboK5XUBxyO2",
+		"locale" : "en_US",
+		"nglAppId" : "Illustrator1",
+		"nglAppLaunchState" : "WORKFLOW_STATE",
+		"nglAppProfileScope" : "",
+		"nglAppVersion" : "26.5.0",
+		"nglLibRuntimeMode" : "NAMED_USER_ONLINE",
+		"nglLibVersion" : "1.30.0.2"
+	},
+	"deviceDetails" : 
+	{
+		"currentDate" : "2022-10-13T10:00:16.775-0400",
+		"currentTimestamp" : 1665669616428,
+		"deviceId" : "2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa",
+		"deviceName" : "dan",
+		"embeddedBrowserVersion" : "WK-17613.3.9.1.16",
+		"enableVdiMarkerExists" : false,
+		"isOsUserAccountInDomain" : false,
+		"isVirtualEnvironment" : false,
+		"osName" : "MAC",
+		"osUserId" : "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d",
+		"osVersion" : "12.6.0"
+	},
+	"deviceTokenHash" : "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b"
+}
+
