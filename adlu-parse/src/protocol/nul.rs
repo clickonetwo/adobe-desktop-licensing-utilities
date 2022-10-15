@@ -455,7 +455,7 @@ mod test {
         let request: super::NulActivationRequestBody =
             serde_json::from_str(body.to_body_string().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
-        assert_eq!(request.app_details.ngl_app_id, "Photoshop1");
+        assert_eq!(request.app_details.ngl_app_id, "PremierePro1");
     }
 
     #[test]
@@ -514,9 +514,9 @@ mod test {
 
     #[test]
     fn test_parse_deactivation_request() {
-        let query = "npdId=YzQ5ZmIw...elided...zMGUz&deviceId=2c93c879...elided...28c2fa&osUserId=b693be35...elided...e084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0";
+        let query = "deviceId=2c93c879...elided...28c2fa&osUserId=b693be35...elided...e084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0";
         let parse: HashMap<String, String> = serde_urlencoded::from_str(query).unwrap();
-        assert_eq!(parse["npd_id"], "YzQ5ZmIw...elided...zMGUz");
-        assert_eq!(parse["device_id"], "b693be35...elided...e084d");
+        assert_eq!(parse["deviceId"], "2c93c879...elided...28c2fa");
+        assert_eq!(parse["osUserId"], "b693be35...elided...e084d");
     }
 }
