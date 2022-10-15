@@ -18,7 +18,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 mod frl;
 mod log;
-mod nul;
+mod named_user;
 
 use eyre::{eyre, Result, WrapErr};
 use warp::{Filter, Reply};
@@ -31,7 +31,7 @@ pub use frl::{
     FrlDeviceDetails,
 };
 pub use log::{parse_log_data, LogSession, LogUploadRequest, LogUploadResponse};
-pub use nul::{
+pub use named_user::{
     NulActivationRequest, NulActivationRequestBody, NulActivationResponse,
     NulActivationResponseBody, NulAppDetails, NulDeactivationRequest,
     NulDeactivationResponse, NulDeactivationResponseBody, NulDeviceDetails,
