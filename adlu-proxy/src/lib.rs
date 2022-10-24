@@ -73,27 +73,40 @@ mod tests {
     use super::proxy;
     use super::settings::ProxyMode;
     use super::testing::*;
+    use std::time::Duration;
 
-    async fn send_activation(
+    async fn send_frl_activation(
         conf: &proxy::Config,
         outcome: &MockOutcome,
         device_id: &str,
     ) -> u16 {
-        let filter = proxy::activate_route(conf.clone());
+        let filter = proxy::frl_activate_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_activation_request(outcome, device_id, builder);
+        builder = frl::mock_activation_request(outcome, device_id, builder);
         let response = builder.reply(&filter).await;
         response.status().as_u16()
     }
 
-    async fn send_deactivation(
+    async fn send_frl_deactivation(
         conf: &proxy::Config,
         outcome: &MockOutcome,
         device_id: &str,
     ) -> u16 {
-        let filter = proxy::deactivate_route(conf.clone());
+        let filter = proxy::frl_deactivate_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_deactivation_request(outcome, device_id, builder);
+        builder = frl::mock_deactivation_request(outcome, device_id, builder);
+        let response = builder.reply(&filter).await;
+        response.status().as_u16()
+    }
+
+    async fn send_nul_activation(
+        conf: &proxy::Config,
+        outcome: &MockOutcome,
+        device_id: &str,
+    ) -> u16 {
+        let filter = proxy::nul_activate_route(conf.clone());
+        let mut builder = warp::test::request();
+        builder = named_user::mock_activation_request(outcome, device_id, builder);
         let response = builder.reply(&filter).await;
         response.status().as_u16()
     }
@@ -105,78 +118,89 @@ mod tests {
     ) -> u16 {
         let filter = proxy::upload_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = mock_log_upload_request(outcome, session_id, builder);
+        builder = log::mock_log_upload_request(outcome, session_id, builder);
         let response = builder.reply(&filter).await;
         response.status().as_u16()
     }
 
     #[tokio::test]
-    async fn test_activation_request() {
+    async fn test_frl_activation_request() {
         let conf = get_test_config(&ProxyMode::Connected).await;
-        let result = send_activation(&conf, &MockOutcome::Success, "ar1").await;
+        let result = send_frl_activation(&conf, &MockOutcome::Success, "ar1").await;
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 
     #[tokio::test]
-    async fn test_activation_deactivation_to_adobe() {
+    async fn test_frl_activation_deactivation_to_adobe() {
         // this device_id is the sha256 of the NIST test string "abc"
         let device_id =
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
         let conf = get_test_config(&ProxyMode::Transparent).await;
-        let result = send_activation(&conf, &MockOutcome::FromAdobe, device_id).await;
+        let result = send_frl_activation(&conf, &MockOutcome::FromAdobe, device_id).await;
         assert_eq!(result, 200);
-        let result = send_deactivation(&conf, &MockOutcome::FromAdobe, device_id).await;
+        // give the server database time to replicate
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let result =
+            send_frl_deactivation(&conf, &MockOutcome::FromAdobe, device_id).await;
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 
     #[tokio::test]
-    async fn test_activation_cache() {
+    async fn test_frl_activation_cache() {
         let conf = get_test_config(&ProxyMode::Isolated).await;
-        let result = send_activation(&conf, &MockOutcome::Isolated, "ac1").await;
+        let result = send_frl_activation(&conf, &MockOutcome::Isolated, "ac1").await;
         assert_eq!(result, 502);
         let conf = conf.clone_with_mode(&ProxyMode::Connected);
-        let result = send_activation(&conf, &MockOutcome::Success, "ac1").await;
+        let result = send_frl_activation(&conf, &MockOutcome::Success, "ac1").await;
         assert_eq!(result, 200);
         let conf = conf.clone_with_mode(&ProxyMode::Isolated);
-        let result = send_activation(&conf, &MockOutcome::Isolated, "ac1").await;
+        let result = send_frl_activation(&conf, &MockOutcome::Isolated, "ac1").await;
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 
     #[tokio::test]
-    async fn test_deactivation_request() {
+    async fn test_frl_deactivation_request() {
         let conf = get_test_config(&ProxyMode::Connected).await;
-        let result = send_deactivation(&conf, &MockOutcome::Success, "dr1").await;
+        let result = send_frl_deactivation(&conf, &MockOutcome::Success, "dr1").await;
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 
     #[tokio::test]
-    async fn test_deactivation_cache() {
+    async fn test_frl_deactivation_cache() {
         let conf = get_test_config(&ProxyMode::Isolated).await;
-        let result = send_deactivation(&conf, &MockOutcome::Isolated, "dc1").await;
+        let result = send_frl_deactivation(&conf, &MockOutcome::Isolated, "dc1").await;
         assert_eq!(result, 502);
         let conf = conf.clone_with_mode(&ProxyMode::Connected);
-        let result = send_deactivation(&conf, &MockOutcome::Success, "dc1").await;
+        let result = send_frl_deactivation(&conf, &MockOutcome::Success, "dc1").await;
         assert_eq!(result, 200);
         let conf = conf.clone_with_mode(&ProxyMode::Isolated);
-        let result = send_deactivation(&conf, &MockOutcome::Isolated, "dc1").await;
+        let result = send_frl_deactivation(&conf, &MockOutcome::Isolated, "dc1").await;
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 
     #[tokio::test]
-    async fn test_activation_deactivation_sequence() {
+    async fn test_frl_activation_deactivation_sequence() {
         let conf = get_test_config(&ProxyMode::Connected).await;
-        let result = send_activation(&conf, &MockOutcome::Success, "ads1").await;
+        let result = send_frl_activation(&conf, &MockOutcome::Success, "ads1").await;
         assert_eq!(result, 200);
-        let result = send_deactivation(&conf, &MockOutcome::Success, "ads1").await;
+        let result = send_frl_deactivation(&conf, &MockOutcome::Success, "ads1").await;
         assert_eq!(result, 200);
         let conf = conf.clone_with_mode(&ProxyMode::Isolated);
-        let result = send_activation(&conf, &MockOutcome::Isolated, "ads1").await;
+        let result = send_frl_activation(&conf, &MockOutcome::Isolated, "ads1").await;
         assert_eq!(result, 502);
+        release_test_config(conf).await;
+    }
+
+    #[tokio::test]
+    async fn test_nul_activation_request() {
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let result = send_nul_activation(&conf, &MockOutcome::Success, "nul1").await;
+        assert_eq!(result, 200);
         release_test_config(conf).await;
     }
 

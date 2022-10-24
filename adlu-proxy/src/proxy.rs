@@ -195,8 +195,9 @@ pub fn routes(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     status_route(conf.clone())
-        .or(activate_route(conf.clone()))
-        .or(deactivate_route(conf.clone()))
+        .or(frl_activate_route(conf.clone()))
+        .or(frl_deactivate_route(conf.clone()))
+        .or(nul_activate_route(conf.clone()))
         .or(upload_route(conf))
         .or(record_post_route())
         .or(record_delete_route())
@@ -229,22 +230,32 @@ pub fn record_delete_route(
     warp::delete().and(warp::path::full()).and(warp::query()).then(record_delete)
 }
 
-pub fn activate_route(
+pub fn frl_activate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(warp::path!("asnp" / "frl_connected" / "values" / "v2"))
-        .and(Request::activation_filter())
+        .and(Request::frl_activation_filter())
         .and(with_conf(conf))
         .then(process_web_request)
 }
 
-pub fn deactivate_route(
+pub fn frl_deactivate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::delete()
         .and(warp::path!("asnp" / "frl_connected" / "v1"))
-        .and(Request::deactivation_filter())
+        .and(Request::frl_deactivation_filter())
+        .and(with_conf(conf))
+        .then(process_web_request)
+}
+
+pub fn nul_activate_route(
+    conf: Config,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    warp::post()
+        .and(warp::path!("asnp" / "nud" / "v4"))
+        .and(Request::nul_activation_filter())
         .and(with_conf(conf))
         .then(process_web_request)
 }
@@ -254,7 +265,7 @@ pub fn upload_route(
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
         .and(warp::path!("ulecs" / "v1"))
-        .and(Request::log_filter())
+        .and(Request::log_upload_filter())
         .and(with_conf(conf))
         .then(process_web_request)
 }
@@ -367,24 +378,34 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
 
 async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response> {
     let method = match req {
-        Request::Activation(_) => http::Method::POST,
-        Request::Deactivation(_) => http::Method::DELETE,
+        Request::FrlActivation(_) => http::Method::POST,
+        Request::FrlDeactivation(_) => http::Method::DELETE,
+        Request::NulActivation(_) => http::Method::POST,
+        Request::NulDeactivation(_) => http::Method::DELETE,
         Request::LogUpload(_) => http::Method::POST,
     };
     let endpoint = match req {
-        Request::Activation(_) => {
+        Request::FrlActivation(_) => {
             format!("{}/{}", &conf.frl_server, "asnp/frl_connected/values/v2")
         }
-        Request::Deactivation(_) => {
+        Request::FrlDeactivation(_) => {
             format!("{}/{}", &conf.frl_server, "asnp/frl_connected/v1")
+        }
+        Request::NulActivation(_) => {
+            format!("{}/{}", &conf.frl_server, "asnp/nud/v4")
+        }
+        Request::NulDeactivation(_) => {
+            format!("{}/{}", &conf.frl_server, "asnp/nud/v1")
         }
         Request::LogUpload(_) => {
             format!("{}/{}", &conf.log_server, "ulecs/v1")
         }
     };
     let response_type = match req {
-        Request::Activation(_) => "application/json",
-        Request::Deactivation(_) => "application/json",
+        Request::FrlActivation(_) => "application/json",
+        Request::FrlDeactivation(_) => "application/json",
+        Request::NulActivation(_) => "application/json",
+        Request::NulDeactivation(_) => "application/json",
         Request::LogUpload(_) => "*/*",
     };
     let builder = conf

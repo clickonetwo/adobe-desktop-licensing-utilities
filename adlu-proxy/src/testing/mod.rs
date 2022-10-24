@@ -21,15 +21,12 @@ use std::collections::HashMap;
 use eyre::{eyre, Result, WrapErr};
 use uuid::Uuid;
 
-pub use frl::{mock_activation_request, mock_deactivation_request};
-
 use super::settings::{LogLevel, ProxyMode, Settings, SettingsVal};
 use super::{cache, logging, proxy, settings};
 
-pub use self::log::mock_log_upload_request;
-
-mod frl;
-mod log;
+pub mod frl;
+pub mod log;
+pub mod named_user;
 
 #[derive(Default)]
 struct SharedCache {
@@ -111,6 +108,12 @@ pub async fn get_test_directory() -> std::path::PathBuf {
 pub async fn get_test_config(mode: &ProxyMode) -> proxy::Config {
     let cache = init_logging_and_cache().await;
     let mut settings = SettingsVal::default_config();
+    if let Ok(port) = std::env::var("LOCAL_PROXY_PORT") {
+        settings.upstream.use_proxy = true;
+        settings.upstream.proxy_protocol = "http".to_string();
+        settings.upstream.proxy_host = "127.0.0.1".to_string();
+        settings.upstream.proxy_port = port;
+    }
     settings.proxy.mode = mode.clone();
     let settings = Settings::new(settings);
     proxy::Config::new(settings, cache).unwrap()
@@ -132,8 +135,9 @@ pub enum MockOutcome {
 
 #[derive(Debug, Clone)]
 enum MockRequestType {
-    Activation,
-    Deactivation,
+    FrlActivation,
+    FrlDeactivation,
+    NulActivation,
     LogUpload,
 }
 
@@ -173,7 +177,7 @@ impl MockInfo {
 
     pub fn api_key(&self) -> String {
         if matches!(self.outcome, MockOutcome::FromAdobe) {
-            if matches!(self.rtype, MockRequestType::Deactivation) {
+            if matches!(self.rtype, MockRequestType::FrlDeactivation) {
                 "adobe_licensing_toolkit".to_string()
             } else {
                 "ngl_photoshop1".to_string()
@@ -237,8 +241,11 @@ pub async fn mock_adobe_server(
     let mi: MockInfo = (&req).into();
     match mi.outcome {
         MockOutcome::Success => match mi.rtype {
-            MockRequestType::Activation => Ok(frl::mock_activation_response(req)),
-            MockRequestType::Deactivation => Ok(frl::mock_deactivation_response(req)),
+            MockRequestType::FrlActivation => Ok(frl::mock_activation_response(req)),
+            MockRequestType::FrlDeactivation => Ok(frl::mock_deactivation_response(req)),
+            MockRequestType::NulActivation => {
+                Ok(named_user::mock_activation_response(req))
+            }
             MockRequestType::LogUpload => Ok(log::mock_log_response(req)),
         },
         MockOutcome::Isolated => panic!("request sent in Isolated mode"),

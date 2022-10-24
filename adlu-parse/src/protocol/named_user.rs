@@ -32,10 +32,34 @@ pub struct NulActivationRequest {
     pub request_id: String,
     pub session_id: String,
     pub body: Vec<u8>,
-    pub parsed_body: NulActivationRequestBody,
+    pub parsed_body: Option<NulActivationRequestBody>,
 }
 
 impl NulActivationRequest {
+    pub fn from_parts(
+        request_id: String,
+        session_id: String,
+        api_key: String,
+        body: bytes::Bytes,
+    ) -> Self {
+        let body = body.to_vec();
+        let parsed_body = if let Ok(parse) =
+            serde_json::from_slice::<NulActivationRequestBody>(&body)
+        {
+            Some(parse)
+        } else {
+            None
+        };
+        Self {
+            timestamp: Timestamp::now(),
+            api_key,
+            request_id,
+            session_id,
+            body,
+            parsed_body,
+        }
+    }
+
     pub fn to_network(
         &self,
         builder: reqwest::RequestBuilder,
@@ -57,6 +81,14 @@ pub struct NulDeactivationRequest {
 }
 
 impl NulDeactivationRequest {
+    pub fn from_parts(
+        request_id: String,
+        api_key: String,
+        params: HashMap<String, String>,
+    ) -> Self {
+        Self { timestamp: Timestamp::now(), api_key, request_id, params }
+    }
+
     pub fn to_network(
         &self,
         builder: reqwest::RequestBuilder,

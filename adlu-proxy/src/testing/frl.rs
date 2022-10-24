@@ -28,7 +28,7 @@ pub fn mock_activation_request(
     device_id: &str,
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
-    let mi = MockInfo::with_type_and_outcome(&MockRequestType::Activation, ask);
+    let mi = MockInfo::with_type_and_outcome(&MockRequestType::FrlActivation, ask);
     let body = if matches!(ask, MockOutcome::FromAdobe) {
         FrlActivationRequestBody::valid_from_device_id(device_id)
     } else {
@@ -63,7 +63,7 @@ pub fn mock_deactivation_request(
     device_id: &str,
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
-    let mi = MockInfo::with_type_and_outcome(&MockRequestType::Deactivation, ask);
+    let mi = MockInfo::with_type_and_outcome(&MockRequestType::FrlDeactivation, ask);
     let params = if matches!(ask, MockOutcome::FromAdobe) {
         FrlDeactivationQueryParams::valid_from_device_id(device_id)
     } else {

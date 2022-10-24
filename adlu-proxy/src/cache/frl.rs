@@ -127,18 +127,18 @@ pub async fn fetch_unanswered_requests(pool: &SqlitePool) -> Result<Vec<Request>
         if let Some(actr) = act {
             if let Some(deactr) = deact {
                 if actr.timestamp <= deactr.timestamp {
-                    result.push(Request::Activation(Box::new(actr.clone())));
+                    result.push(Request::FrlActivation(Box::new(actr.clone())));
                     act = acts.next();
                 } else {
-                    result.push(Request::Deactivation(Box::new(deactr.clone())));
+                    result.push(Request::FrlDeactivation(Box::new(deactr.clone())));
                     deact = deacts.next();
                 }
             } else {
-                result.push(Request::Activation(Box::new(actr.clone())));
+                result.push(Request::FrlActivation(Box::new(actr.clone())));
                 act = acts.next();
             }
         } else if let Some(deactr) = deact {
-            result.push(Request::Deactivation(Box::new(deactr.clone())));
+            result.push(Request::FrlDeactivation(Box::new(deactr.clone())));
             deact = deacts.next();
         } else {
             break;

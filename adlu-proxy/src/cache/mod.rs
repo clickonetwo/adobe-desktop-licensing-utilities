@@ -98,11 +98,13 @@ impl Db {
     pub async fn store_request(&self, req: &Request) {
         let pool = &self.pool;
         let result = match req {
-            Request::Activation(req) => frl::store_activation_request(pool, req).await,
-            Request::Deactivation(req) => {
+            Request::FrlActivation(req) => frl::store_activation_request(pool, req).await,
+            Request::FrlDeactivation(req) => {
                 frl::store_deactivation_request(pool, req).await
             }
             Request::LogUpload(req) => log::store_upload_request(pool, req).await,
+            // no caching of named-user requests at this time
+            _ => Ok(()),
         };
         if let Err(err) = result {
             let id = req.request_id();
@@ -115,15 +117,15 @@ impl Db {
         let mismatch =
             eyre!("Internal request/response inconsistency: please report a bug!");
         let result = match resp {
-            Response::Activation(resp) => {
-                if let Request::Activation(req) = req {
+            Response::FrlActivation(resp) => {
+                if let Request::FrlActivation(req) = req {
                     frl::store_activation_response(pool, req, resp).await
                 } else {
                     Err(mismatch)
                 }
             }
-            Response::Deactivation(resp) => {
-                if let Request::Deactivation(req) = req {
+            Response::FrlDeactivation(resp) => {
+                if let Request::FrlDeactivation(req) = req {
                     frl::store_deactivation_response(pool, req, resp).await
                 } else {
                     Err(mismatch)
@@ -136,6 +138,8 @@ impl Db {
                     Err(mismatch)
                 }
             }
+            // no caching of NUL responses at this time
+            _ => Ok(()),
         };
         if let Err(err) = result {
             error!("Cache store of request ID {} failed: {}", req.request_id(), err);
@@ -145,16 +149,16 @@ impl Db {
     pub async fn fetch_response(&self, req: &Request) -> Option<Response> {
         let pool = &self.pool;
         let result = match req {
-            Request::Activation(req) => {
+            Request::FrlActivation(req) => {
                 match frl::fetch_activation_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::Activation(Box::new(resp)))),
+                    Ok(Some(resp)) => Ok(Some(Response::FrlActivation(Box::new(resp)))),
                     Ok(None) => Ok(None),
                     Err(err) => Err(err),
                 }
             }
-            Request::Deactivation(req) => {
+            Request::FrlDeactivation(req) => {
                 match frl::fetch_deactivation_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::Deactivation(Box::new(resp)))),
+                    Ok(Some(resp)) => Ok(Some(Response::FrlDeactivation(Box::new(resp)))),
                     Ok(None) => Ok(None),
                     Err(err) => Err(err),
                 }
@@ -166,6 +170,8 @@ impl Db {
                     Err(err) => Err(err),
                 }
             }
+            // no caching of NUL requests at this time
+            _ => Ok(None),
         };
         match result {
             Err(err) => {
