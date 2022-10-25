@@ -80,7 +80,6 @@ mod tests {
     use super::settings::ProxyMode;
     use super::testing::*;
     use crate::cli::Datasource;
-    use std::time::Duration;
 
     async fn send_frl_activation(
         conf: &proxy::Config,
@@ -138,6 +137,9 @@ mod tests {
         release_test_config(conf).await;
     }
 
+    // we don't want to test round trips to Adobe servers as part of general library testing,
+    // only explicitly while developing when we think we may have broken it.
+    #[cfg(feature = "test_to_adobe")]
     #[tokio::test]
     async fn test_frl_activation_deactivation_to_adobe() {
         // this device_id is the sha256 of the NIST test string "abc"
@@ -147,7 +149,7 @@ mod tests {
         let result = send_frl_activation(&conf, &MockOutcome::FromAdobe, device_id).await;
         assert_eq!(result, 200);
         // give the server database time to replicate
-        tokio::time::sleep(Duration::from_millis(2000)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
         let result =
             send_frl_deactivation(&conf, &MockOutcome::FromAdobe, device_id).await;
         assert_eq!(result, 200);
