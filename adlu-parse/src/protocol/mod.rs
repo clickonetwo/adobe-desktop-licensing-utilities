@@ -33,9 +33,10 @@ pub use frl::{
 };
 pub use log::{parse_log_data, LogSession, LogUploadRequest, LogUploadResponse};
 pub use named_user::{
-    NulActivationRequest, NulActivationRequestBody, NulActivationResponse,
-    NulActivationResponseBody, NulAppDetails, NulDeactivationRequest,
-    NulDeactivationResponse, NulDeactivationResponseBody, NulDeviceDetails,
+    LicenseSession, NulActivationRequest, NulActivationRequestBody,
+    NulActivationResponse, NulActivationResponseBody, NulAppDetails,
+    NulDeactivationRequest, NulDeactivationResponse, NulDeactivationResponseBody,
+    NulDeviceDetails,
 };
 
 /// An enumeration type of protocol requests.

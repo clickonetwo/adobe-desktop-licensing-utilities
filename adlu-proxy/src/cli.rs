@@ -16,7 +16,27 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum Datasource {
+    /// FRL Activations
+    Frl,
+    /// NUL Launches
+    Nul,
+    /// Log Sessions
+    Log,
+}
+
+impl std::fmt::Display for Datasource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Datasource::Frl => "FRL Activations".fmt(f),
+            Datasource::Nul => "NUL Launches".fmt(f),
+            Datasource::Log => "Log Sessions".fmt(f),
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -69,11 +89,24 @@ pub enum Command {
     /// Forward un-answered requests
     Forward,
     /// Import from other proxy's database
-    Import { from_path: String },
+    Import {
+        #[clap(short, long, value_enum, default_value_t = Datasource::Frl)]
+        data: Datasource,
+
+        from_path: String,
+    },
     /// Export to other proxy's database
-    Export { to_path: String },
+    Export {
+        #[clap(short, long, value_enum, default_value_t = Datasource::Frl)]
+        data: Datasource,
+
+        to_path: String,
+    },
     /// Report on database contents
     Report {
+        #[clap(short, long, value_enum, default_value_t = Datasource::Log)]
+        data: Datasource,
+
         #[clap(short, long)]
         // Show sessions that are empty (devoid of data)
         empty: bool,

@@ -51,18 +51,24 @@ pub async fn run(
         Command::Clear { yes } => {
             cache.clear(yes).await.wrap_err("Failed to clear cache")
         }
-        Command::Import { from_path: import_path } => cache
-            .import(&import_path)
+        Command::Import { data: source, from_path: import_path } => cache
+            .import(&source, &import_path)
             .await
-            .wrap_err(format!("Failed to import from {}", &import_path)),
-        Command::Export { to_path: export_path } => cache
-            .export(&export_path)
+            .wrap_err(format!("Failed to import {} from {}", &source, &import_path)),
+        Command::Export { data: source, to_path: export_path } => cache
+            .export(&source, &export_path)
             .await
-            .wrap_err(format!("Failed to export to {}", &export_path)),
-        Command::Report { empty, timezone, rfc3339, to_path: report_path } => cache
-            .report(&report_path, empty, timezone, rfc3339)
+            .wrap_err(format!("Failed to export {} to {}", &source, &export_path)),
+        Command::Report {
+            data: source,
+            empty,
+            timezone,
+            rfc3339,
+            to_path: report_path,
+        } => cache
+            .report(&source, &report_path, empty, timezone, rfc3339)
             .await
-            .wrap_err(format!("Failed to report to {}", &report_path)),
+            .wrap_err(format!("Failed to report {} to {}", &source, &report_path)),
     };
     cache.close().await;
     result
@@ -73,6 +79,7 @@ mod tests {
     use super::proxy;
     use super::settings::ProxyMode;
     use super::testing::*;
+    use crate::cli::Datasource;
     use std::time::Duration;
 
     async fn send_frl_activation(
@@ -140,7 +147,7 @@ mod tests {
         let result = send_frl_activation(&conf, &MockOutcome::FromAdobe, device_id).await;
         assert_eq!(result, 200);
         // give the server database time to replicate
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
         let result =
             send_frl_deactivation(&conf, &MockOutcome::FromAdobe, device_id).await;
         assert_eq!(result, 200);
@@ -205,6 +212,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_license_report() {
+        let tempdir = get_test_directory().await;
+        let conf = get_test_config(&ProxyMode::Connected).await;
+        let result = send_nul_activation(&conf, &MockOutcome::Success, "nul1").await;
+        assert_eq!(result, 200);
+        let path = tempdir.join("launch-report1.csv");
+        eprintln!("Launch report at: {:?}", path);
+        conf.cache
+            .report(&Datasource::Nul, path.to_str().unwrap(), false, false, false)
+            .await
+            .expect("Report failed");
+        let content = std::fs::read_to_string(&path).expect("Can't read report");
+        assert!(content.contains("MockApp1"));
+    }
+
+    #[tokio::test]
     async fn test_log_upload_request() {
         let conf = get_test_config(&ProxyMode::Connected).await;
         let result = send_log_upload(&conf, &MockOutcome::Success, "lr1").await;
@@ -218,9 +241,10 @@ mod tests {
         let conf = get_test_config(&ProxyMode::Connected).await;
         let result = send_log_upload(&conf, &MockOutcome::Success, "lrr1").await;
         assert_eq!(result, 200);
-        let path = tempdir.join("test-report1.csv");
+        let path = tempdir.join("log-report1.csv");
+        eprintln!("Log report at: {:?}", path);
         conf.cache
-            .report(path.to_str().unwrap(), false, false, false)
+            .report(&Datasource::Log, path.to_str().unwrap(), false, false, false)
             .await
             .expect("Report failed");
         let content = std::fs::read_to_string(&path).expect("Can't read report");

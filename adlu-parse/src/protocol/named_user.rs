@@ -16,7 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use eyre::{Result, WrapErr};
+use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use warp::Reply;
@@ -186,7 +186,9 @@ impl NulActivationRequestBody {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NulAppDetails {
+    #[serde(default)]
     pub app_name_for_locale: String,
+    #[serde(default)]
     pub app_version_for_locale: String,
     #[serde(default)]
     pub current_asnp_id: String,
@@ -214,8 +216,11 @@ pub struct NulDeviceDetails {
     pub device_name: String,
     #[serde(default)]
     pub embedded_browser_version: String,
+    #[serde(default)]
     pub enable_vdi_marker_exists: bool,
+    #[serde(default)]
     pub is_os_user_account_in_domain: bool,
+    #[serde(default)]
     pub is_virtual_environment: bool,
     pub os_name: String,
     pub os_user_id: String,
@@ -249,6 +254,56 @@ impl From<NulActivationResponse> for warp::reply::Response {
 impl Reply for NulActivationResponse {
     fn into_response(self) -> warp::reply::Response {
         self.into()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LicenseSession {
+    pub session_id: String,
+    pub session_start: Timestamp,
+    pub session_end: Timestamp,
+    pub app_id: String,
+    pub app_version: String,
+    pub app_locale: String,
+    pub ngl_version: String,
+    pub os_name: String,
+    pub os_version: String,
+    pub user_id: String,
+}
+
+impl LicenseSession {
+    pub fn merge(&self, other: LicenseSession) -> Result<Self> {
+        if self.session_id != other.session_id {
+            Err(eyre!("Can't merge sessions with different IDs"))
+        } else {
+            let mut result = self.clone();
+            result.session_end = other.session_end;
+            Ok(result)
+        }
+    }
+}
+
+impl From<&NulActivationRequest> for LicenseSession {
+    fn from(req: &NulActivationRequest) -> Self {
+        let parsed_body =
+            req.parsed_body.as_ref().expect("Can't create a report with a parsed body");
+        let session_id = if let Some(start) = req.session_id.find('/') {
+            req.session_id[0..start].to_string()
+        } else {
+            req.session_id.clone()
+        };
+        Self {
+            session_id,
+            session_start: req.timestamp.clone(),
+            session_end: req.timestamp.clone(),
+            app_id: parsed_body.app_details.ngl_app_id.clone(),
+            app_version: parsed_body.app_details.ngl_app_version.clone(),
+            app_locale: parsed_body.app_details.locale.clone(),
+            ngl_version: parsed_body.app_details.ngl_lib_version.clone(),
+            os_name: parsed_body.device_details.os_name.clone(),
+            os_version: parsed_body.device_details.os_name.clone(),
+            user_id: parsed_body.device_details.os_name.clone(),
+        }
     }
 }
 

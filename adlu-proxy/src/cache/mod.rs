@@ -28,10 +28,12 @@ use sqlx::{
     ConnectOptions,
 };
 
+use crate::cli::Datasource;
 use adlu_parse::protocol::{Request, Response};
 
 mod frl;
 mod log;
+mod named_user;
 
 /// A cache for requests and responses.
 ///
@@ -73,26 +75,46 @@ impl Db {
             let pool = &self.pool;
             frl::clear(pool).await?;
             log::clear(pool).await?;
+            named_user::clear(pool).await?;
         }
         Ok(())
     }
 
-    pub async fn import(&self, path: &str) -> Result<()> {
-        frl::import(&self.pool, path).await
+    pub async fn import(&self, source: &Datasource, path: &str) -> Result<()> {
+        if let Datasource::Frl = source {
+            frl::import(&self.pool, path).await
+        } else {
+            Err(eyre!("Import of {} is not yet implemented.", &source))
+        }
     }
 
-    pub async fn export(&self, path: &str) -> Result<()> {
-        frl::export(&self.pool, path).await
+    pub async fn export(&self, source: &Datasource, path: &str) -> Result<()> {
+        if let Datasource::Frl = source {
+            frl::export(&self.pool, path).await
+        } else {
+            Err(eyre!("Export of {} is not yet implemented.", &source))
+        }
     }
 
     pub async fn report(
         &self,
+        source: &Datasource,
         path: &str,
         empty: bool,
         timezone: bool,
         rfc3339: bool,
     ) -> Result<()> {
-        log::report(&self.pool, path, empty, timezone, rfc3339).await
+        match source {
+            Datasource::Frl => {
+                Err(eyre!("Reporting of {} is not yet implemented", &source))
+            }
+            Datasource::Nul => {
+                named_user::report(&self.pool, path, empty, timezone, rfc3339).await
+            }
+            Datasource::Log => {
+                log::report(&self.pool, path, empty, timezone, rfc3339).await
+            }
+        }
     }
 
     pub async fn store_request(&self, req: &Request) {
@@ -102,8 +124,11 @@ impl Db {
             Request::FrlDeactivation(req) => {
                 frl::store_deactivation_request(pool, req).await
             }
+            Request::NulActivation(req) => {
+                named_user::store_license_request(pool, req).await
+            }
             Request::LogUpload(req) => log::store_upload_request(pool, req).await,
-            // no caching of named-user requests at this time
+            // no caching of other requests at this time
             _ => Ok(()),
         };
         if let Err(err) = result {
@@ -131,6 +156,13 @@ impl Db {
                     Err(mismatch)
                 }
             }
+            Response::NulActivation(resp) => {
+                if let Request::NulActivation(req) = req {
+                    named_user::store_license_response(pool, req, resp).await
+                } else {
+                    Err(mismatch)
+                }
+            }
             Response::LogUpload(resp) => {
                 if let Request::LogUpload(req) = req {
                     log::store_upload_response(pool, req, resp).await
@@ -138,7 +170,7 @@ impl Db {
                     Err(mismatch)
                 }
             }
-            // no caching of NUL responses at this time
+            // no caching of other responses at this time
             _ => Ok(()),
         };
         if let Err(err) = result {
@@ -159,6 +191,13 @@ impl Db {
             Request::FrlDeactivation(req) => {
                 match frl::fetch_deactivation_response(pool, req).await {
                     Ok(Some(resp)) => Ok(Some(Response::FrlDeactivation(Box::new(resp)))),
+                    Ok(None) => Ok(None),
+                    Err(err) => Err(err),
+                }
+            }
+            Request::NulActivation(req) => {
+                match named_user::fetch_license_response(pool, req).await {
+                    Ok(Some(resp)) => Ok(Some(Response::NulActivation(Box::new(resp)))),
                     Ok(None) => Ok(None),
                     Err(err) => Err(err),
                 }
@@ -198,5 +237,6 @@ async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
     let pool = SqlitePoolOptions::new().max_connections(5).connect_with(options).await?;
     frl::db_init(&pool).await?;
     log::db_init(&pool).await?;
+    named_user::db_init(&pool).await?;
     Ok(pool)
 }
