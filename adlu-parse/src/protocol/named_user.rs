@@ -24,28 +24,15 @@ use adlu_base::Timestamp;
 
 use crate::{AdobeSignatures, CustomerSignatures};
 
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 pub struct NulActivationRequest {
     pub timestamp: Timestamp,
     pub authorization: String,
     pub api_key: String,
     pub request_id: String,
     pub session_id: String,
-    pub body: Vec<u8>,
+    pub body: String,
     pub parsed_body: Option<NulActivationRequestBody>,
-}
-
-impl std::fmt::Debug for NulActivationRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NulActivationRequest")
-            .field("timestamp", &self.timestamp)
-            .field("authorization", &self.authorization)
-            .field("api_key", &self.api_key)
-            .field("request_id", &self.request_id)
-            .field("session_id", &self.session_id)
-            .field("body", &String::from_utf8_lossy(&self.body).to_string())
-            .finish()
-    }
 }
 
 impl NulActivationRequest {
@@ -56,22 +43,17 @@ impl NulActivationRequest {
         api_key: String,
         body: bytes::Bytes,
     ) -> Self {
-        let body = body.to_vec();
-        let parsed_body = if let Ok(parse) =
-            serde_json::from_slice::<NulActivationRequestBody>(&body)
-        {
-            Some(parse)
-        } else {
-            None
-        };
+        let string = String::from_utf8(body.to_vec())
+            .unwrap_or_else(|_| String::from_utf8_lossy(&body).to_string());
+        let parse = serde_json::from_slice::<NulActivationRequestBody>(&body).ok();
         Self {
             timestamp: Timestamp::now(),
             authorization,
             api_key,
             request_id,
             session_id,
-            body,
-            parsed_body,
+            body: string,
+            parsed_body: parse,
         }
     }
 
@@ -84,7 +66,7 @@ impl NulActivationRequest {
             .header("X-Request-Id", &self.request_id)
             .header("X-Session-Id", &self.session_id)
             .header("X-Api-Key", &self.api_key)
-            // because the body is bytes, we have to set the content type
+            // because the body is a string, we have to set the content type
             .header("Content-Type", "application/json")
             .body(self.body.clone())
     }
@@ -95,6 +77,7 @@ impl NulActivationRequest {
 pub struct NulActivationRequestBody {
     pub app_details: NulAppDetails,
     pub device_details: NulDeviceDetails,
+    #[serde(default)]
     pub device_token_hash: String,
 }
 
@@ -164,7 +147,7 @@ impl NulActivationRequestBody {
                         .to_string(),
                 os_version: "12.6.0".to_string(),
             },
-            device_token_hash: "".to_string(),
+            device_token_hash: "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b".to_string(),
         }
     }
 
