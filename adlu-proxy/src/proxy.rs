@@ -189,6 +189,7 @@ pub fn routes(
         .or(activate_route(conf.clone()))
         .or(deactivate_route(conf.clone()))
         .or(upload_route(conf))
+        .with(warp::log("route::summary"))
 }
 
 pub fn with_conf(
@@ -238,7 +239,7 @@ pub async fn status(conf: Config) -> reply::Response {
     info!("Status request received, issuing status: {}", &status);
     let body =
         serde_json::json!({"statusCode": 200, "version": &agent(), "status": &status});
-    proxy_reply(502, reply::json(&body))
+    proxy_reply(200, reply::json(&body))
 }
 
 pub async fn process_web_request(req: Request, conf: Config) -> reply::Response {
