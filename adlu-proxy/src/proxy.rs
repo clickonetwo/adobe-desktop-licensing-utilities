@@ -348,26 +348,26 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
         info!("Sending request ID {} to Adobe endpoint", id);
         match send_to_adobe(conf, req).await {
             Ok(response) => {
-                if response.status().is_success() {
+                let status = response.status();
+                if status.is_success() {
+                    info!(
+                        "Received valid response status for request ID {}: {}",
+                        id, status
+                    );
                     match Response::from_network(req, response).await {
                         Ok(resp) => {
-                            info!("Received valid response for request ID {}", id);
                             debug!("Response for request ID {}: {:?}", id, resp);
                             // cache the response
                             conf.cache.store_response(req, &resp).await;
                             SendOutcome::Success(resp)
                         }
                         Err(err) => {
-                            error!(
-                                "Received invalid response for request ID {}: {}",
-                                id, err
-                            );
+                            error!("Can't parse response for request ID {}: {}", id, err);
                             SendOutcome::ParseFailure(err)
                         }
                     }
                 } else {
-                    let status = response.status();
-                    error!("Received failure status for request ID {}: {:?}", id, status);
+                    error!("Received failure status for request ID {}: {}", id, status);
                     debug!("Response for request ID {}: {:?}", id, response);
                     // return the safe bits of the response
                     SendOutcome::ErrorStatus(response)
