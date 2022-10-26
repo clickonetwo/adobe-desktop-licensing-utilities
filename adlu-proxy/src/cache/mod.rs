@@ -128,8 +128,6 @@ impl Db {
                 named_user::store_license_request(pool, req).await
             }
             Request::LogUpload(req) => log::store_upload_request(pool, req).await,
-            // no caching of other requests at this time
-            _ => Ok(()),
         };
         if let Err(err) = result {
             let id = req.request_id();
@@ -170,8 +168,6 @@ impl Db {
                     Err(mismatch)
                 }
             }
-            // no caching of other responses at this time
-            _ => Ok(()),
         };
         if let Err(err) = result {
             error!("Cache store of request ID {} failed: {}", req.request_id(), err);
@@ -209,8 +205,6 @@ impl Db {
                     Err(err) => Err(err),
                 }
             }
-            // no caching of NUL requests at this time
-            _ => Ok(None),
         };
         match result {
             Err(err) => {

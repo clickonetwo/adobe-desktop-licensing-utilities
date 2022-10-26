@@ -394,7 +394,6 @@ async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response
         Request::FrlActivation(_) => http::Method::POST,
         Request::FrlDeactivation(_) => http::Method::DELETE,
         Request::NulActivation(_) => http::Method::POST,
-        Request::NulDeactivation(_) => http::Method::DELETE,
         Request::LogUpload(_) => http::Method::POST,
     };
     let endpoint = match req {
@@ -407,9 +406,6 @@ async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response
         Request::NulActivation(_) => {
             format!("{}/{}", &conf.frl_server, "asnp/nud/v4")
         }
-        Request::NulDeactivation(_) => {
-            format!("{}/{}", &conf.frl_server, "asnp/nud/v1")
-        }
         Request::LogUpload(_) => {
             format!("{}/{}", &conf.log_server, "ulecs/v1")
         }
@@ -418,7 +414,6 @@ async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response
         Request::FrlActivation(_) => "application/json",
         Request::FrlDeactivation(_) => "application/json",
         Request::NulActivation(_) => "application/json",
-        Request::NulDeactivation(_) => "application/json",
         Request::LogUpload(_) => "*/*",
     };
     let builder = conf

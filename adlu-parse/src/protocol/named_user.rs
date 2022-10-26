@@ -18,7 +18,6 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use warp::Reply;
 
 use adlu_base::Timestamp;
@@ -88,34 +87,6 @@ impl NulActivationRequest {
             // because the body is bytes, we have to set the content type
             .header("Content-Type", "application/json")
             .body(self.body.clone())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct NulDeactivationRequest {
-    pub timestamp: Timestamp,
-    pub api_key: String,
-    pub request_id: String,
-    pub params: HashMap<String, String>,
-}
-
-impl NulDeactivationRequest {
-    pub fn from_parts(
-        request_id: String,
-        api_key: String,
-        params: HashMap<String, String>,
-    ) -> Self {
-        Self { timestamp: Timestamp::now(), api_key, request_id, params }
-    }
-
-    pub fn to_network(
-        &self,
-        builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
-        builder
-            .header("X-Request-Id", &self.request_id)
-            .header("X-Api-Key", &self.api_key)
-            .query(&self.params)
     }
 }
 
@@ -326,51 +297,6 @@ impl From<&NulActivationRequest> for LicenseSession {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct NulDeactivationResponse {
-    pub timestamp: Timestamp,
-    pub request_id: String,
-    pub body: String,
-    pub parsed_body: Option<NulDeactivationResponseBody>,
-}
-
-impl NulDeactivationResponse {
-    pub async fn from_network(response: reqwest::Response) -> Result<Self> {
-        let request_id = super::get_response_id(&response)?;
-        let body = response.text().await.wrap_err("Failure to receive body")?;
-        let parsed_body: Option<NulDeactivationResponseBody> =
-            if cfg!(feature = "parse_responses") {
-                Some(
-                    serde_json::from_str::<NulDeactivationResponseBody>(&body)
-                        .wrap_err("Invalid deactivation response")?,
-                )
-            } else {
-                None
-            };
-        Ok(NulDeactivationResponse {
-            timestamp: Timestamp::now(),
-            request_id,
-            body,
-            parsed_body,
-        })
-    }
-}
-
-impl From<NulDeactivationResponse> for warp::reply::Response {
-    fn from(act_resp: NulDeactivationResponse) -> Self {
-        ::http::Response::builder()
-            .header("X-Request-Id", &act_resp.request_id)
-            .body(act_resp.body.into())
-            .unwrap()
-    }
-}
-
-impl Reply for NulDeactivationResponse {
-    fn into_response(self) -> warp::reply::Response {
-        self.into()
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NulActivationResponseBody {
@@ -484,22 +410,6 @@ pub struct NulCustomerSignedValues {
 pub struct CacheExpiryWarningControl {
     warning_start_timestamp: i64,
     warning_interval: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NulDeactivationResponseBody {
-    invalidation_successful: bool,
-}
-
-impl NulDeactivationResponseBody {
-    pub fn mock_from_device_id(_device_id: &str) -> Self {
-        NulDeactivationResponseBody { invalidation_successful: true }
-    }
-
-    pub fn to_body_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
 }
 
 #[cfg(test)]

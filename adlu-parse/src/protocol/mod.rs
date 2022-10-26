@@ -21,7 +21,6 @@ mod log;
 mod named_user;
 
 use eyre::{eyre, Result, WrapErr};
-use std::collections::HashMap;
 use warp::{Filter, Reply};
 
 use adlu_base::Timestamp;
@@ -34,9 +33,7 @@ pub use frl::{
 pub use log::{parse_log_data, LogSession, LogUploadRequest, LogUploadResponse};
 pub use named_user::{
     LicenseSession, NulActivationRequest, NulActivationRequestBody,
-    NulActivationResponse, NulActivationResponseBody, NulAppDetails,
-    NulDeactivationRequest, NulDeactivationResponse, NulDeactivationResponseBody,
-    NulDeviceDetails,
+    NulActivationResponse, NulActivationResponseBody, NulAppDetails, NulDeviceDetails,
 };
 
 /// An enumeration type of protocol requests.
@@ -45,7 +42,6 @@ pub enum Request {
     FrlActivation(Box<FrlActivationRequest>),
     FrlDeactivation(Box<FrlDeactivationRequest>),
     NulActivation(Box<NulActivationRequest>),
-    NulDeactivation(Box<NulDeactivationRequest>),
     LogUpload(Box<LogUploadRequest>),
 }
 
@@ -55,7 +51,6 @@ impl Request {
             Request::FrlActivation(req) => &req.timestamp,
             Request::FrlDeactivation(req) => &req.timestamp,
             Request::NulActivation(req) => &req.timestamp,
-            Request::NulDeactivation(req) => &req.timestamp,
             Request::LogUpload(req) => &req.timestamp,
         }
     }
@@ -65,7 +60,6 @@ impl Request {
             Request::FrlActivation(req) => &req.request_id,
             Request::FrlDeactivation(req) => &req.request_id,
             Request::NulActivation(req) => &req.request_id,
-            Request::NulDeactivation(req) => &req.request_id,
             Request::LogUpload(req) => &req.request_id,
         }
     }
@@ -148,24 +142,6 @@ impl Request {
             )
     }
 
-    /// a [`warp::Filter`] that produces an `NulDeactivationRequest` from a well-formed FRL
-    /// deactivation network request posted to a warp server.  You can compose this filter with
-    /// a path filter to provide a deactivation handler at a specific endpoint.
-    pub fn nul_deactivation_filter(
-    ) -> impl Filter<Extract = (Self,), Error = warp::Rejection> + Clone {
-        warp::delete()
-            .and(warp::header::<String>("X-Request-Id"))
-            .and(warp::header::<String>("X-Api-Key"))
-            .and(warp::query::<HashMap<String, String>>())
-            .map(
-                |request_id: String, api_key: String, params: HashMap<String, String>| {
-                    Request::NulDeactivation(Box::new(
-                        NulDeactivationRequest::from_parts(request_id, api_key, params),
-                    ))
-                },
-            )
-    }
-
     /// a [`warp::Filter`] that produces a `LogUploadRequest` from a well-formed
     /// log upload network request posted to a warp server.  You can compose this filter with
     /// a log upload filter to provide a log upload handler at a specific endpoint.
@@ -199,7 +175,6 @@ impl Request {
             Request::FrlActivation(req) => req.to_network(builder),
             Request::FrlDeactivation(req) => req.to_network(builder),
             Request::NulActivation(req) => req.to_network(builder),
-            Request::NulDeactivation(req) => req.to_network(builder),
             Request::LogUpload(req) => req.to_network(builder),
         }
     }
@@ -210,7 +185,6 @@ pub enum Response {
     FrlActivation(Box<FrlActivationResponse>),
     FrlDeactivation(Box<FrlDeactivationResponse>),
     NulActivation(Box<NulActivationResponse>),
-    NulDeactivation(Box<NulDeactivationResponse>),
     LogUpload(Box<LogUploadResponse>),
 }
 
@@ -220,7 +194,6 @@ impl Response {
             Response::FrlActivation(resp) => &resp.timestamp,
             Response::FrlDeactivation(resp) => &resp.timestamp,
             Response::NulActivation(resp) => &resp.timestamp,
-            Response::NulDeactivation(resp) => &resp.timestamp,
             Response::LogUpload(resp) => &resp.timestamp,
         }
     }
@@ -239,10 +212,6 @@ impl Response {
                 let resp = NulActivationResponse::from_network(resp).await?;
                 Ok(Response::NulActivation(Box::new(resp)))
             }
-            Request::NulDeactivation(_) => {
-                let resp = NulDeactivationResponse::from_network(resp).await?;
-                Ok(Response::NulDeactivation(Box::new(resp)))
-            }
             Request::LogUpload(_) => {
                 let resp = LogUploadResponse::from_network(resp).await?;
                 Ok(Response::LogUpload(Box::new(resp)))
@@ -257,7 +226,6 @@ impl From<Response> for warp::reply::Response {
             Response::FrlActivation(resp) => resp.into_response(),
             Response::FrlDeactivation(resp) => resp.into_response(),
             Response::NulActivation(resp) => resp.into_response(),
-            Response::NulDeactivation(resp) => resp.into_response(),
             Response::LogUpload(resp) => resp.into_response(),
         }
     }
