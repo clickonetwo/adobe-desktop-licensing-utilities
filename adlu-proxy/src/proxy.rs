@@ -219,15 +219,22 @@ pub fn status_route(
 pub fn record_post_route() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone
 {
     warp::post()
+        // .and(warp::path!("asnp" / "nud"))
         .and(warp::path::full())
-        .and(warp::body::content_length_limit(32_000_000))
-        .and(warp::body::bytes())
+        .and(warp::filters::header::headers_cloned())
+        .and(warp::body::content_length_limit(32_000))
+        .and(warp::body::json())
         .then(record_post)
 }
 
 pub fn record_delete_route(
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::delete().and(warp::path::full()).and(warp::query()).then(record_delete)
+    warp::delete()
+        // .and(warp::path!("asnp" / "nud"))
+        .and(warp::path::full())
+        .and(warp::filters::header::headers_cloned())
+        .and(warp::query())
+        .then(record_delete)
 }
 
 pub fn frl_activate_route(
@@ -280,21 +287,27 @@ pub async fn status(conf: Config) -> reply::Response {
 
 pub async fn record_post(
     path: warp::path::FullPath,
-    body: bytes::Bytes,
+    headers: http::HeaderMap,
+    body: serde_json::Value,
 ) -> reply::Response {
     let path = path.as_str().to_string();
-    info!("POST request to path: {}", &path);
-    let content = String::from_utf8_lossy(&body);
-    debug!("Request body is: {}", content);
+    info!("Unrecognized POST request to path: {}", &path);
+    debug!("Request headers are: {:?}", headers);
+    debug!(
+        "Request body is: {}",
+        serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string())
+    );
     proxy_offline_reply()
 }
 
 pub async fn record_delete(
     path: warp::path::FullPath,
+    headers: http::HeaderMap,
     query: HashMap<String, String>,
 ) -> reply::Response {
     let path = path.as_str().to_string();
-    info!("DELETE request to path: {}", &path);
+    info!("Unrecognized DELETE request to path: {}", &path);
+    debug!("Request headers are: {:?}", headers);
     debug!("Query is: {:?}", query);
     proxy_offline_reply()
 }

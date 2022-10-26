@@ -33,6 +33,7 @@ pub fn mock_activation_request(
     };
     let mut builder = builder.method("POST").path("/asnp/nud/v4");
     builder = builder
+        .header("Authorization", &mi.authorization())
         .header("X-Request-Id", &mi.request_id())
         .header("X-Session-Id", &mi.session_id())
         .header("X-Api-Key", &mi.api_key());

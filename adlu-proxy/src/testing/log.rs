@@ -46,7 +46,7 @@ pub fn mock_log_upload_request(
     let mi = MockInfo::with_type_and_outcome(&MockRequestType::LogUpload, ask);
     let mut builder = builder.method("POST").path("/ulecs/v1");
     builder = builder
-        .header("Authorization", mi.authorization())
+        .header("Authorization", &mi.authorization())
         .header("X-Api-Key", &mi.api_key());
     builder.body(session.to_body_string())
 }

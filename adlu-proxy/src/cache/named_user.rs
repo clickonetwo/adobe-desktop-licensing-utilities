@@ -193,7 +193,7 @@ async fn store_license_session(
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
-    debug!("Stored log upload request has rowid {}", result.last_insert_rowid());
+    debug!("Stored license session request has rowid {}", result.last_insert_rowid());
     Ok(())
 }
 

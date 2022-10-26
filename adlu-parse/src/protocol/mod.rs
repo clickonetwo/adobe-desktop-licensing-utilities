@@ -125,18 +125,24 @@ impl Request {
     pub fn nul_activation_filter(
     ) -> impl Filter<Extract = (Self,), Error = warp::Rejection> + Clone {
         warp::post()
+            .and(warp::header::<String>("Authorization"))
             .and(warp::header::<String>("X-Session-Id"))
             .and(warp::header::<String>("X-Request-Id"))
             .and(warp::header::<String>("X-Api-Key"))
             .and(warp::body::content_length_limit(20 * 1024))
             .and(warp::body::bytes())
             .map(
-                |session_id: String,
+                |authorization: String,
+                 session_id: String,
                  request_id: String,
                  api_key: String,
                  body: bytes::Bytes| {
                     Request::NulActivation(Box::new(NulActivationRequest::from_parts(
-                        request_id, session_id, api_key, body,
+                        authorization,
+                        request_id,
+                        session_id,
+                        api_key,
+                        body,
                     )))
                 },
             )

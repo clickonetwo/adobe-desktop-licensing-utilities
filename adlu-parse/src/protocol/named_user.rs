@@ -25,9 +25,10 @@ use adlu_base::Timestamp;
 
 use crate::{AdobeSignatures, CustomerSignatures};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NulActivationRequest {
     pub timestamp: Timestamp,
+    pub authorization: String,
     pub api_key: String,
     pub request_id: String,
     pub session_id: String,
@@ -35,8 +36,22 @@ pub struct NulActivationRequest {
     pub parsed_body: Option<NulActivationRequestBody>,
 }
 
+impl std::fmt::Debug for NulActivationRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NulActivationRequest")
+            .field("timestamp", &self.timestamp)
+            .field("authorization", &self.authorization)
+            .field("api_key", &self.api_key)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("body", &String::from_utf8_lossy(&self.body).to_string())
+            .finish()
+    }
+}
+
 impl NulActivationRequest {
     pub fn from_parts(
+        authorization: String,
         request_id: String,
         session_id: String,
         api_key: String,
@@ -52,6 +67,7 @@ impl NulActivationRequest {
         };
         Self {
             timestamp: Timestamp::now(),
+            authorization,
             api_key,
             request_id,
             session_id,
@@ -65,9 +81,12 @@ impl NulActivationRequest {
         builder: reqwest::RequestBuilder,
     ) -> reqwest::RequestBuilder {
         builder
+            .header("Authorization", &self.authorization)
             .header("X-Request-Id", &self.request_id)
             .header("X-Session-Id", &self.session_id)
             .header("X-Api-Key", &self.api_key)
+            // because the body is bytes, we have to set the content type
+            .header("Content-Type", "application/json")
             .body(self.body.clone())
     }
 }
