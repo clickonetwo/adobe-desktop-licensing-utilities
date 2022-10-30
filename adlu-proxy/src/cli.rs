@@ -52,7 +52,7 @@ pub enum Command {
         /// Overrides the config file setting.
         mode: Option<String>,
 
-        #[clap(long, parse(try_from_str))]
+        #[clap(long, value_parser=clap::builder::BoolishValueParser::new())]
         /// Enable SSL? (true or false).
         /// Overrides the config file setting.
         ssl: Option<bool>,

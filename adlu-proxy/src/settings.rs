@@ -84,11 +84,30 @@ impl Debug for Ssl {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogRotationType {
+    None = 0,
+    Daily = 1,
+    Sized = 2,
+}
+
+impl std::fmt::Display for LogRotationType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogRotationType::None => write!(f, "None"),
+            LogRotationType::Daily => write!(f, "Daily"),
+            LogRotationType::Sized => write!(f, "By Size"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Logging {
     pub level: LogLevel,
     pub destination: LogDestination,
     pub file_path: String,
-    pub rotate_size_kb: u64,
+    pub rotate_type: LogRotationType,
+    pub max_size_kb: u64,
     pub rotate_count: u32,
 }
 
@@ -98,7 +117,8 @@ impl Default for Logging {
             level: LogLevel::Info,
             destination: LogDestination::File,
             file_path: "proxy-log.log".to_string(),
-            rotate_size_kb: 0,
+            rotate_type: LogRotationType::None,
+            max_size_kb: 100,
             rotate_count: 10,
         }
     }
@@ -523,16 +543,19 @@ impl SettingsVal {
                 }
             }
             // ask about log rotation
-            let mut target_size = self.logging.rotate_size_kb;
             if matches!(self.logging.destination, LogDestination::File) {
-                let prompt = if target_size == 0 {
+                let prompt = if let LogRotationType::None = self.logging.rotate_type {
                     eprintln!("The proxy is not doing log rotation.");
-                    target_size = 1024;
                     "Do you want to enable log rotation?"
                 } else {
-                    eprintln!(
-                        "The proxy is rotating logs when they reach {target_size}KB."
-                    );
+                    if let LogRotationType::Sized = self.logging.rotate_type {
+                        eprintln!(
+                            "The proxy is rotating logs when they reach {}KB.",
+                            self.logging.max_size_kb
+                        );
+                    } else {
+                        eprintln!("The proxy is rotating logs every day");
+                    }
                     "Do you want to change your log rotation configuration?"
                 };
                 let choice = Confirm::new()
@@ -541,11 +564,20 @@ impl SettingsVal {
                     .with_prompt(prompt)
                     .interact()?;
                 if choice {
-                    self.logging.rotate_size_kb = Input::new()
-                        .default(target_size)
-                        .with_prompt("Max log file size in KB (0 for no rotation)")
+                    let choices = [
+                        LogRotationType::None.to_string(),
+                        LogRotationType::Daily.to_string(),
+                        LogRotationType::Sized.to_string(),
+                    ];
+                    let default = self.logging.rotate_type.clone() as usize;
+                    let choice = Select::new()
+                        .items(&choices)
+                        .default(default)
+                        .with_prompt("Rotation type")
                         .interact()?;
-                    if self.logging.rotate_size_kb > 0 {
+                    if choice == 0 {
+                        self.logging.rotate_type = LogRotationType::None;
+                    } else {
                         self.logging.rotate_count = Input::new()
                             .default(self.logging.rotate_count)
                             .validate_with(|cnt: &u32| {
@@ -557,6 +589,22 @@ impl SettingsVal {
                             })
                             .with_prompt("Keep this many log files (1-99)")
                             .interact()?;
+                        if choice == 1 {
+                            self.logging.rotate_type = LogRotationType::Daily;
+                        } else {
+                            self.logging.rotate_type = LogRotationType::Sized;
+                            self.logging.max_size_kb = Input::new()
+                                .default(self.logging.max_size_kb)
+                                .validate_with(|cnt: &u64| {
+                                    if *cnt > 0 {
+                                        Ok(())
+                                    } else {
+                                        Err(eyre!("Value must be greater than 0"))
+                                    }
+                                })
+                                .with_prompt("Max log file size in KB")
+                                .interact()?;
+                        }
                     }
                 }
             }

@@ -52,8 +52,7 @@ async fn init_logging_and_cache() -> cache::Cache {
                 level: LogLevel::Debug,
                 destination: settings::LogDestination::File,
                 file_path: tempdir.join("proxy-log.log").to_str().unwrap().to_string(),
-                rotate_size_kb: 0,
-                rotate_count: 0,
+                ..Default::default()
             };
             logging::init(&logging).unwrap();
             shared_cache.log_initialized = true;
