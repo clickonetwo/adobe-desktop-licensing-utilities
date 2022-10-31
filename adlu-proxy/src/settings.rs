@@ -107,7 +107,7 @@ pub struct Logging {
     pub destination: LogDestination,
     pub file_path: String,
     pub rotate_type: LogRotationType,
-    pub max_size_kb: u64,
+    pub rotate_size_kb: u64,
     pub rotate_count: u32,
 }
 
@@ -118,7 +118,7 @@ impl Default for Logging {
             destination: LogDestination::File,
             file_path: "proxy-log.log".to_string(),
             rotate_type: LogRotationType::None,
-            max_size_kb: 100,
+            rotate_size_kb: 100,
             rotate_count: 10,
         }
     }
@@ -187,6 +187,7 @@ impl Default for Log {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SettingsVal {
+    pub version: Option<u32>,
     pub proxy: Proxy,
     pub ssl: Ssl,
     pub frl: Frl,
@@ -209,15 +210,19 @@ pub fn load_config_file(args: &ProxyArgs) -> Result<Settings> {
 
 /// Update (or create) a configuration file after interviewing user
 /// No logging on this path, because it might interfere with the interview
-pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()> {
+pub fn update_config_file(settings: Option<&Settings>, args: &ProxyArgs) -> Result<()> {
     // get the configuration
     let mut conf: SettingsVal = match settings {
         Some(settings) => settings.as_ref().clone(),
         None => SettingsVal::default_config(),
     };
-    // interview the user for updates
-    conf.update_config().wrap_err("Configuration interview failed")?;
+    // maybe interview the user for updates
+    let repair_only = matches!(args.cmd, Command::Configure { repair: true });
+    if settings.is_none() || !repair_only {
+        conf.update_config().wrap_err("Configuration interview failed")?;
+    }
     // save the configuration
+    let path = args.config_file.as_str();
     let toml = toml::to_string(&conf)
         .wrap_err(format!("Cannot serialize configuration: {:?}", &conf))?;
     let mut file =
@@ -242,6 +247,8 @@ impl SettingsVal {
             .add_source(ConfigFile::new(&args.config_file, FileFormat::Toml))
             .add_source(Environment::with_prefix("adlu_proxy"));
         let mut settings: Self = builder.build()?.try_deserialize()?;
+        // Now repair the older config if needed
+        settings.repair_config(args)?;
         // Now process the args as overrides: global first, then command-specific
         match args.debug {
             1 => settings.logging.level = LogLevel::Debug,
@@ -274,11 +281,34 @@ impl SettingsVal {
                     settings.logging.destination = LogDestination::File
                 };
             }
-            Command::Configure => {
+            Command::Configure { .. } => {
+                // allow repair, because we're configuring
                 // don't touch the settings, so they can be configured
             }
         }
         Ok(settings)
+    }
+
+    fn version_none_to_one(&mut self) {
+        // in version None, the only kind of log rotation was by size
+        self.version = Some(1);
+        if self.logging.rotate_count > 0 && self.logging.rotate_size_kb > 0 {
+            self.logging.rotate_type = LogRotationType::Sized
+        }
+    }
+
+    fn repair_config(&mut self, args: &ProxyArgs) -> Result<()> {
+        let can_repair = matches!(args.cmd, Command::Configure { .. });
+        let mut did_repair = false;
+        if self.version.is_none() {
+            did_repair = true;
+            self.version_none_to_one();
+        }
+        if did_repair && !can_repair {
+            Err(eyre!("Please reconfigure"))
+        } else {
+            Ok(())
+        }
     }
 
     /// Update configuration settings by interviewing user
@@ -551,7 +581,7 @@ impl SettingsVal {
                     if let LogRotationType::Sized = self.logging.rotate_type {
                         eprintln!(
                             "The proxy is rotating logs when they reach {}KB.",
-                            self.logging.max_size_kb
+                            self.logging.rotate_size_kb
                         );
                     } else {
                         eprintln!("The proxy is rotating logs every day");
@@ -593,8 +623,8 @@ impl SettingsVal {
                             self.logging.rotate_type = LogRotationType::Daily;
                         } else {
                             self.logging.rotate_type = LogRotationType::Sized;
-                            self.logging.max_size_kb = Input::new()
-                                .default(self.logging.max_size_kb)
+                            self.logging.rotate_size_kb = Input::new()
+                                .default(self.logging.rotate_size_kb)
                                 .validate_with(|cnt: &u64| {
                                     if *cnt > 0 {
                                         Ok(())

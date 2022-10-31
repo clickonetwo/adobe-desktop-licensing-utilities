@@ -67,7 +67,7 @@ pub fn init(logging: &Logging) -> Result<()> {
             .build(&pattern, window_size)
             .map_err(|err| eyre!("Can't build log rotation config: {:?}", err))?;
         let compound_policy = if let LogRotationType::Sized = logging.rotate_type {
-            let size_limit = 1024 * logging.max_size_kb;
+            let size_limit = 1024 * logging.rotate_size_kb;
             let size_trigger = SizeTrigger::new(size_limit as u64);
             CompoundPolicy::new(Box::new(size_trigger), Box::new(fixed_window_roller))
         } else {

@@ -43,7 +43,10 @@ pub struct ProxyArgs {
 /// Proxy commands
 pub enum Command {
     /// Interactively create the config file
-    Configure,
+    Configure {
+        #[clap(short, long)]
+        repair: bool,
+    },
     /// Start the proxy server
     Serve {
         #[clap(short, long)]
