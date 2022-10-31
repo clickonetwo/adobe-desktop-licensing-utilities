@@ -4,7 +4,7 @@
 # directory should be the parent of a newly-created adlu-proxy directory
 # that contains the running server.  The script makes the adlu-proxy directory,
 # downloads the ubuntu binary to that directory, and then runs the proxy
-# for you to create your configuration file.
+# to update (or create via interview) the proxy configuration file.
 #
 # You need to invoke the script with release tag you want to download;
 # for example, v1.0.0-alpha.2 or v1.0.1
@@ -38,5 +38,5 @@ then
     exit 1
   fi
   echo "Proxy is installed.  Configuring..."
-  exec ./adlu-proxy configure
+  exec ./adlu-proxy configure --repair
 fi
