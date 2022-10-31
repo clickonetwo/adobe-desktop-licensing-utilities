@@ -91,6 +91,12 @@ pub enum LogRotationType {
     Sized = 2,
 }
 
+impl Default for LogRotationType {
+    fn default() -> Self {
+        LogRotationType::None
+    }
+}
+
 impl std::fmt::Display for LogRotationType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -187,7 +193,8 @@ impl Default for Log {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SettingsVal {
-    pub version: Option<u32>,
+    pub proxy_version: Option<String>,
+    pub settings_version: Option<u32>,
     pub proxy: Proxy,
     pub ssl: Ssl,
     pub frl: Frl,
@@ -222,6 +229,7 @@ pub fn update_config_file(settings: Option<&Settings>, args: &ProxyArgs) -> Resu
         conf.update_config().wrap_err("Configuration interview failed")?;
     }
     // save the configuration
+    conf.proxy_version = Some(env!("CARGO_PKG_VERSION").to_string());
     let path = args.config_file.as_str();
     let toml = toml::to_string(&conf)
         .wrap_err(format!("Cannot serialize configuration: {:?}", &conf))?;
@@ -234,20 +242,33 @@ pub fn update_config_file(settings: Option<&Settings>, args: &ProxyArgs) -> Resu
 }
 
 impl SettingsVal {
-    /// Create a new default config
+    const SETTINGS_VERSION: u32 = 1;
+
+    /// Create a new default config.  A default config carries the version of the proxy
+    /// that created it, but it doesn't carry a settings version, because we need the
+    /// settings version to be declared by the user's config file.  Note that this means
+    /// that newer settings versions have to be extensions of older ones, so the older
+    /// ones will still deserialize correctly.
     pub fn default_config() -> Self {
-        Default::default()
+        Self {
+            proxy_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            ..Default::default()
+        }
     }
 
     /// Load an existing config file, returning its contained config
     pub fn load_config(args: &ProxyArgs) -> Result<Self> {
-        let default_str = toml::to_string(&Self::default_config()).unwrap();
+        let default_str = toml::to_string(&SettingsVal::default_config()).unwrap();
         let builder = Config::builder()
             .add_source(ConfigFile::from_str(&default_str, FileFormat::Toml))
             .add_source(ConfigFile::new(&args.config_file, FileFormat::Toml))
             .add_source(Environment::with_prefix("adlu_proxy"));
-        let mut settings: Self = builder.build()?.try_deserialize()?;
-        // Now repair the older config if needed
+        // There's a very important subtlety here: Default::default for a SettingsVal
+        // is NOT the same as a SettingsVal::default_config (the former has no proxy_version;
+        // the latter does have one).  If we can't deserialize the config file, the config
+        // we send for repair will not be repairable, because it won't have the proxy version.
+        let mut settings: Self = builder.build()?.try_deserialize().unwrap_or_default();
+        // Now repair the older config if needed and possible and allowed
         settings.repair_config(args)?;
         // Now process the args as overrides: global first, then command-specific
         match args.debug {
@@ -282,7 +303,6 @@ impl SettingsVal {
                 };
             }
             Command::Configure { .. } => {
-                // allow repair, because we're configuring
                 // don't touch the settings, so they can be configured
             }
         }
@@ -291,29 +311,61 @@ impl SettingsVal {
 
     fn version_none_to_one(&mut self) {
         // in version None, the only kind of log rotation was by size
-        self.version = Some(1);
+        self.settings_version = Some(1);
         if self.logging.rotate_count > 0 && self.logging.rotate_size_kb > 0 {
             self.logging.rotate_type = LogRotationType::Sized
         }
     }
 
     fn repair_config(&mut self, args: &ProxyArgs) -> Result<()> {
-        let can_repair = matches!(args.cmd, Command::Configure { .. });
-        let mut did_repair = false;
-        if self.version.is_none() {
-            did_repair = true;
+        // if we already have the right version of the settings,
+        // then no repair is needed
+        if let Some(Self::SETTINGS_VERSION) = self.settings_version {
+            return Ok(());
+        }
+        // Only if the configure command was specified (so we will be updating
+        // the config file) are we allowed to do the repair.
+        if !matches!(args.cmd, Command::Configure { .. }) {
+            eprintln!(
+                "Your configuration file must be updated before the proxy can run."
+            );
+            return Err(eyre!("Repair disallowed"));
+        }
+        // if we couldn't deserialize the config file contents (probably because it is
+        // a config file from the frl-proxy, but possibly because it's broken), then
+        // the proxy_version field will be None.  In that case, no repair is possible.
+        let can_repair = self.proxy_version.is_some();
+        // We always try to back up the existing config, even if we can't repair it,
+        // because it will have to be replaced by a new config.
+        let path = args.config_file.as_str();
+        backup_config(path, can_repair);
+        // If we can't repair the config file, warn the user and give up.
+        if !can_repair {
+            eprintln!("Your configuration file cannot be repaired");
+            eprintln!("Please re-create your configuration from scratch.");
+            return Err(eyre!("Repair failed"));
+        }
+        // Now attempt the repair: each repair takes us to the next settings
+        // version, starting from zero (which is actually no version)
+        if self.settings_version.is_none() {
             self.version_none_to_one();
         }
-        if did_repair && !can_repair {
-            Err(eyre!("Please reconfigure"))
-        } else {
+        // Make sure we got to the expected version.  If not, we probably started
+        // with a file that had a higher settings version (meaning it was from a
+        // newer version of the proxy)
+        if let Some(Self::SETTINGS_VERSION) = self.settings_version {
             Ok(())
+        } else {
+            eprintln!("Your configuration file is from a newer version of the proxy.");
+            eprintln!("Either upgrade your proxy or remake your configuration.");
+            Err(eyre!("Repair failed"))
         }
     }
 
     /// Update configuration settings by interviewing user
     /// No logging on this path, because it might interfere with the interview
     pub fn update_config(&mut self) -> Result<()> {
+        self.settings_version = Some(Self::SETTINGS_VERSION);
         self.update_proxy_config()?;
         self.update_ssl_config()?;
         self.update_frl_config()?;
@@ -640,6 +692,27 @@ impl SettingsVal {
             }
         }
         Ok(())
+    }
+}
+
+fn backup_config(path: &str, preserve_original: bool) {
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
+    let backup = format!("{}.bak", path);
+    let failure = if preserve_original {
+        std::fs::copy(path, &backup).err()
+    } else {
+        std::fs::rename(path, &backup).err()
+    };
+    match failure {
+        None => {
+            let verb = if preserve_original { "Copied" } else { "Moved" };
+            eprintln!("({} your config file to {})", verb, &backup);
+        }
+        Some(err) => {
+            eprintln!("(Couldn't back up your config file: {})", err);
+        }
     }
 }
 

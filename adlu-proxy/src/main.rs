@@ -33,9 +33,12 @@ async fn main() {
             std::process::exit(1);
         }
     } else {
-        eprintln!("Configuration file missing or out of date...");
-        args.cmd = Command::Configure { repair: false };
+        if !matches!(args.cmd, Command::Configure { .. }) {
+            eprintln!("The proxy cannot run without a valid configuration file.");
+            args.cmd = Command::Configure { repair: false };
+        }
         let settings = settings::load_config_file(&args);
+        eprintln!("Please answer the questions to update your configuration file...");
         if let Err(err) = settings::update_config_file(settings.ok().as_ref(), &args) {
             eprintln!("Failed to create config file: {}", err);
             std::process::exit(1);
