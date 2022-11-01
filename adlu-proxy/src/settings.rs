@@ -314,6 +314,9 @@ impl SettingsVal {
         self.settings_version = Some(1);
         if self.logging.rotate_count > 0 && self.logging.rotate_size_kb > 0 {
             self.logging.rotate_type = LogRotationType::Sized
+        } else {
+            // reset the rotation size since it's no longer a marker
+            self.logging.rotate_size_kb = 100;
         }
     }
 
@@ -868,5 +871,77 @@ impl TryFrom<&str> for LogLevel {
                 s
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{load_config_file, update_config_file, Command, ProxyArgs};
+
+    fn compare_update_config(cname: &str, before: &str, after: &str) {
+        eprintln!("cname: {}; before: {}", cname, before);
+        let cfg =
+            std::env::temp_dir().join(cname).to_str().expect("Bad name").to_string();
+        eprintln!("Config file is at: {}", &cfg);
+        std::fs::copy(before, &cfg).expect("Can't copy before");
+        let args = ProxyArgs {
+            config_file: cfg.clone(),
+            debug: 0,
+            log_to: None,
+            cmd: Command::Configure { repair: true },
+        };
+        let settings = load_config_file(&args).expect("Can't load config");
+        update_config_file(Some(&settings), &args).expect("Can't update config");
+        let updated = std::fs::read_to_string(cfg).expect("Can't read updated");
+        let updated_rest = &updated[updated.find('\n').expect("No newline")..];
+        let expected = std::fs::read_to_string(after).expect("Can't read expected");
+        let expected_rest = &expected[expected.find('\n').expect("No newline")..];
+        assert_eq!(updated_rest, expected_rest)
+    }
+
+    #[test]
+    fn test_dont_need_update() {
+        compare_update_config(
+            "conf1.toml",
+            "../rsrc/configs/proxy-conf.toml.v1-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-rotate",
+        );
+        compare_update_config(
+            "conf2.toml",
+            "../rsrc/configs/proxy-conf.toml.v1-no-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-no-rotate",
+        );
+    }
+
+    #[test]
+    fn test_need_update() {
+        compare_update_config(
+            "conf3.toml",
+            "../rsrc/configs/proxy-conf.toml.v0-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-rotate",
+        );
+        compare_update_config(
+            "conf4",
+            "../rsrc/configs/proxy-conf.toml.v0-no-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-no-rotate",
+        );
+    }
+
+    #[test]
+    fn test_cannot_update() {
+        let cname = "conf5.toml";
+        let before = "../rsrc/configs/proxy-conf.toml.adobe";
+        eprintln!("cname: {}; before: {}", cname, before);
+        let cfg =
+            std::env::temp_dir().join(cname).to_str().expect("Bad name").to_string();
+        eprintln!("Config file is at: {}", &cfg);
+        std::fs::copy(before, &cfg).expect("Can't copy before");
+        let args = ProxyArgs {
+            config_file: cfg,
+            debug: 0,
+            log_to: None,
+            cmd: Command::Configure { repair: true },
+        };
+        assert!(load_config_file(&args).is_err(), "Repaired adobe config");
     }
 }

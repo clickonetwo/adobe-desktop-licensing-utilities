@@ -3,7 +3,7 @@ name = "adlu-proxy"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 description = "A protocol-aware, caching, store/forward reverse proxy for Adobe desktop licensing servers"
 license = "AGPLv3"
-version = "1.1.0-alpha.1"
+version = "1.1.0-rc.1"
 edition = "2021"
 
 [features]
