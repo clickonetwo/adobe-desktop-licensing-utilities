@@ -19,12 +19,12 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 use clap::Parser;
 
 use adlu_base::get_first_interrupt;
-use adlu_proxy::cli::ProxyArgs;
+use adlu_proxy::cli::{Command, ProxyArgs};
 use adlu_proxy::settings;
 
 #[tokio::main]
 async fn main() {
-    let args: ProxyArgs = ProxyArgs::parse();
+    let mut args: ProxyArgs = ProxyArgs::parse();
     // if we have a valid config, proceed, else update the config
     if let Ok(settings) = settings::load_config_file(&args) {
         let stop_signal = get_first_interrupt();
@@ -33,8 +33,13 @@ async fn main() {
             std::process::exit(1);
         }
     } else {
-        eprintln!("Couldn't read the configuration file, creating a new one...");
-        if let Err(err) = settings::update_config_file(None, &args.config_file) {
+        if !matches!(args.cmd, Command::Configure { .. }) {
+            eprintln!("The proxy cannot run without a valid configuration file.");
+            args.cmd = Command::Configure { repair: false };
+        }
+        let settings = settings::load_config_file(&args);
+        eprintln!("Please answer the questions to update your configuration file...");
+        if let Err(err) = settings::update_config_file(settings.ok().as_ref(), &args) {
             eprintln!("Failed to create config file: {}", err);
             std::process::exit(1);
         }

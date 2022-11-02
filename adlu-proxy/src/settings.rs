@@ -84,10 +84,35 @@ impl Debug for Ssl {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogRotationType {
+    None = 0,
+    Daily = 1,
+    Sized = 2,
+}
+
+impl Default for LogRotationType {
+    fn default() -> Self {
+        LogRotationType::None
+    }
+}
+
+impl std::fmt::Display for LogRotationType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogRotationType::None => write!(f, "None"),
+            LogRotationType::Daily => write!(f, "Daily"),
+            LogRotationType::Sized => write!(f, "By Size"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Logging {
     pub level: LogLevel,
     pub destination: LogDestination,
     pub file_path: String,
+    pub rotate_type: LogRotationType,
     pub rotate_size_kb: u64,
     pub rotate_count: u32,
 }
@@ -98,7 +123,8 @@ impl Default for Logging {
             level: LogLevel::Info,
             destination: LogDestination::File,
             file_path: "proxy-log.log".to_string(),
-            rotate_size_kb: 0,
+            rotate_type: LogRotationType::None,
+            rotate_size_kb: 100,
             rotate_count: 10,
         }
     }
@@ -167,6 +193,8 @@ impl Default for Log {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SettingsVal {
+    pub proxy_version: Option<String>,
+    pub settings_version: Option<u32>,
     pub proxy: Proxy,
     pub ssl: Ssl,
     pub frl: Frl,
@@ -189,15 +217,20 @@ pub fn load_config_file(args: &ProxyArgs) -> Result<Settings> {
 
 /// Update (or create) a configuration file after interviewing user
 /// No logging on this path, because it might interfere with the interview
-pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()> {
+pub fn update_config_file(settings: Option<&Settings>, args: &ProxyArgs) -> Result<()> {
     // get the configuration
     let mut conf: SettingsVal = match settings {
         Some(settings) => settings.as_ref().clone(),
         None => SettingsVal::default_config(),
     };
-    // interview the user for updates
-    conf.update_config().wrap_err("Configuration interview failed")?;
+    // maybe interview the user for updates
+    let repair_only = matches!(args.cmd, Command::Configure { repair: true });
+    if settings.is_none() || !repair_only {
+        conf.update_config().wrap_err("Configuration interview failed")?;
+    }
     // save the configuration
+    conf.proxy_version = Some(env!("CARGO_PKG_VERSION").to_string());
+    let path = args.config_file.as_str();
     let toml = toml::to_string(&conf)
         .wrap_err(format!("Cannot serialize configuration: {:?}", &conf))?;
     let mut file =
@@ -209,19 +242,34 @@ pub fn update_config_file(settings: Option<&Settings>, path: &str) -> Result<()>
 }
 
 impl SettingsVal {
-    /// Create a new default config
+    const SETTINGS_VERSION: u32 = 1;
+
+    /// Create a new default config.  A default config carries the version of the proxy
+    /// that created it, but it doesn't carry a settings version, because we need the
+    /// settings version to be declared by the user's config file.  Note that this means
+    /// that newer settings versions have to be extensions of older ones, so the older
+    /// ones will still deserialize correctly.
     pub fn default_config() -> Self {
-        Default::default()
+        Self {
+            proxy_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            ..Default::default()
+        }
     }
 
     /// Load an existing config file, returning its contained config
     pub fn load_config(args: &ProxyArgs) -> Result<Self> {
-        let default_str = toml::to_string(&Self::default_config()).unwrap();
+        let default_str = toml::to_string(&SettingsVal::default_config()).unwrap();
         let builder = Config::builder()
             .add_source(ConfigFile::from_str(&default_str, FileFormat::Toml))
             .add_source(ConfigFile::new(&args.config_file, FileFormat::Toml))
             .add_source(Environment::with_prefix("adlu_proxy"));
-        let mut settings: Self = builder.build()?.try_deserialize()?;
+        // There's a very important subtlety here: Default::default for a SettingsVal
+        // is NOT the same as a SettingsVal::default_config (the former has no proxy_version;
+        // the latter does have one).  If we can't deserialize the config file, the config
+        // we send for repair will not be repairable, because it won't have the proxy version.
+        let mut settings: Self = builder.build()?.try_deserialize().unwrap_or_default();
+        // Now repair the older config if needed and possible and allowed
+        settings.repair_config(args)?;
         // Now process the args as overrides: global first, then command-specific
         match args.debug {
             1 => settings.logging.level = LogLevel::Debug,
@@ -254,16 +302,73 @@ impl SettingsVal {
                     settings.logging.destination = LogDestination::File
                 };
             }
-            Command::Configure => {
+            Command::Configure { .. } => {
                 // don't touch the settings, so they can be configured
             }
         }
         Ok(settings)
     }
 
+    fn version_none_to_one(&mut self) {
+        // in version None, the only kind of log rotation was by size
+        self.settings_version = Some(1);
+        if self.logging.rotate_count > 0 && self.logging.rotate_size_kb > 0 {
+            self.logging.rotate_type = LogRotationType::Sized
+        } else {
+            // reset the rotation size since it's no longer a marker
+            self.logging.rotate_size_kb = 100;
+        }
+    }
+
+    fn repair_config(&mut self, args: &ProxyArgs) -> Result<()> {
+        // if we already have the right version of the settings,
+        // then no repair is needed
+        if let Some(Self::SETTINGS_VERSION) = self.settings_version {
+            return Ok(());
+        }
+        // Only if the configure command was specified (so we will be updating
+        // the config file) are we allowed to do the repair.
+        if !matches!(args.cmd, Command::Configure { .. }) {
+            eprintln!(
+                "Your configuration file must be updated before the proxy can run."
+            );
+            return Err(eyre!("Repair disallowed"));
+        }
+        // if we couldn't deserialize the config file contents (probably because it is
+        // a config file from the frl-proxy, but possibly because it's broken), then
+        // the proxy_version field will be None.  In that case, no repair is possible.
+        let can_repair = self.proxy_version.is_some();
+        // We always try to back up the existing config, even if we can't repair it,
+        // because it will have to be replaced by a new config.
+        let path = args.config_file.as_str();
+        backup_config(path, can_repair);
+        // If we can't repair the config file, warn the user and give up.
+        if !can_repair {
+            eprintln!("Your configuration file cannot be repaired");
+            eprintln!("Please re-create your configuration from scratch.");
+            return Err(eyre!("Repair failed"));
+        }
+        // Now attempt the repair: each repair takes us to the next settings
+        // version, starting from zero (which is actually no version)
+        if self.settings_version.is_none() {
+            self.version_none_to_one();
+        }
+        // Make sure we got to the expected version.  If not, we probably started
+        // with a file that had a higher settings version (meaning it was from a
+        // newer version of the proxy)
+        if let Some(Self::SETTINGS_VERSION) = self.settings_version {
+            Ok(())
+        } else {
+            eprintln!("Your configuration file is from a newer version of the proxy.");
+            eprintln!("Either upgrade your proxy or remake your configuration.");
+            Err(eyre!("Repair failed"))
+        }
+    }
+
     /// Update configuration settings by interviewing user
     /// No logging on this path, because it might interfere with the interview
     pub fn update_config(&mut self) -> Result<()> {
+        self.settings_version = Some(Self::SETTINGS_VERSION);
         self.update_proxy_config()?;
         self.update_ssl_config()?;
         self.update_frl_config()?;
@@ -523,16 +628,19 @@ impl SettingsVal {
                 }
             }
             // ask about log rotation
-            let mut target_size = self.logging.rotate_size_kb;
             if matches!(self.logging.destination, LogDestination::File) {
-                let prompt = if target_size == 0 {
+                let prompt = if let LogRotationType::None = self.logging.rotate_type {
                     eprintln!("The proxy is not doing log rotation.");
-                    target_size = 1024;
                     "Do you want to enable log rotation?"
                 } else {
-                    eprintln!(
-                        "The proxy is rotating logs when they reach {target_size}KB."
-                    );
+                    if let LogRotationType::Sized = self.logging.rotate_type {
+                        eprintln!(
+                            "The proxy is rotating logs when they reach {}KB.",
+                            self.logging.rotate_size_kb
+                        );
+                    } else {
+                        eprintln!("The proxy is rotating logs every day");
+                    }
                     "Do you want to change your log rotation configuration?"
                 };
                 let choice = Confirm::new()
@@ -541,11 +649,20 @@ impl SettingsVal {
                     .with_prompt(prompt)
                     .interact()?;
                 if choice {
-                    self.logging.rotate_size_kb = Input::new()
-                        .default(target_size)
-                        .with_prompt("Max log file size in KB (0 for no rotation)")
+                    let choices = [
+                        LogRotationType::None.to_string(),
+                        LogRotationType::Daily.to_string(),
+                        LogRotationType::Sized.to_string(),
+                    ];
+                    let default = self.logging.rotate_type.clone() as usize;
+                    let choice = Select::new()
+                        .items(&choices)
+                        .default(default)
+                        .with_prompt("Rotation type")
                         .interact()?;
-                    if self.logging.rotate_size_kb > 0 {
+                    if choice == 0 {
+                        self.logging.rotate_type = LogRotationType::None;
+                    } else {
                         self.logging.rotate_count = Input::new()
                             .default(self.logging.rotate_count)
                             .validate_with(|cnt: &u32| {
@@ -557,11 +674,48 @@ impl SettingsVal {
                             })
                             .with_prompt("Keep this many log files (1-99)")
                             .interact()?;
+                        if choice == 1 {
+                            self.logging.rotate_type = LogRotationType::Daily;
+                        } else {
+                            self.logging.rotate_type = LogRotationType::Sized;
+                            self.logging.rotate_size_kb = Input::new()
+                                .default(self.logging.rotate_size_kb)
+                                .validate_with(|cnt: &u64| {
+                                    if *cnt > 0 {
+                                        Ok(())
+                                    } else {
+                                        Err(eyre!("Value must be greater than 0"))
+                                    }
+                                })
+                                .with_prompt("Max log file size in KB")
+                                .interact()?;
+                        }
                     }
                 }
             }
         }
         Ok(())
+    }
+}
+
+fn backup_config(path: &str, preserve_original: bool) {
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
+    let backup = format!("{}.bak", path);
+    let failure = if preserve_original {
+        std::fs::copy(path, &backup).err()
+    } else {
+        std::fs::rename(path, &backup).err()
+    };
+    match failure {
+        None => {
+            let verb = if preserve_original { "Copied" } else { "Moved" };
+            eprintln!("({} your config file to {})", verb, &backup);
+        }
+        Some(err) => {
+            eprintln!("(Couldn't back up your config file: {})", err);
+        }
     }
 }
 
@@ -717,5 +871,81 @@ impl TryFrom<&str> for LogLevel {
                 s
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{load_config_file, update_config_file, Command, ProxyArgs};
+
+    fn compare_update_config(cname: &str, before: &str, after: &str) {
+        eprintln!("cname: {}; before: {}", cname, before);
+        let cfg =
+            std::env::temp_dir().join(cname).to_str().expect("Bad name").to_string();
+        eprintln!("Config file is at: {}", &cfg);
+        std::fs::copy(before, &cfg).expect("Can't copy before");
+        let args = ProxyArgs {
+            config_file: cfg.clone(),
+            debug: 0,
+            log_to: None,
+            cmd: Command::Configure { repair: true },
+        };
+        let settings = load_config_file(&args).expect("Can't load config");
+        update_config_file(Some(&settings), &args).expect("Can't update config");
+        let updated = std::fs::read_to_string(cfg).expect("Can't read updated");
+        // canonicalize line endings
+        let updated = updated.replace("\r\n", "\n");
+        // skip the first line that has the proxy version
+        let updated_rest = &updated[updated.find('\n').expect("No newline")..];
+        let expected = std::fs::read_to_string(after).expect("Can't read expected");
+        let expected = expected.replace("\r\n", "\n");
+        let expected_rest = &expected[expected.find('\n').expect("No newline")..];
+        assert_eq!(updated_rest, expected_rest)
+    }
+
+    #[test]
+    fn test_dont_need_update() {
+        compare_update_config(
+            "conf1.toml",
+            "../rsrc/configs/proxy-conf.toml.v1-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-rotate",
+        );
+        compare_update_config(
+            "conf2.toml",
+            "../rsrc/configs/proxy-conf.toml.v1-no-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-no-rotate",
+        );
+    }
+
+    #[test]
+    fn test_need_update() {
+        compare_update_config(
+            "conf3.toml",
+            "../rsrc/configs/proxy-conf.toml.v0-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-rotate",
+        );
+        compare_update_config(
+            "conf4",
+            "../rsrc/configs/proxy-conf.toml.v0-no-rotate",
+            "../rsrc/configs/proxy-conf.toml.v1-no-rotate",
+        );
+    }
+
+    #[test]
+    fn test_cannot_update() {
+        let cname = "conf5.toml";
+        let before = "../rsrc/configs/proxy-conf.toml.adobe";
+        eprintln!("cname: {}; before: {}", cname, before);
+        let cfg =
+            std::env::temp_dir().join(cname).to_str().expect("Bad name").to_string();
+        eprintln!("Config file is at: {}", &cfg);
+        std::fs::copy(before, &cfg).expect("Can't copy before");
+        let args = ProxyArgs {
+            config_file: cfg,
+            debug: 0,
+            log_to: None,
+            cmd: Command::Configure { repair: true },
+        };
+        assert!(load_config_file(&args).is_err(), "Repaired adobe config");
     }
 }

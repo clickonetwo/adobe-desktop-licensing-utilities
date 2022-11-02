@@ -39,9 +39,7 @@ pub async fn run(
     debug!("Loaded config: {:?}", &settings);
     let cache = cache::connect(&settings.proxy.db_path).await?;
     let result = match args.cmd {
-        Command::Configure => {
-            settings::update_config_file(Some(&settings), &args.config_file)
-        }
+        Command::Configure { .. } => settings::update_config_file(Some(&settings), &args),
         Command::Serve { .. } => {
             if settings.proxy.ssl {
                 proxy::serve_incoming_https_requests(&settings, &cache, stop_signal).await

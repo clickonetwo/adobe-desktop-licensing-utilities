@@ -43,7 +43,10 @@ pub struct ProxyArgs {
 /// Proxy commands
 pub enum Command {
     /// Interactively create the config file
-    Configure,
+    Configure {
+        #[clap(short, long)]
+        repair: bool,
+    },
     /// Start the proxy server
     Serve {
         #[clap(short, long)]
@@ -52,7 +55,7 @@ pub enum Command {
         /// Overrides the config file setting.
         mode: Option<String>,
 
-        #[clap(long, parse(try_from_str))]
+        #[clap(long, value_parser=clap::builder::BoolishValueParser::new())]
         /// Enable SSL? (true or false).
         /// Overrides the config file setting.
         ssl: Option<bool>,
