@@ -893,8 +893,12 @@ mod test {
         let settings = load_config_file(&args).expect("Can't load config");
         update_config_file(Some(&settings), &args).expect("Can't update config");
         let updated = std::fs::read_to_string(cfg).expect("Can't read updated");
+        // canonicalize line endings
+        let updated = updated.replace("\r\n", "\n");
+        // skip the first line that has the proxy version
         let updated_rest = &updated[updated.find('\n').expect("No newline")..];
         let expected = std::fs::read_to_string(after).expect("Can't read expected");
+        let expected = expected.replace("\r\n", "\n");
         let expected_rest = &expected[expected.find('\n').expect("No newline")..];
         assert_eq!(updated_rest, expected_rest)
     }
