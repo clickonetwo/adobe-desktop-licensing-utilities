@@ -28,96 +28,15 @@ use eyre::{eyre, Report, Result, WrapErr};
 use log::{debug, error, info};
 use warp::{reply, Filter, Rejection, Reply};
 
-use adlu_base::{load_pem_files, load_pfx_file, CertificateData};
 use adlu_parse::protocol::{Request, Response};
 
 use crate::cache::Cache;
 use crate::settings::{ProxyMode, Settings};
 
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub settings: Settings,
-    pub cache: Cache,
-    pub client: reqwest::Client,
-    pub frl_server: String,
-    pub log_server: String,
-}
+pub use self::config::Config;
 
-impl Config {
-    pub fn new(settings: Settings, cache: Cache) -> Result<Self> {
-        let mut builder = reqwest::Client::builder();
-        builder = builder.timeout(std::time::Duration::new(59, 0));
-        if settings.upstream.use_proxy {
-            let proxy_host = format!(
-                "{}://{}:{}",
-                settings.upstream.proxy_protocol,
-                settings.upstream.proxy_host,
-                settings.upstream.proxy_port
-            );
-            let mut proxy = reqwest::Proxy::https(&proxy_host)
-                .wrap_err("Invalid proxy configuration")?;
-            if settings.upstream.use_basic_auth {
-                proxy = proxy.basic_auth(
-                    &settings.upstream.proxy_username,
-                    &settings.upstream.proxy_password,
-                );
-            }
-            builder = builder.proxy(proxy)
-        }
-        let client = builder.build().wrap_err("Can't create proxy client")?;
-        let frl_server: http::Uri =
-            settings.frl.remote_host.parse().wrap_err("Invalid FRL endpoint")?;
-        let log_server: http::Uri =
-            settings.log.remote_host.parse().wrap_err("Invalid log endpoint")?;
-        Ok(Config {
-            settings,
-            cache,
-            client,
-            frl_server: frl_server.to_string(),
-            log_server: log_server.to_string(),
-        })
-    }
-
-    #[cfg(test)]
-    pub fn clone_with_mode(&self, mode: &ProxyMode) -> Self {
-        let mut new_settings = self.settings.as_ref().clone();
-        new_settings.proxy.mode = mode.clone();
-        let mut new_config = self.clone();
-        new_config.settings = Settings::new(new_settings);
-        new_config
-    }
-
-    pub fn bind_addr(&self) -> Result<std::net::SocketAddr> {
-        let proxy_addr = if self.settings.proxy.ssl {
-            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.ssl_port)
-        } else {
-            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.port)
-        };
-        proxy_addr.parse().wrap_err("Invalid proxy host/port configuration")
-    }
-
-    pub fn cert_data(&self) -> Result<CertificateData> {
-        if self.settings.proxy.ssl {
-            load_cert_data(&self.settings).wrap_err("SSL configuration failure")
-        } else {
-            Err(eyre!("SSL is not enabled"))
-        }
-    }
-}
-
-fn load_cert_data(settings: &Settings) -> Result<CertificateData> {
-    if settings.ssl.use_pfx {
-        load_pfx_file(&settings.ssl.cert_path, &settings.ssl.password)
-            .wrap_err("Failed to load PKCS12 data:")
-    } else {
-        let key_pass = match settings.ssl.password.as_str() {
-            "" => None,
-            p => Some(p),
-        };
-        load_pem_files(&settings.ssl.key_path, &settings.ssl.cert_path, key_pass)
-            .wrap_err("Failed to load certificate and key files")
-    }
-}
+pub mod config;
+pub mod protocol;
 
 pub async fn serve_incoming_https_requests(
     settings: &Settings,
