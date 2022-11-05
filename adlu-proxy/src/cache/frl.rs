@@ -25,11 +25,8 @@ use sqlx::{
 
 use adlu_base::Timestamp;
 use adlu_parse::protocol::{
-    FrlActivationRequest as ActReq, FrlActivationRequestBody,
-    FrlActivationResponse as ActResp, FrlActivationResponseBody, FrlAppDetails,
-    FrlDeactivationQueryParams, FrlDeactivationRequest as DeactReq,
-    FrlDeactivationResponse as DeactResp, FrlDeactivationResponseBody, FrlDeviceDetails,
-    Request,
+    FrlActivationRequestBody, FrlActivationResponseBody, FrlAppDetails,
+    FrlDeactivationQueryParams, FrlDeactivationResponseBody, FrlDeviceDetails,
 };
 
 pub async fn clear(pool: &SqlitePool) -> Result<()> {

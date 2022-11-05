@@ -110,7 +110,7 @@ mod tests {
         outcome: &MockOutcome,
         device_id: &str,
     ) -> u16 {
-        let filter = proxy::nul_activate_route(conf.clone());
+        let filter = proxy::nul_license_route(conf.clone());
         let mut builder = warp::test::request();
         builder = named_user::mock_activation_request(outcome, device_id, builder);
         let response = builder.reply(&filter).await;

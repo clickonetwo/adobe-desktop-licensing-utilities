@@ -21,19 +21,18 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 Provides the top-level proxy framework, both insecure and secure.  This includes a status endpoint
 that can be used to ensure the proxy is up and find out which services it is providing.
  */
-use std::collections::HashMap;
 use std::convert::Infallible;
 
-use eyre::{eyre, Report, Result, WrapErr};
+use eyre::{eyre, Report, Result};
 use log::{debug, error, info};
+use serde_json::{json, Value};
 use warp::{reply, Filter, Rejection, Reply};
-
-use adlu_parse::protocol::{Request, Response};
 
 use crate::cache::Cache;
 use crate::settings::{ProxyMode, Settings};
 
 pub use self::config::Config;
+pub use self::protocol::{Request, RequestType, Response};
 
 pub mod config;
 pub mod protocol;
@@ -113,14 +112,7 @@ pub async fn forward_stored_requests(settings: &Settings, cache: &Cache) -> Resu
 pub fn routes(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    status_route(conf.clone())
-        .or(frl_activate_route(conf.clone()))
-        .or(frl_deactivate_route(conf.clone()))
-        .or(nul_activate_route(conf.clone()))
-        .or(upload_route(conf))
-        .or(record_post_route())
-        .or(record_delete_route())
-        .with(warp::log("route::summary"))
+    status_route(conf.clone()).or(adobe_route(conf)).with(warp::log("route::summary"))
 }
 
 pub fn with_conf(
@@ -132,113 +124,74 @@ pub fn with_conf(
 pub fn status_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::get().and(warp::path("status")).and(with_conf(conf)).then(status)
+    warp::get()
+        .and(warp::path("status"))
+        .and(warp::path::end())
+        .and(with_conf(conf))
+        .then(status)
 }
 
-pub fn record_post_route() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone
-{
-    warp::post()
-        // .and(warp::path!("asnp" / "nud"))
-        .and(warp::path::full())
-        .and(warp::filters::header::headers_cloned())
-        .and(warp::body::content_length_limit(32_000))
-        .and(warp::body::json())
-        .then(record_post)
-}
-
-pub fn record_delete_route(
+pub fn adobe_route(
+    conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::delete()
-        // .and(warp::path!("asnp" / "nud"))
-        .and(warp::path::full())
-        .and(warp::filters::header::headers_cloned())
-        .and(warp::query())
-        .then(record_delete)
+    Request::frl_activation_filter()
+        .or(Request::frl_deactivation_filter())
+        .unify()
+        .or(Request::nul_license_filter())
+        .unify()
+        .or(Request::log_upload_filter())
+        .unify()
+        .or(Request::unknown_filter())
+        .unify()
+        .and(with_conf(conf))
+        .then(process_adobe_request)
 }
 
 pub fn frl_activate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::post()
-        .and(warp::path!("asnp" / "frl_connected" / "values" / "v2"))
-        .and(Request::frl_activation_filter())
-        .and(with_conf(conf))
-        .then(process_web_request)
+    Request::frl_activation_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
 pub fn frl_deactivate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::delete()
-        .and(warp::path!("asnp" / "frl_connected" / "v1"))
-        .and(Request::frl_deactivation_filter())
-        .and(with_conf(conf))
-        .then(process_web_request)
+    Request::frl_deactivation_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
-pub fn nul_activate_route(
+pub fn nul_license_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::post()
-        .and(warp::path!("asnp" / "nud" / "v4"))
-        .and(Request::nul_activation_filter())
-        .and(with_conf(conf))
-        .then(process_web_request)
+    Request::nul_license_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
 pub fn upload_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::post()
-        .and(warp::path!("ulecs" / "v1"))
-        .and(Request::log_upload_filter())
-        .and(with_conf(conf))
-        .then(process_web_request)
+    Request::log_upload_filter().and(with_conf(conf)).then(process_adobe_request)
+}
+
+pub fn unknown_route(
+    conf: Config,
+) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    Request::unknown_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
 pub async fn status(conf: Config) -> reply::Response {
-    let status = format!("Proxy running in {:?} mode", conf.settings.proxy.mode);
+    let status = format!("{} running in {:?} mode", proxy_id(), conf.settings.proxy.mode);
     info!("Status request received, issuing status: {}", &status);
-    let body =
-        serde_json::json!({"statusCode": 200, "version": &agent(), "status": &status});
-    proxy_reply(200, reply::json(&body))
+    let body = json!({"statusCode": 200, "status": &status});
+    proxy_reply(http::StatusCode::OK, &body)
 }
 
-pub async fn record_post(
-    path: warp::path::FullPath,
-    headers: http::HeaderMap,
-    body: serde_json::Value,
-) -> reply::Response {
-    let path = path.as_str().to_string();
-    info!("Unrecognized POST request to path: {}", &path);
-    debug!("Request headers are: {:?}", headers);
-    debug!(
-        "Request body is: {}",
-        serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string())
-    );
-    proxy_offline_reply()
-}
-
-pub async fn record_delete(
-    path: warp::path::FullPath,
-    headers: http::HeaderMap,
-    query: HashMap<String, String>,
-) -> reply::Response {
-    let path = path.as_str().to_string();
-    info!("Unrecognized DELETE request to path: {}", &path);
-    debug!("Request headers are: {:?}", headers);
-    debug!("Query is: {:?}", query);
-    proxy_offline_reply()
-}
-
-pub async fn process_web_request(req: Request, conf: Config) -> reply::Response {
-    info!("Received request id: {}", req.request_id());
-    debug!("Received request: {:?}", &req);
+pub async fn process_adobe_request(req: Request, conf: Config) -> reply::Response {
+    info!("Received {} request {}", &req.request_type, req.with_id());
+    debug!("Received {} request: {:?}", &req.request_type, &req);
     if !matches!(conf.settings.proxy.mode, ProxyMode::Isolated) {
         conf.cache.store_request(&req).await;
     }
     match send_request(&conf, &req).await {
-        SendOutcome::Success(resp) => proxy_reply(200, resp),
+        SendOutcome::Success(resp) => resp.into_response(),
         SendOutcome::Isolated => proxy_offline_reply(),
         SendOutcome::Unreachable(err) => unreachable_reply(err),
         SendOutcome::ParseFailure(err) => adobe_error_reply(err),
@@ -259,41 +212,38 @@ pub enum SendOutcome {
 }
 
 pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
-    let id = req.request_id();
+    let id = format!("{} request {}", &req.request_type, req.with_id());
     let outcome = if let ProxyMode::Isolated = conf.settings.proxy.mode {
-        info!("Isolated - not forwarding request ID {}", id);
+        info!("Isolated - not forwarding {}", id);
         SendOutcome::Isolated
     } else {
-        info!("Sending request ID {} to Adobe endpoint", id);
-        match send_to_adobe(conf, req).await {
+        info!("Sending {} to Adobe endpoint", id);
+        match req.send_to_adobe(conf).await {
             Ok(response) => {
                 let status = response.status();
                 if status.is_success() {
-                    info!(
-                        "Received valid response status for request ID {}: {}",
-                        id, status
-                    );
+                    info!("Received valid response status for {}: {}", id, status);
                     match Response::from_network(req, response).await {
                         Ok(resp) => {
-                            debug!("Response for request ID {}: {:?}", id, resp);
+                            debug!("Response for {}: {:?}", id, resp);
                             // cache the response
-                            conf.cache.store_response(req, &resp).await;
+                            conf.cache.store_response(&resp).await;
                             SendOutcome::Success(resp)
                         }
                         Err(err) => {
-                            error!("Can't parse response for request ID {}: {}", id, err);
+                            error!("Can't parse response for {}: {}", id, err);
                             SendOutcome::ParseFailure(err)
                         }
                     }
                 } else {
-                    error!("Received failure status for request ID {}: {}", id, status);
-                    debug!("Response for request ID {}: {:?}", id, response);
+                    error!("Received failure status for {}: {}", id, status);
+                    debug!("Response for {}: {:?}", id, response);
                     // return the safe bits of the response
                     SendOutcome::ErrorStatus(response)
                 }
             }
             Err(err) => {
-                info!("Network failure sending request ID {}", id);
+                info!("Network failure sending {}", id);
                 SendOutcome::Unreachable(err)
             }
         }
@@ -301,53 +251,10 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
     if let SendOutcome::Success(resp) = outcome {
         SendOutcome::Success(resp)
     } else if let Some(resp) = conf.cache.fetch_response(req).await {
-        info!("Using previously cached response for request ID {}", id);
+        info!("Using previously cached response for {}", id);
         SendOutcome::Success(resp)
     } else {
         outcome
-    }
-}
-
-async fn send_to_adobe(conf: &Config, req: &Request) -> Result<reqwest::Response> {
-    let method = match req {
-        Request::FrlActivation(_) => http::Method::POST,
-        Request::FrlDeactivation(_) => http::Method::DELETE,
-        Request::NulActivation(_) => http::Method::POST,
-        Request::LogUpload(_) => http::Method::POST,
-    };
-    let endpoint = match req {
-        Request::FrlActivation(_) => {
-            format!("{}/{}", &conf.frl_server, "asnp/frl_connected/values/v2")
-        }
-        Request::FrlDeactivation(_) => {
-            format!("{}/{}", &conf.frl_server, "asnp/frl_connected/v1")
-        }
-        Request::NulActivation(_) => {
-            format!("{}/{}", &conf.frl_server, "asnp/nud/v4")
-        }
-        Request::LogUpload(_) => {
-            format!("{}/{}", &conf.log_server, "ulecs/v1")
-        }
-    };
-    let response_type = match req {
-        Request::FrlActivation(_) => "application/json",
-        Request::FrlDeactivation(_) => "application/json",
-        Request::NulActivation(_) => "application/json",
-        Request::LogUpload(_) => "*/*",
-    };
-    let builder = conf
-        .client
-        .request(method, endpoint)
-        .header("User-Agent", agent())
-        .header("Accept-Encoding", "gzip, deflate, br")
-        .header("Accept", response_type)
-        .header("Accept-Language", "en-us");
-    let request =
-        req.to_network(builder).build().wrap_err("Failure building network request")?;
-    if cfg!(test) {
-        mock_adobe_server(conf, request).await.wrap_err("Error mocking network request")
-    } else {
-        conf.client.execute(request).await.wrap_err("Error executing network request")
     }
 }
 
@@ -364,42 +271,40 @@ async fn mock_adobe_server(_: &Config, _: reqwest::Request) -> Result<reqwest::R
     Err(eyre!("Can't mock except in testing"))
 }
 
-fn proxy_reply(status_code: u16, core: impl Reply) -> reply::Response {
-    reply::with_status(
-        reply::with_header(
-            reply::with_header(core, "content-type", "application/json;charset=UTF-8"),
-            "server",
-            agent(),
-        ),
-        http::StatusCode::from_u16(status_code).unwrap(),
-    )
-    .into_response()
+fn proxy_reply(status: http::StatusCode, body: &Value) -> reply::Response {
+    reply::with_status(reply::with_header(reply::json(body), "Via", proxy_via()), status)
+        .into_response()
 }
 
 fn proxy_offline_reply() -> reply::Response {
     let message = "Proxy is operating offline: request stored for later replay";
     debug!("{}", message);
-    let body = serde_json::json!({"statusCode": 502, "message": message});
-    proxy_reply(502, reply::json(&body))
+    let body = json!({"statusCode": 502, "message": message});
+    proxy_reply(http::StatusCode::BAD_GATEWAY, &body)
 }
 
 fn unreachable_reply(err: Report) -> reply::Response {
     let message = format!("Could not reach Adobe: {}", err);
     error!("{}", &message);
-    let body = serde_json::json!({"statusCode": 502, "message": message});
-    proxy_reply(502, reply::json(&body))
+    let body = json!({"statusCode": 502, "message": message});
+    proxy_reply(http::StatusCode::BAD_GATEWAY, &body)
 }
 
 async fn adobe_bad_status_reply(resp: reqwest::Response) -> reply::Response {
-    let mut builder =
-        http::Response::builder().status(resp.status()).header("server", agent());
+    let mut builder = http::Response::builder().status(resp.status());
     if let Some(request_id) = resp.headers().get("X-Request-Id") {
         builder = builder.header("X-Request-Id", request_id)
     }
     if let Some(content_type) = resp.headers().get("Content-Type") {
         builder = builder.header("Content-Type", content_type)
+    }
+    if let Some(via) = resp.headers().get("Via") {
+        builder = builder.header(
+            "Via",
+            format!("{}, {}", via.to_str().unwrap_or("upstream"), proxy_via()),
+        )
     } else {
-        return adobe_error_reply(eyre!("Missing content type: {:?}", resp));
+        builder = builder.header("Via", proxy_via())
     }
     let body = match resp.bytes().await {
         Ok(val) => val,
@@ -411,15 +316,14 @@ async fn adobe_bad_status_reply(resp: reqwest::Response) -> reply::Response {
 fn adobe_error_reply(err: Report) -> reply::Response {
     let message = format!("Malformed Adobe response: {}", err);
     error!("{}", &message);
-    let body = serde_json::json!({"statusCode": 502, "message": message});
-    proxy_reply(502, reply::json(&body))
+    let body = json!({"statusCode": 500, "message": message});
+    proxy_reply(http::StatusCode::INTERNAL_SERVER_ERROR, &body)
 }
 
-pub fn agent() -> String {
-    format!(
-        "ADLU-Proxy/{} ({}/{})",
-        env!("CARGO_PKG_VERSION"),
-        std::env::consts::OS,
-        sys_info::os_release().as_deref().unwrap_or("Unknown")
-    )
+pub fn proxy_id() -> String {
+    format!("adlu-proxy-{}", env!("CARGO_PKG_VERSION"))
+}
+
+pub fn proxy_via() -> String {
+    format!("1.1 {}", proxy_id())
 }

@@ -29,7 +29,7 @@ use sqlx::{
 };
 
 use crate::cli::Datasource;
-use adlu_parse::protocol::{Request, Response};
+use crate::proxy::protocol::{Request, RequestType, Response};
 
 mod frl;
 mod log;
@@ -119,55 +119,34 @@ impl Db {
 
     pub async fn store_request(&self, req: &Request) {
         let pool = &self.pool;
-        let result = match req {
-            Request::FrlActivation(req) => frl::store_activation_request(pool, req).await,
-            Request::FrlDeactivation(req) => {
+        let result = match req.request_type {
+            RequestType::FrlActivation => frl::store_activation_request(pool, req).await,
+            RequestType::FrlDeactivation => {
                 frl::store_deactivation_request(pool, req).await
             }
-            Request::NulActivation(req) => {
-                named_user::store_license_request(pool, req).await
-            }
-            Request::LogUpload(req) => log::store_upload_request(pool, req).await,
+            RequestType::NulLicense => named_user::store_license_request(pool, req).await,
+            RequestType::LogUpload => log::store_upload_request(pool, req).await,
+            RequestType::Unknown => Ok(()),
         };
         if let Err(err) = result {
-            let id = req.request_id();
-            error!("Cache store of request ID {} failed: {}", id, err);
+            error!("Cache store of {} failed: {}", req.with_id(), err);
         }
     }
 
-    pub async fn store_response(&self, req: &Request, resp: &Response) {
+    pub async fn store_response(&self, resp: &Response) {
         let pool = &self.pool;
-        let mismatch =
-            eyre!("Internal request/response inconsistency: please report a bug!");
-        let result = match resp {
-            Response::FrlActivation(resp) => {
-                if let Request::FrlActivation(req) = req {
-                    frl::store_activation_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
+        let result = match resp.request_type {
+            RequestType::FrlActivation => {
+                frl::store_activation_response(pool, resp).await
             }
-            Response::FrlDeactivation(resp) => {
-                if let Request::FrlDeactivation(req) = req {
-                    frl::store_deactivation_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
+            RequestType::FrlDeactivation => {
+                frl::store_deactivation_response(pool, resp).await
             }
-            Response::NulActivation(resp) => {
-                if let Request::NulActivation(req) = req {
-                    named_user::store_license_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
+            RequestType::NulLicense => {
+                named_user::store_license_response(pool, resp).await
             }
-            Response::LogUpload(resp) => {
-                if let Request::LogUpload(req) = req {
-                    log::store_upload_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
-            }
+            RequestType::LogUpload => log::store_upload_response(pool, resp).await,
+            RequestType::Unknown => Ok(()),
         };
         if let Err(err) = result {
             error!("Cache store of request ID {} failed: {}", req.request_id(), err);

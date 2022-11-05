@@ -18,8 +18,8 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 
 use eyre::{Result, WrapErr};
-use log::error;
-use warp::{Filter, Rejection};
+use log::warn;
+use warp::{Filter, Rejection, Reply};
 
 use adlu_base::Timestamp;
 
@@ -34,10 +34,22 @@ pub enum RequestType {
     Unknown,
 }
 
+impl std::fmt::Display for RequestType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RequestType::FrlActivation => write!(f, "FRL Activation"),
+            RequestType::FrlDeactivation => write!(f, "FRL Deactivation"),
+            RequestType::NulLicense => write!(f, "NUL License"),
+            RequestType::LogUpload => write!(f, "Log Upload"),
+            RequestType::Unknown => write!(f, "Unknown"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Request {
     pub timestamp: Timestamp,
-    pub kind: RequestType,
+    pub request_type: RequestType,
     pub source_ip: Option<std::net::SocketAddr>,
     pub method: http::method::Method,
     pub path: String,
@@ -46,6 +58,8 @@ pub struct Request {
     pub content_type: String,
     pub accept_type: Option<String>,
     pub accept_language: Option<String>,
+    pub user_agent: Option<String>,
+    pub via: Option<String>,
     pub api_key: Option<String>,
     pub request_id: Option<String>,
     pub session_id: Option<String>,
@@ -106,6 +120,8 @@ impl Request {
             .and(warp::header::<String>("Content-Type"))
             .and(warp::filters::header::optional::<String>("Accept"))
             .and(warp::filters::header::optional::<String>("Accept-Language"))
+            .and(warp::filters::header::optional::<String>("User-Agent"))
+            .and(warp::filters::header::optional::<String>("Via"))
             .and(warp::filters::header::optional::<String>("X-Api-Key"))
             .and(warp::filters::header::optional::<String>("X-Request-Id"))
             .and(warp::filters::header::optional::<String>("X-Session-Id"))
@@ -120,6 +136,8 @@ impl Request {
                       content_type,
                       accept_type,
                       accept_language,
+                      user_agent,
+                      via,
                       api_key,
                       request_id,
                       session_id,
@@ -132,7 +150,7 @@ impl Request {
                     };
                     Self {
                         timestamp: Timestamp::now(),
-                        kind: kind.clone(),
+                        request_type: kind.clone(),
                         source_ip,
                         method,
                         path: path.as_str().to_string(),
@@ -140,6 +158,8 @@ impl Request {
                         content_type,
                         accept_type,
                         accept_language,
+                        user_agent,
+                        via,
                         api_key,
                         request_id,
                         session_id,
@@ -150,8 +170,16 @@ impl Request {
             )
     }
 
+    pub fn with_id(&self) -> String {
+        if let Some(request_id) = &self.request_id {
+            format!("with X-Request-Id: {}", request_id)
+        } else {
+            format!("with Timestamp: {:x}", self.timestamp.millis)
+        }
+    }
+
     pub async fn send_to_adobe(&self, conf: &Config) -> Result<reqwest::Response> {
-        let server = match self.kind {
+        let server = match self.request_type {
             RequestType::LogUpload => conf.log_server.as_str(),
             _ => conf.frl_server.as_str(),
         };
@@ -161,7 +189,6 @@ impl Request {
             builder = builder.query(query);
         }
         builder = builder
-            .header("User-Agent", super::agent())
             .header("Accept-Encoding", "gzip, deflate, br")
             .header("Content-Type", &self.content_type);
         if let Some(accept_type) = &self.accept_type {
@@ -213,23 +240,70 @@ fn required_header(
     warp::header::<String>(key).map(|_| {}).untuple_one()
 }
 
+#[derive(Clone, Debug)]
 pub struct Response {
     pub timestamp: Timestamp,
-    pub kind: RequestType,
+    pub request_type: RequestType,
     pub status: http::status::StatusCode,
     pub body: Option<String>,
     pub content_type: Option<String>,
+    pub server: Option<String>,
+    pub via: Option<String>,
     pub request_id: Option<String>,
     pub session_id: Option<String>,
+}
+
+impl From<Response> for warp::reply::Response {
+    fn from(resp: Response) -> Self {
+        let mut builder = http::Response::builder().status(resp.status.clone());
+        if let Some(server) = resp.server {
+            builder = builder.header("Server", server);
+        }
+        if let Some(via) = resp.via {
+            builder = builder.header("Via", format!("{}, {}", via, super::proxy_id()));
+        } else {
+            builder = builder.header("Via", super::proxy_id());
+        }
+        if let Some(request_id) = resp.request_id {
+            builder = builder.header("X-Request-Id", request_id);
+        }
+        if let Some(session_id) = resp.session_id {
+            builder = builder.header("X-Session-Id", session_id);
+        }
+        if let Some(content) = resp.body {
+            if let Some(content_type) = resp.content_type {
+                builder = builder.header("Content-Type", content_type);
+            }
+            builder.body(content.into()).unwrap()
+        } else {
+            builder.body("".into()).unwrap()
+        }
+    }
+}
+
+impl Reply for Response {
+    fn into_response(self) -> warp::reply::Response {
+        self.into()
+    }
 }
 
 impl Response {
     pub async fn from_network(req: &Request, resp: reqwest::Response) -> Result<Self> {
         let timestamp = Timestamp::now();
-        let kind = req.kind.clone();
+        let request_type = req.request_type.clone();
         let status = resp.status();
         let content_type = if let Some(val) = resp.headers().get("Content-Type") {
             Some(val.to_str().wrap_err("Content-Type is not valid")?.to_string())
+        } else {
+            None
+        };
+        let server = if let Some(val) = resp.headers().get("Server") {
+            Some(val.to_str().wrap_err("Server is not valid")?.to_string())
+        } else {
+            None
+        };
+        let via = if let Some(val) = resp.headers().get("Via") {
+            Some(val.to_str().wrap_err("Via is not valid")?.to_string())
         } else {
             None
         };
@@ -244,18 +318,25 @@ impl Response {
             None
         };
         let content = resp.text().await.wrap_err("Failure to receive body")?;
-        let body = if content_type.is_some() {
-            Some(content)
-        } else {
-            if !content.is_empty() {
-                error!(
-                    "Response has body but no content type, ignoring it: {}",
-                    &content
-                );
-            }
+        let body = if content.is_empty() {
             None
+        } else {
+            if !content_type.is_some() {
+                warn!("Response has body but no content type");
+            }
+            Some(content)
         };
-        Ok(Self { timestamp, kind, status, body, content_type, request_id, session_id })
+        Ok(Self {
+            timestamp,
+            request_type,
+            status,
+            body,
+            content_type,
+            server,
+            via,
+            request_id,
+            session_id,
+        })
     }
 }
 
