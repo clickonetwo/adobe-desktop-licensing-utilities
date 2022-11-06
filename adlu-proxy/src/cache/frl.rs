@@ -16,17 +16,17 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use eyre::{eyre, Result};
+use eyre::{eyre, Result, WrapErr};
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
     Row,
 };
 
+use crate::proxy::{Request, RequestType, Response};
 use adlu_base::Timestamp;
 use adlu_parse::protocol::{
-    FrlActivationRequestBody, FrlActivationResponseBody, FrlAppDetails,
-    FrlDeactivationQueryParams, FrlDeactivationResponseBody, FrlDeviceDetails,
+    FrlActivationRequestBody, FrlAppDetails, FrlDeactivationQueryParams, FrlDeviceDetails,
 };
 
 pub async fn clear(pool: &SqlitePool) -> Result<()> {
@@ -124,18 +124,18 @@ pub async fn fetch_unanswered_requests(pool: &SqlitePool) -> Result<Vec<Request>
         if let Some(actr) = act {
             if let Some(deactr) = deact {
                 if actr.timestamp <= deactr.timestamp {
-                    result.push(Request::FrlActivation(Box::new(actr.clone())));
+                    result.push(actr.clone());
                     act = acts.next();
                 } else {
-                    result.push(Request::FrlDeactivation(Box::new(deactr.clone())));
+                    result.push(deactr.clone());
                     deact = deacts.next();
                 }
             } else {
-                result.push(Request::FrlActivation(Box::new(actr.clone())));
+                result.push(actr.clone());
                 act = acts.next();
             }
         } else if let Some(deactr) = deact {
-            result.push(Request::FrlDeactivation(Box::new(deactr.clone())));
+            result.push(deactr.clone());
             deact = deacts.next();
         } else {
             break;
@@ -152,7 +152,9 @@ pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
-pub async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result<()> {
+pub async fn store_activation_request(pool: &SqlitePool, req: &Request) -> Result<()> {
+    let body = req.body.as_ref().ok_or_else(|| eyre!("{} has no body", req))?;
+    let parse = FrlActivationRequestBody::from_body(body).wrap_err(req.to_string())?;
     let field_list = r#"
         (
             activation_key, deactivation_key, api_key, request_id, session_id, device_date,
@@ -164,28 +166,28 @@ pub async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result
         "insert or replace into activation_requests {} values {}",
         field_list, value_list
     );
-    let a_key = req.activation_id();
-    debug!("Storing activation request {} with key: {}", &req.request_id, &a_key);
+    let a_key = parse.activation_id();
+    debug!("Storing {} with key: {}", req, &a_key);
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
         .bind(&a_key)
-        .bind(&req.deactivation_id())
-        .bind(&req.api_key)
-        .bind(&req.request_id)
-        .bind(&req.session_id)
-        .bind(&req.parsed_body.device_details.current_date)
-        .bind(&req.parsed_body.npd_id)
-        .bind(&req.parsed_body.asnp_template_id)
-        .bind(&req.parsed_body.device_details.device_id)
-        .bind(&req.parsed_body.device_details.os_user_id)
-        .bind(req.parsed_body.device_details.enable_vdi_marker_exists)
-        .bind(req.parsed_body.device_details.is_os_user_account_in_domain)
-        .bind(req.parsed_body.device_details.is_virtual_environment)
-        .bind(&req.parsed_body.device_details.os_name)
-        .bind(&req.parsed_body.device_details.os_version)
-        .bind(&req.parsed_body.app_details.ngl_app_id)
-        .bind(&req.parsed_body.app_details.ngl_app_version)
-        .bind(&req.parsed_body.app_details.ngl_lib_version)
+        .bind(&parse.deactivation_id())
+        .bind(req.api_key.as_ref().ok_or_else(|| eyre!("{} has no api key", req))?)
+        .bind(req.request_id.as_ref().ok_or_else(|| eyre!("{} has no request id", req))?)
+        .bind(req.session_id.as_ref().ok_or_else(|| eyre!("{} has no session id", req))?)
+        .bind(&parse.device_details.current_date)
+        .bind(&parse.npd_id)
+        .bind(&parse.asnp_template_id)
+        .bind(&parse.device_details.device_id)
+        .bind(&parse.device_details.os_user_id)
+        .bind(parse.device_details.enable_vdi_marker_exists)
+        .bind(parse.device_details.is_os_user_account_in_domain)
+        .bind(parse.device_details.is_virtual_environment)
+        .bind(&parse.device_details.os_name)
+        .bind(&parse.device_details.os_version)
+        .bind(&parse.app_details.ngl_app_id)
+        .bind(&parse.app_details.ngl_app_version)
+        .bind(&parse.app_details.ngl_lib_version)
         .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
@@ -194,7 +196,10 @@ pub async fn store_activation_request(pool: &SqlitePool, req: &ActReq) -> Result
     Ok(())
 }
 
-pub async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Result<()> {
+pub async fn store_deactivation_request(pool: &SqlitePool, req: &Request) -> Result<()> {
+    let query = req.query.as_ref().ok_or_else(|| eyre!("{} has no query", req))?;
+    let parse =
+        FrlDeactivationQueryParams::from_query(query).wrap_err(req.to_string())?;
     let field_list = r#"
             (
                 deactivation_key, api_key, request_id, package_id,
@@ -206,56 +211,57 @@ pub async fn store_deactivation_request(pool: &SqlitePool, req: &DeactReq) -> Re
         "insert or replace into deactivation_requests {} values {}",
         field_list, value_list
     );
-    let d_key = req.deactivation_id();
-    debug!("Storing deactivation request {} with key: {}", &req.request_id, &d_key);
+    let d_key = parse.deactivation_id();
+    debug!("Storing {} with key: {}", req, &d_key);
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
         .bind(&d_key)
-        .bind(&req.api_key)
-        .bind(&req.request_id)
-        .bind(&req.params.npd_id)
-        .bind(&req.params.device_id)
-        .bind(&req.params.os_user_id)
-        .bind(req.params.enable_vdi_marker_exists)
-        .bind(req.params.is_os_user_account_in_domain)
-        .bind(req.params.is_virtual_environment)
+        .bind(req.api_key.as_ref().ok_or_else(|| eyre!("{} has no api key", req))?)
+        .bind(&req.request_id.as_ref().ok_or_else(|| eyre!("{} has no request id", req))?)
+        .bind(&parse.npd_id)
+        .bind(&parse.device_id)
+        .bind(&parse.os_user_id)
+        .bind(parse.enable_vdi_marker_exists)
+        .bind(parse.is_os_user_account_in_domain)
+        .bind(parse.is_virtual_environment)
         .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
-    debug!("Stored deactivation request has rowid {}", result.last_insert_rowid());
+    debug!("Stored {} has rowid {}", req, result.last_insert_rowid());
     Ok(())
 }
 
 pub async fn store_activation_response(
     pool: &SqlitePool,
-    req: &ActReq,
-    resp: &ActResp,
+    req: &Request,
+    resp: &Response,
 ) -> Result<()> {
+    let body = req.body.as_ref().ok_or_else(|| eyre!("{} has no body", req))?;
+    let parse = FrlActivationRequestBody::from_body(body).wrap_err(req.to_string())?;
     let field_list = "(activation_key, deactivation_key, body, timestamp)";
     let value_list = "(?, ?, ?, ?)";
     let i_str = format!(
         "insert or replace into activation_responses {} values {}",
         field_list, value_list
     );
-    let a_key = req.activation_id();
-    let d_key = req.deactivation_id();
+    let a_key = parse.activation_id();
+    let d_key = parse.deactivation_id();
     let mut tx = pool.begin().await?;
-    debug!("Storing activation response {} with key: {}", &req.request_id, &a_key);
-    #[cfg(feature = "parse_responses")]
-    let body = serde_json::to_string(&resp.body)?;
-    #[cfg(not(feature = "parse_responses"))]
-    let body = resp.body.clone();
+    debug!("Storing response for {} with key: {}", &req, &a_key);
     let result = sqlx::query(&i_str)
         .bind(&a_key)
         .bind(&d_key)
-        .bind(&body)
+        .bind(
+            resp.body
+                .as_ref()
+                .ok_or_else(|| eyre!("Response for {} has no body", req))?,
+        )
         .bind(req.timestamp.to_db())
         .execute(&mut tx)
         .await?;
     debug!("Stored activation response has rowid {}", result.last_insert_rowid());
     // remove all matching deactivation requests/responses as they are now invalid
-    let d_key = req.deactivation_id();
     debug!("Removing deactivation requests with key: {}", d_key);
     let d_str = "delete from deactivation_requests where deactivation_key = ?";
     sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
@@ -268,13 +274,16 @@ pub async fn store_activation_response(
 
 pub async fn store_deactivation_response(
     pool: &SqlitePool,
-    req: &DeactReq,
-    resp: &DeactResp,
+    req: &Request,
+    resp: &Response,
 ) -> Result<()> {
-    debug!("Caching successful deactivation with request ID {}", req.request_id);
+    let query = req.query.as_ref().ok_or_else(|| eyre!("{} has no query", req))?;
+    let parse =
+        FrlDeactivationQueryParams::from_query(query).wrap_err(req.to_string())?;
+    debug!("Processing successful response to {}", req);
     let mut tx = pool.begin().await?;
     // first remove all earlier matching requests/responses as they are now invalid
-    let d_key = req.deactivation_id();
+    let d_key = parse.deactivation_id();
     debug!("Removing activation requests with deactivation key: {}", d_key);
     let d_str = "delete from activation_requests where deactivation_key = ?";
     sqlx::query(d_str).bind(&d_key).execute(&mut tx).await?;
@@ -295,8 +304,7 @@ pub async fn store_deactivation_response(
         "insert or replace into deactivation_responses {} values {}",
         field_list, value_list
     );
-    let d_key = req.deactivation_id();
-    debug!("Storing deactivation response {} with key: {}", &req.request_id, &d_key);
+    debug!("Storing response for {} with key: {}", req, &d_key);
     let result = sqlx::query(&i_str)
         .bind(&d_key)
         .bind(&resp.body)
@@ -304,15 +312,17 @@ pub async fn store_deactivation_response(
         .execute(&mut tx)
         .await?;
     tx.commit().await?;
-    debug!("Stored deactivation response has rowid {}", result.last_insert_rowid());
+    debug!("Stored response to {} has rowid {}", req, result.last_insert_rowid());
     Ok(())
 }
 
 pub async fn fetch_activation_response(
     pool: &SqlitePool,
-    req: &ActReq,
-) -> Result<Option<ActResp>> {
-    let a_key = req.activation_id();
+    req: &Request,
+) -> Result<Option<Response>> {
+    let body = req.body.as_ref().ok_or_else(|| eyre!("{} has no body", req))?;
+    let parse = FrlActivationRequestBody::from_body(body).wrap_err(req.to_string())?;
+    let a_key = parse.activation_id();
     let q_str =
         "select body, timestamp from activation_responses where activation_key = ?";
     debug!("Finding activation response with key: {}", &a_key);
@@ -320,17 +330,16 @@ pub async fn fetch_activation_response(
     match result {
         Some(row) => {
             let body: String = row.get("body");
-            let parsed_body: Option<FrlActivationResponseBody> =
-                if cfg!(feature = "parse_responses") {
-                    Some(serde_json::from_str(&body)?)
-                } else {
-                    None
-                };
-            Ok(Some(ActResp {
-                request_id: req.request_id.clone(),
+            Ok(Some(Response {
                 timestamp: Timestamp::from_db(row.get("timestamp")),
-                body,
-                parsed_body,
+                request_type: RequestType::FrlActivation,
+                status: http::StatusCode::OK,
+                body: Some(body),
+                content_type: Some("application/json".to_string()),
+                server: Some(crate::proxy::proxy_id()),
+                via: None,
+                request_id: req.request_id.clone(),
+                session_id: None,
             }))
         }
         None => {
@@ -342,29 +351,23 @@ pub async fn fetch_activation_response(
 
 pub async fn fetch_deactivation_response(
     pool: &SqlitePool,
-    req: &DeactReq,
-) -> Result<Option<DeactResp>> {
-    let d_key = req.deactivation_id();
+    req: &Request,
+) -> Result<Option<Response>> {
+    let query = req.query.as_ref().ok_or_else(|| eyre!("{} has no query", req))?;
+    let parse =
+        FrlDeactivationQueryParams::from_query(query).wrap_err(req.to_string())?;
+    let d_key = parse.deactivation_id();
     let q_str =
         "select body, timestamp from deactivation_responses where deactivation_key = ?";
     debug!("Finding deactivation response with key: {}", &d_key);
     let result = sqlx::query(q_str).bind(&d_key).fetch_optional(pool).await?;
     match result {
-        Some(row) => {
-            let body: String = row.get("body");
-            let parsed_body: Option<FrlDeactivationResponseBody> =
-                if cfg!(feature = "parse_responses") {
-                    Some(serde_json::from_str(&body)?)
-                } else {
-                    None
-                };
-            Ok(Some(DeactResp {
-                request_id: req.request_id.clone(),
-                timestamp: Timestamp::from_db(row.get("timestamp")),
-                body,
-                parsed_body,
-            }))
-        }
+        Some(row) => Ok(Some(response_from_parts(
+            RequestType::FrlDeactivation,
+            Timestamp::from_db(row.get("timestamp")),
+            req.request_id.clone().ok_or_else(|| eyre!("{} has no request id", req))?,
+            row.get("body"),
+        ))),
         None => {
             debug!("No deactivation response found for key: {}", &d_key);
             Ok(None)
@@ -372,7 +375,7 @@ pub async fn fetch_deactivation_response(
     }
 }
 
-async fn fetch_unanswered_activations(pool: &SqlitePool) -> Result<Vec<ActReq>> {
+async fn fetch_unanswered_activations(pool: &SqlitePool) -> Result<Vec<Request>> {
     let mut result = Vec::new();
     let q_str = r#"select * from activation_requests req where not exists
                     (select 1 from activation_responses where
@@ -386,7 +389,7 @@ async fn fetch_unanswered_activations(pool: &SqlitePool) -> Result<Vec<ActReq>> 
     Ok(result)
 }
 
-async fn fetch_unanswered_deactivations(pool: &SqlitePool) -> Result<Vec<DeactReq>> {
+async fn fetch_unanswered_deactivations(pool: &SqlitePool) -> Result<Vec<Request>> {
     let mut result = Vec::new();
     let q_str = r#"select * from deactivation_requests"#;
     let rows = sqlx::query(q_str).fetch_all(pool).await?;
@@ -396,7 +399,9 @@ async fn fetch_unanswered_deactivations(pool: &SqlitePool) -> Result<Vec<DeactRe
     Ok(result)
 }
 
-async fn fetch_answered_activations(pool: &SqlitePool) -> Result<Vec<(ActReq, ActResp)>> {
+async fn fetch_answered_activations(
+    pool: &SqlitePool,
+) -> Result<Vec<(Request, Response)>> {
     let mut result = Vec::new();
     let q_str = r#"
         select req.*, resp.body from activation_requests req 
@@ -412,7 +417,7 @@ async fn fetch_answered_activations(pool: &SqlitePool) -> Result<Vec<(ActReq, Ac
 
 async fn fetch_answered_deactivations(
     pool: &SqlitePool,
-) -> Result<Vec<(DeactReq, DeactResp)>> {
+) -> Result<Vec<(Request, Response)>> {
     let mut result = Vec::new();
     let q_str = r#"
         select req.*, resp.body from deactivation_requests req 
@@ -428,7 +433,7 @@ async fn fetch_answered_deactivations(
     Ok(result)
 }
 
-fn request_from_activation_row(row: &SqliteRow) -> ActReq {
+fn request_from_activation_row(row: &SqliteRow) -> Request {
     let device_details = FrlDeviceDetails {
         current_date: row.get("device_date"),
         device_id: row.get("device_id"),
@@ -452,61 +457,97 @@ fn request_from_activation_row(row: &SqliteRow) -> ActReq {
         npd_id: row.get("package_id"),
         npd_precedence: None,
     };
-    ActReq {
-        api_key: row.get("api_key"),
-        request_id: row.get("request_id"),
-        session_id: row.get("session_id"),
+    let body = parsed_body.to_body();
+    let api_key: String = row.get("api_key");
+    let request_id: String = row.get("request_id");
+    let session_id: String = row.get("session_id");
+    Request {
         timestamp: Timestamp::from_db(row.get("timestamp")),
-        parsed_body,
+        request_type: RequestType::FrlActivation,
+        source_ip: None,
+        method: http::Method::POST,
+        path: "/asnp/frl_connected/values/v2".to_string(),
+        query: None,
+        body: Some(body),
+        content_type: Some("application/json".to_string()),
+        accept_type: Some("application/json".to_string()),
+        accept_language: Some("en_US".to_string()),
+        user_agent: Some(crate::proxy::proxy_id()),
+        via: None,
+        api_key: Some(api_key),
+        request_id: Some(request_id),
+        session_id: Some(session_id),
+        authorization: None,
     }
 }
 
-fn request_from_deactivation_row(row: &SqliteRow) -> DeactReq {
-    DeactReq {
+fn request_from_deactivation_row(row: &SqliteRow) -> Request {
+    let params = FrlDeactivationQueryParams {
+        npd_id: row.get("package_id"),
+        device_id: row.get("device_id"),
+        enable_vdi_marker_exists: row.get("is_vdi"),
+        is_virtual_environment: row.get("is_virtual"),
+        os_user_id: row.get("os_user_id"),
+        is_os_user_account_in_domain: row.get("is_domain_user"),
+    };
+    let query = params.to_query();
+    let api_key: String = row.get("api_key");
+    let request_id: String = row.get("request_id");
+    Request {
         timestamp: Timestamp::from_db(row.get("timestamp")),
-        api_key: row.get("api_key"),
-        request_id: row.get("request_id"),
-        params: FrlDeactivationQueryParams {
-            npd_id: row.get("package_id"),
-            device_id: row.get("device_id"),
-            enable_vdi_marker_exists: row.get("is_vdi"),
-            is_virtual_environment: row.get("is_virtual"),
-            os_user_id: row.get("os_user_id"),
-            is_os_user_account_in_domain: row.get("is_domain_user"),
-        },
+        request_type: RequestType::FrlDeactivation,
+        source_ip: None,
+        method: http::Method::DELETE,
+        path: "/asnp/frl_connected/v1".to_string(),
+        query: Some(query),
+        body: None,
+        content_type: None,
+        accept_type: Some("application/json".to_string()),
+        accept_language: Some("en_US".to_string()),
+        user_agent: Some(crate::proxy::proxy_id()),
+        via: None,
+        api_key: Some(api_key),
+        request_id: Some(request_id),
+        session_id: None,
+        authorization: None,
     }
 }
 
-fn response_from_activation_row(row: &SqliteRow) -> Result<ActResp> {
-    let body: String = row.get("body");
-    let parsed_body: Option<FrlActivationResponseBody> =
-        if cfg!(feature = "parse_responses") {
-            Some(serde_json::from_str(&body)?)
-        } else {
-            None
-        };
-    Ok(ActResp {
-        request_id: row.get("request_id"),
-        timestamp: Timestamp::from_db(row.get("timestamp")),
-        body,
-        parsed_body,
-    })
+fn response_from_activation_row(row: &SqliteRow) -> Result<Response> {
+    Ok(response_from_parts(
+        RequestType::FrlActivation,
+        Timestamp::from_db(row.get("timestamp")),
+        row.get("request_id"),
+        row.get("body"),
+    ))
 }
 
-fn response_from_deactivation_row(row: &SqliteRow) -> Result<DeactResp> {
-    let body: String = row.get("body");
-    let parsed_body: Option<FrlDeactivationResponseBody> =
-        if cfg!(feature = "parse_responses") {
-            Some(serde_json::from_str(&body)?)
-        } else {
-            None
-        };
-    Ok(DeactResp {
-        request_id: row.get("request_id"),
-        timestamp: Timestamp::from_db(row.get("timestamp")),
-        body,
-        parsed_body,
-    })
+fn response_from_deactivation_row(row: &SqliteRow) -> Result<Response> {
+    Ok(response_from_parts(
+        RequestType::FrlDeactivation,
+        Timestamp::from_db(row.get("timestamp")),
+        row.get("request_id"),
+        row.get("body"),
+    ))
+}
+
+fn response_from_parts(
+    request_type: RequestType,
+    timestamp: Timestamp,
+    request_id: String,
+    body: String,
+) -> Response {
+    Response {
+        timestamp,
+        request_type,
+        status: http::StatusCode::OK,
+        body: Some(body),
+        content_type: Some("application/json".to_string()),
+        server: Some(crate::proxy::proxy_id()),
+        via: None,
+        request_id: Some(request_id),
+        session_id: None,
+    }
 }
 
 const ACTIVATION_REQUEST_SCHEMA: &str = r#"

@@ -17,13 +17,15 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use adlu_base::Timestamp;
-use adlu_parse::protocol::{LicenseSession, NulActivationRequest, NulActivationResponse};
-use eyre::{eyre, Result};
+use adlu_parse::protocol::{LicenseSession, NulLicenseRequestBody};
+use eyre::{eyre, Result, WrapErr};
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
     Row,
 };
+
+use crate::proxy::{Request, Response};
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
@@ -94,14 +96,14 @@ fn report_record(session: &LicenseSession, timezone: bool, rfc3339: bool) -> Vec
     result
 }
 
-pub async fn store_license_request(
-    pool: &SqlitePool,
-    req: &NulActivationRequest,
-) -> Result<()> {
-    if req.parsed_body.is_none() {
-        return Err(eyre!("Can't create license report without activation body"));
-    }
-    let new: LicenseSession = req.into();
+pub async fn store_license_request(pool: &SqlitePool, req: &Request) -> Result<()> {
+    let body = req.body.as_ref().ok_or_else(|| eyre!("{} has no body", req))?;
+    let parse = NulLicenseRequestBody::from_body(body).wrap_err(req.to_string())?;
+    let new = LicenseSession::from_parts(
+        &req.timestamp,
+        req.session_id.as_ref().ok_or_else(|| eyre!("{} has no session id", req))?,
+        &parse,
+    );
     if let Some(existing) = fetch_license_session(pool, &new.session_id).await? {
         store_license_session(pool, &existing.merge(new)?).await?;
     } else {
@@ -112,8 +114,8 @@ pub async fn store_license_request(
 
 pub async fn store_license_response(
     _pool: &SqlitePool,
-    _req: &NulActivationRequest,
-    _resp: &NulActivationResponse,
+    _req: &Request,
+    _resp: &Response,
 ) -> Result<()> {
     // a no-op, since we don't store NUL license info
     Ok(())
@@ -121,8 +123,8 @@ pub async fn store_license_response(
 
 pub async fn fetch_license_response(
     _pool: &SqlitePool,
-    _req: &NulActivationRequest,
-) -> Result<Option<NulActivationResponse>> {
+    _req: &Request,
+) -> Result<Option<Response>> {
     // a no-op, since we don't store NUL license info
     Ok(None)
 }

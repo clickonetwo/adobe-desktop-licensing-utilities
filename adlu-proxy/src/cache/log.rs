@@ -17,13 +17,15 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use adlu_base::Timestamp;
-use adlu_parse::protocol::{LogSession, LogUploadRequest, LogUploadResponse};
-use eyre::Result;
+use adlu_parse::protocol::LogSession;
+use eyre::{eyre, Result};
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
     Row,
 };
+
+use crate::proxy::{Request, RequestType, Response};
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
@@ -106,11 +108,9 @@ fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<Str
     result
 }
 
-pub async fn store_upload_request(
-    pool: &SqlitePool,
-    req: &LogUploadRequest,
-) -> Result<()> {
-    let sessions = &req.session_data;
+pub async fn store_upload_request(pool: &SqlitePool, req: &Request) -> Result<()> {
+    let body = req.body.clone().ok_or_else(|| eyre!("{} has no body", req))?;
+    let sessions = adlu_parse::protocol::parse_log_data(bytes::Bytes::from(body));
     for new in sessions.iter() {
         if let Some(existing) = fetch_log_session(pool, &new.session_id).await? {
             store_log_session(pool, &existing.merge(new)?).await?;
@@ -123,8 +123,8 @@ pub async fn store_upload_request(
 
 pub async fn store_upload_response(
     _pool: &SqlitePool,
-    _req: &LogUploadRequest,
-    _resp: &LogUploadResponse,
+    _req: &Request,
+    _resp: &Response,
 ) -> Result<()> {
     // a no-op, since all responses are the same
     Ok(())
@@ -132,9 +132,19 @@ pub async fn store_upload_response(
 
 pub async fn fetch_upload_response(
     _pool: &SqlitePool,
-    _req: &LogUploadRequest,
-) -> Result<Option<LogUploadResponse>> {
-    Ok(Some(LogUploadResponse::new()))
+    _req: &Request,
+) -> Result<Option<Response>> {
+    Ok(Some(Response {
+        timestamp: Timestamp::now(),
+        request_type: RequestType::LogUpload,
+        status: http::StatusCode::OK,
+        body: None,
+        content_type: None,
+        server: Some(crate::proxy::proxy_id()),
+        via: None,
+        request_id: None,
+        session_id: None,
+    }))
 }
 
 async fn fetch_log_session(

@@ -283,8 +283,7 @@ impl std::str::FromStr for Timestamp {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(val) = s.parse::<i64>() {
-            // for now we assume milliseconds
-            // TODO: figure out if it's seconds, milliseconds, or nanoseconds
+            // we always work in milliseconds
             Ok(Self { millis: val })
         } else if let Ok(dt) = s.parse::<DateTime<Utc>>() {
             Ok(Self { millis: dt.timestamp_millis() })

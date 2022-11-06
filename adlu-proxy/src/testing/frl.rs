@@ -55,7 +55,7 @@ pub fn mock_activation_response(req: reqwest::Request) -> reqwest::Response {
         None => builder,
         Some(val) => builder.header("X-Request-Id", val),
     };
-    builder.body(body.to_body_string()).unwrap().into()
+    builder.body(body.to_body()).unwrap().into()
 }
 
 pub fn mock_deactivation_request(
@@ -69,7 +69,7 @@ pub fn mock_deactivation_request(
     } else {
         FrlDeactivationQueryParams::mock_from_device_id(device_id)
     };
-    let path = format!("//asnp/frl_connected/v1?{}", params.to_query_params());
+    let path = format!("//asnp/frl_connected/v1?{}", params.to_query());
     let mut builder = builder.method("DELETE").path(&path);
     builder = builder
         .header("X-Request-Id", &mi.request_id())
@@ -87,5 +87,5 @@ pub fn mock_deactivation_response(req: reqwest::Request) -> reqwest::Response {
         None => builder,
         Some(val) => builder.header("X-Request-Id", val),
     };
-    builder.body(body.to_body_string()).unwrap().into()
+    builder.body(body.to_body()).unwrap().into()
 }

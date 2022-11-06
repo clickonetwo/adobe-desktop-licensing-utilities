@@ -129,66 +129,46 @@ impl Db {
             RequestType::Unknown => Ok(()),
         };
         if let Err(err) = result {
-            error!("Cache store of {} failed: {}", req.with_id(), err);
+            error!("Cache store of {} failed: {}", req, err);
         }
     }
 
-    pub async fn store_response(&self, resp: &Response) {
+    pub async fn store_response(&self, req: &Request, resp: &Response) {
         let pool = &self.pool;
         let result = match resp.request_type {
             RequestType::FrlActivation => {
-                frl::store_activation_response(pool, resp).await
+                frl::store_activation_response(pool, req, resp).await
             }
             RequestType::FrlDeactivation => {
-                frl::store_deactivation_response(pool, resp).await
+                frl::store_deactivation_response(pool, req, resp).await
             }
             RequestType::NulLicense => {
-                named_user::store_license_response(pool, resp).await
+                named_user::store_license_response(pool, req, resp).await
             }
-            RequestType::LogUpload => log::store_upload_response(pool, resp).await,
+            RequestType::LogUpload => log::store_upload_response(pool, req, resp).await,
             RequestType::Unknown => Ok(()),
         };
         if let Err(err) = result {
-            error!("Cache store of request ID {} failed: {}", req.request_id(), err);
+            error!("Cache store of {} failed: {}", req, err);
         }
     }
 
     pub async fn fetch_response(&self, req: &Request) -> Option<Response> {
         let pool = &self.pool;
-        let result = match req {
-            Request::FrlActivation(req) => {
-                match frl::fetch_activation_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::FrlActivation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
+        let result = match &req.request_type {
+            RequestType::FrlActivation => frl::fetch_activation_response(pool, req).await,
+            RequestType::FrlDeactivation => {
+                frl::fetch_deactivation_response(pool, req).await
             }
-            Request::FrlDeactivation(req) => {
-                match frl::fetch_deactivation_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::FrlDeactivation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
+            RequestType::NulLicense => {
+                named_user::fetch_license_response(pool, req).await
             }
-            Request::NulActivation(req) => {
-                match named_user::fetch_license_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::NulActivation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
-            }
-            Request::LogUpload(req) => {
-                match log::fetch_upload_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::LogUpload(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
-            }
+            RequestType::LogUpload => log::fetch_upload_response(pool, req).await,
+            RequestType::Unknown => Ok(None),
         };
         match result {
             Err(err) => {
-                let id = req.request_id();
-                error!("Cache fetch of request ID {} failed: {}", id, err);
+                error!("Cache fetch of response for {} failed: {}", req, err);
                 None
             }
             Ok(val) => val,

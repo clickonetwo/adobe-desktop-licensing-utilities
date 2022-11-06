@@ -18,70 +18,29 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
-use warp::Reply;
 
 use adlu_base::Timestamp;
 
 use crate::{AdobeSignatures, CustomerSignatures};
 
-#[derive(Clone, Default, Debug)]
-pub struct NulActivationRequest {
-    pub timestamp: Timestamp,
-    pub authorization: String,
-    pub api_key: String,
-    pub request_id: String,
-    pub session_id: String,
-    pub body: String,
-    pub parsed_body: Option<NulActivationRequestBody>,
-}
-
-impl NulActivationRequest {
-    pub fn from_parts(
-        authorization: String,
-        request_id: String,
-        session_id: String,
-        api_key: String,
-        body: bytes::Bytes,
-    ) -> Self {
-        let string = String::from_utf8(body.to_vec())
-            .unwrap_or_else(|_| String::from_utf8_lossy(&body).to_string());
-        let parse = serde_json::from_slice::<NulActivationRequestBody>(&body).ok();
-        Self {
-            timestamp: Timestamp::now(),
-            authorization,
-            api_key,
-            request_id,
-            session_id,
-            body: string,
-            parsed_body: parse,
-        }
-    }
-
-    pub fn to_network(
-        &self,
-        builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
-        builder
-            .header("Authorization", &self.authorization)
-            .header("X-Request-Id", &self.request_id)
-            .header("X-Session-Id", &self.session_id)
-            .header("X-Api-Key", &self.api_key)
-            // because the body is a string, we have to set the content type
-            .header("Content-Type", "application/json")
-            .body(self.body.clone())
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NulActivationRequestBody {
+pub struct NulLicenseRequestBody {
     pub app_details: NulAppDetails,
     pub device_details: NulDeviceDetails,
     #[serde(default)]
     pub device_token_hash: String,
 }
 
-impl NulActivationRequestBody {
+impl NulLicenseRequestBody {
+    pub fn from_body(body: &str) -> Result<Self> {
+        serde_json::from_str(body).wrap_err("Malformed body")
+    }
+
+    pub fn to_body(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+
     pub fn mock_from_device_id(device_id: &str) -> Self {
         Self {
             app_details: NulAppDetails {
@@ -150,10 +109,6 @@ impl NulActivationRequestBody {
             device_token_hash: "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b".to_string(),
         }
     }
-
-    pub fn to_body_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,36 +156,6 @@ pub struct NulDeviceDetails {
 }
 
 #[derive(Debug, Clone)]
-pub struct NulActivationResponse {
-    pub timestamp: Timestamp,
-    pub request_id: String,
-    pub body: String,
-}
-
-impl NulActivationResponse {
-    pub async fn from_network(response: reqwest::Response) -> Result<Self> {
-        let request_id = super::get_response_id(&response)?;
-        let body = response.text().await.wrap_err("Failure to receive body")?;
-        Ok(NulActivationResponse { timestamp: Timestamp::now(), request_id, body })
-    }
-}
-
-impl From<NulActivationResponse> for warp::reply::Response {
-    fn from(act_resp: NulActivationResponse) -> Self {
-        ::http::Response::builder()
-            .header("X-Request-Id", &act_resp.request_id)
-            .body(act_resp.body.into())
-            .unwrap()
-    }
-}
-
-impl Reply for NulActivationResponse {
-    fn into_response(self) -> warp::reply::Response {
-        self.into()
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct LicenseSession {
     pub session_id: String,
     pub session_start: Timestamp,
@@ -254,40 +179,48 @@ impl LicenseSession {
             Ok(result)
         }
     }
-}
 
-impl From<&NulActivationRequest> for LicenseSession {
-    fn from(req: &NulActivationRequest) -> Self {
-        let parsed_body =
-            req.parsed_body.as_ref().expect("Can't create a report with a parsed body");
-        let session_id = if let Some(start) = req.session_id.find('/') {
-            req.session_id[0..start].to_string()
+    pub fn from_parts(
+        timestamp: &Timestamp,
+        session_id: &str,
+        body: &NulLicenseRequestBody,
+    ) -> Self {
+        let session_id = if let Some(start) = session_id.find('/') {
+            session_id[0..start].to_string()
         } else {
-            req.session_id.clone()
+            session_id.to_string()
         };
         Self {
             session_id,
-            session_start: req.timestamp.clone(),
-            session_end: req.timestamp.clone(),
-            app_id: parsed_body.app_details.ngl_app_id.clone(),
-            app_version: parsed_body.app_details.ngl_app_version.clone(),
-            app_locale: parsed_body.app_details.locale.clone(),
-            ngl_version: parsed_body.app_details.ngl_lib_version.clone(),
-            os_name: parsed_body.device_details.os_name.clone(),
-            os_version: parsed_body.device_details.os_name.clone(),
-            user_id: parsed_body.device_details.os_name.clone(),
+            session_start: timestamp.clone(),
+            session_end: timestamp.clone(),
+            app_id: body.app_details.ngl_app_id.clone(),
+            app_version: body.app_details.ngl_app_version.clone(),
+            app_locale: body.app_details.locale.clone(),
+            ngl_version: body.app_details.ngl_lib_version.clone(),
+            os_name: body.device_details.os_name.clone(),
+            os_version: body.device_details.os_name.clone(),
+            user_id: body.device_details.os_name.clone(),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NulActivationResponseBody {
+pub struct NulLicenseResponseBody {
     pub adobe_cert_signed_values: NulAdobeCertSignedValues,
     pub customer_cert_signed_values: NulCustomerCertSignedValues,
 }
 
-impl NulActivationResponseBody {
+impl NulLicenseResponseBody {
+    pub fn from_body(body: &str) -> Result<Self> {
+        serde_json::from_str(body).wrap_err("Malformed body")
+    }
+
+    pub fn to_body(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+
     pub fn mock_from_device_id(device_id: &str) -> Self {
         Self {
             adobe_cert_signed_values: NulAdobeCertSignedValues {
@@ -333,10 +266,6 @@ impl NulActivationResponseBody {
                 },
             },
         }
-    }
-
-    pub fn to_body_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
     }
 }
 
@@ -433,7 +362,7 @@ mod test {
             },
             "deviceTokenHash" : "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b"
         }"#;
-        let request: super::NulActivationRequestBody =
+        let request: super::NulLicenseRequestBody =
             serde_json::from_str(request_str).unwrap();
         assert_eq!(request.app_details.ngl_app_id, "PremierePro1");
         assert!(!request.device_details.is_os_user_account_in_domain);
@@ -441,18 +370,18 @@ mod test {
 
     #[test]
     fn test_parse_mock_activation_request() {
-        let body = super::NulActivationRequestBody::mock_from_device_id("test-id");
-        let request: super::NulActivationRequestBody =
-            serde_json::from_str(body.to_body_string().as_str()).unwrap();
+        let body = super::NulLicenseRequestBody::mock_from_device_id("test-id");
+        let request: super::NulLicenseRequestBody =
+            serde_json::from_str(body.to_body().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
         assert_eq!(request.app_details.ngl_app_id, "MockApp1");
     }
 
     #[test]
     fn test_parse_valid_activation_request() {
-        let body = super::NulActivationRequestBody::valid_from_device_id("test-id");
-        let request: super::NulActivationRequestBody =
-            serde_json::from_str(body.to_body_string().as_str()).unwrap();
+        let body = super::NulLicenseRequestBody::valid_from_device_id("test-id");
+        let request: super::NulLicenseRequestBody =
+            serde_json::from_str(body.to_body().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
         assert_eq!(request.app_details.ngl_app_id, "PremierePro1");
     }
@@ -490,7 +419,7 @@ mod test {
             }
         }
         "#;
-        let response: super::NulActivationResponseBody =
+        let response: super::NulLicenseResponseBody =
             serde_json::from_str(response_str).unwrap();
         assert_eq!(
             response.adobe_cert_signed_values.values.profile_status,
@@ -504,9 +433,9 @@ mod test {
 
     #[test]
     fn test_parse_mock_activation_response() {
-        let response = super::NulActivationResponseBody::mock_from_device_id("test-id");
-        let body = response.to_body_string();
-        let response: super::NulActivationResponseBody =
+        let response = super::NulLicenseResponseBody::mock_from_device_id("test-id");
+        let body = response.to_body();
+        let response: super::NulLicenseResponseBody =
             serde_json::from_str(&body).unwrap();
         assert_eq!(response.customer_cert_signed_values.values.device_id, "test-id");
     }

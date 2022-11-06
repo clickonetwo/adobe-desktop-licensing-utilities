@@ -18,132 +18,10 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use eyre::{Result, WrapErr};
 use serde::{Deserialize, Serialize};
-use warp::Reply;
 
 use adlu_base::Timestamp;
 
 use crate::{AdobeSignatures, CustomerSignatures};
-
-#[derive(Debug, Clone)]
-pub struct FrlActivationRequest {
-    pub timestamp: Timestamp,
-    pub api_key: String,
-    pub request_id: String,
-    pub session_id: String,
-    pub parsed_body: FrlActivationRequestBody,
-}
-
-impl FrlActivationRequest {
-    pub fn activation_id(&self) -> String {
-        let d_id = self.deactivation_id();
-        let factors: Vec<&str> = vec![
-            &self.parsed_body.app_details.ngl_app_id,
-            &self.parsed_body.app_details.ngl_lib_version,
-            &d_id,
-        ];
-        factors.join("|")
-    }
-
-    pub fn deactivation_id(&self) -> String {
-        let factors: Vec<&str> = vec![
-            &self.parsed_body.npd_id,
-            if self.parsed_body.device_details.enable_vdi_marker_exists
-                && self.parsed_body.device_details.is_virtual_environment
-            {
-                &self.parsed_body.device_details.os_user_id
-            } else {
-                &self.parsed_body.device_details.device_id
-            },
-        ];
-        factors.join("|")
-    }
-
-    pub fn to_network(
-        &self,
-        builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
-        builder
-            .header("X-Request-Id", &self.request_id)
-            .header("X-Session-Id", &self.session_id)
-            .header("X-Api-Key", &self.api_key)
-            .json(&self.parsed_body)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FrlDeactivationRequest {
-    pub timestamp: Timestamp,
-    pub api_key: String,
-    pub request_id: String,
-    pub params: FrlDeactivationQueryParams,
-}
-
-impl FrlDeactivationRequest {
-    pub fn deactivation_id(&self) -> String {
-        let factors: Vec<&str> = vec![
-            &self.params.npd_id,
-            if self.params.enable_vdi_marker_exists != 0
-                && self.params.is_virtual_environment != 0
-            {
-                &self.params.os_user_id
-            } else {
-                &self.params.device_id
-            },
-        ];
-        factors.join("|")
-    }
-
-    pub fn to_network(
-        &self,
-        builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
-        builder
-            .header("X-Request-Id", &self.request_id)
-            .header("X-Api-Key", &self.api_key)
-            .query(&self.params)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrlDeactivationQueryParams {
-    pub npd_id: String,
-    pub device_id: String,
-    pub os_user_id: String,
-    pub enable_vdi_marker_exists: i8,
-    pub is_virtual_environment: i8,
-    pub is_os_user_account_in_domain: i8,
-}
-
-impl FrlDeactivationQueryParams {
-    pub fn mock_from_device_id(device_id: &str) -> Self {
-        Self {
-            npd_id: "YzQ5ZmIw...elided...jFiOD".to_string(),
-            device_id: device_id.to_string(),
-            os_user_id: "b693be35...elided...2aff7".to_string(),
-            enable_vdi_marker_exists: 0,
-            is_virtual_environment: 0,
-            is_os_user_account_in_domain: 0,
-        }
-    }
-
-    pub fn valid_from_device_id(device_id: &str) -> Self {
-        Self {
-            npd_id: "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz".to_string(),
-            device_id: device_id.to_string(),
-            os_user_id:
-                "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d"
-                    .to_string(),
-            enable_vdi_marker_exists: 0,
-            is_virtual_environment: 0,
-            is_os_user_account_in_domain: 0,
-        }
-    }
-
-    pub fn to_query_params(&self) -> String {
-        serde_urlencoded::to_string(self).unwrap()
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,6 +35,35 @@ pub struct FrlActivationRequestBody {
 }
 
 impl FrlActivationRequestBody {
+    pub fn activation_id(&self) -> String {
+        let d_id = self.deactivation_id();
+        let factors: Vec<&str> =
+            vec![&self.app_details.ngl_app_id, &self.app_details.ngl_lib_version, &d_id];
+        factors.join("|")
+    }
+
+    pub fn deactivation_id(&self) -> String {
+        let factors: Vec<&str> = vec![
+            &self.npd_id,
+            if self.device_details.enable_vdi_marker_exists
+                && self.device_details.is_virtual_environment
+            {
+                &self.device_details.os_user_id
+            } else {
+                &self.device_details.device_id
+            },
+        ];
+        factors.join("|")
+    }
+
+    pub fn from_body(body: &str) -> Result<Self> {
+        serde_json::from_str(body).wrap_err("Invalid FRL activation body")
+    }
+
+    pub fn to_body(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+
     pub fn mock_from_device_id(device_id: &str) -> Self {
         Self {
             app_details: FrlAppDetails {
@@ -206,10 +113,6 @@ impl FrlActivationRequestBody {
             npd_precedence: Some(80)
         }
     }
-
-    pub fn to_body_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,93 +138,60 @@ pub struct FrlDeviceDetails {
     pub os_version: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct FrlActivationResponse {
-    pub timestamp: Timestamp,
-    pub request_id: String,
-    pub body: String,
-    pub parsed_body: Option<FrlActivationResponseBody>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrlDeactivationQueryParams {
+    pub npd_id: String,
+    pub device_id: String,
+    pub os_user_id: String,
+    pub enable_vdi_marker_exists: i8,
+    pub is_virtual_environment: i8,
+    pub is_os_user_account_in_domain: i8,
 }
 
-impl FrlActivationResponse {
-    pub async fn from_network(response: reqwest::Response) -> Result<Self> {
-        let request_id = super::get_response_id(&response)?;
-        let body = response.text().await.wrap_err("Failure to receive body")?;
-        let parsed_body: Option<FrlActivationResponseBody> =
-            if cfg!(feature = "parse_responses") {
-                Some(
-                    serde_json::from_str::<FrlActivationResponseBody>(&body)
-                        .wrap_err("Invalid activation response")?,
-                )
+impl FrlDeactivationQueryParams {
+    pub fn deactivation_id(&self) -> String {
+        let factors: Vec<&str> = vec![
+            &self.npd_id,
+            if self.enable_vdi_marker_exists != 0 && self.is_virtual_environment != 0 {
+                &self.os_user_id
             } else {
-                None
-            };
-        Ok(FrlActivationResponse {
-            timestamp: Timestamp::now(),
-            request_id,
-            body,
-            parsed_body,
-        })
+                &self.device_id
+            },
+        ];
+        factors.join("|")
     }
-}
 
-impl From<FrlActivationResponse> for warp::reply::Response {
-    fn from(act_resp: FrlActivationResponse) -> Self {
-        ::http::Response::builder()
-            .header("X-Request-Id", &act_resp.request_id)
-            .body(act_resp.body.into())
-            .unwrap()
+    pub fn mock_from_device_id(device_id: &str) -> Self {
+        Self {
+            npd_id: "YzQ5ZmIw...elided...jFiOD".to_string(),
+            device_id: device_id.to_string(),
+            os_user_id: "b693be35...elided...2aff7".to_string(),
+            enable_vdi_marker_exists: 0,
+            is_virtual_environment: 0,
+            is_os_user_account_in_domain: 0,
+        }
     }
-}
 
-impl Reply for FrlActivationResponse {
-    fn into_response(self) -> warp::reply::Response {
-        self.into()
+    pub fn valid_from_device_id(device_id: &str) -> Self {
+        Self {
+            npd_id: "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz".to_string(),
+            device_id: device_id.to_string(),
+            os_user_id:
+                "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d"
+                    .to_string(),
+            enable_vdi_marker_exists: 0,
+            is_virtual_environment: 0,
+            is_os_user_account_in_domain: 0,
+        }
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct FrlDeactivationResponse {
-    pub timestamp: Timestamp,
-    pub request_id: String,
-    pub body: String,
-    pub parsed_body: Option<FrlDeactivationResponseBody>,
-}
-
-impl FrlDeactivationResponse {
-    pub async fn from_network(response: reqwest::Response) -> Result<Self> {
-        let request_id = super::get_response_id(&response)?;
-        let body = response.text().await.wrap_err("Failure to receive body")?;
-        let parsed_body: Option<FrlDeactivationResponseBody> =
-            if cfg!(feature = "parse_responses") {
-                Some(
-                    serde_json::from_str::<FrlDeactivationResponseBody>(&body)
-                        .wrap_err("Invalid deactivation response")?,
-                )
-            } else {
-                None
-            };
-        Ok(FrlDeactivationResponse {
-            timestamp: Timestamp::now(),
-            request_id,
-            body,
-            parsed_body,
-        })
+    pub fn from_query(query: &str) -> Result<Self> {
+        serde_urlencoded::from_str(query).wrap_err("Invalid deactivation query")
     }
-}
 
-impl From<FrlDeactivationResponse> for warp::reply::Response {
-    fn from(act_resp: FrlDeactivationResponse) -> Self {
-        ::http::Response::builder()
-            .header("X-Request-Id", &act_resp.request_id)
-            .body(act_resp.body.into())
-            .unwrap()
-    }
-}
-
-impl Reply for FrlDeactivationResponse {
-    fn into_response(self) -> warp::reply::Response {
-        self.into()
+    pub fn to_query(&self) -> String {
+        serde_urlencoded::to_string(self).unwrap()
     }
 }
 
@@ -333,6 +203,14 @@ pub struct FrlActivationResponseBody {
 }
 
 impl FrlActivationResponseBody {
+    pub fn from_body(body: &str) -> Result<Self> {
+        serde_json::from_str(body).wrap_err("Malformed body")
+    }
+
+    pub fn to_body(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+
     pub fn mock_from_device_id(device_id: &str) -> Self {
         Self {
             adobe_cert_signed_values: FrlAdobeCertSignedValues {
@@ -378,10 +256,6 @@ impl FrlActivationResponseBody {
                 },
             },
         }
-    }
-
-    pub fn to_body_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
     }
 }
 
@@ -447,12 +321,16 @@ pub struct FrlDeactivationResponseBody {
 }
 
 impl FrlDeactivationResponseBody {
-    pub fn mock_from_device_id(_device_id: &str) -> Self {
-        FrlDeactivationResponseBody { invalidation_successful: true }
+    pub fn from_body(body: &str) -> Result<Self> {
+        serde_json::from_str(body).wrap_err("Malformed body")
     }
 
-    pub fn to_body_string(&self) -> String {
+    pub fn to_body(&self) -> String {
         serde_json::to_string(self).unwrap()
+    }
+
+    pub fn mock_from_device_id(_device_id: &str) -> Self {
+        FrlDeactivationResponseBody { invalidation_successful: true }
     }
 }
 
@@ -495,7 +373,7 @@ mod test {
     fn test_parse_mock_activation_request() {
         let body = super::FrlActivationRequestBody::mock_from_device_id("test-id");
         let request: super::FrlActivationRequestBody =
-            serde_json::from_str(body.to_body_string().as_str()).unwrap();
+            serde_json::from_str(body.to_body().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
         assert_eq!(request.app_details.ngl_app_id, "MockApp1");
     }
@@ -504,7 +382,7 @@ mod test {
     fn test_parse_valid_activation_request() {
         let body = super::FrlActivationRequestBody::valid_from_device_id("test-id");
         let request: super::FrlActivationRequestBody =
-            serde_json::from_str(body.to_body_string().as_str()).unwrap();
+            serde_json::from_str(body.to_body().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
         assert_eq!(request.app_details.ngl_app_id, "Photoshop1");
     }
@@ -557,7 +435,7 @@ mod test {
     #[test]
     fn test_parse_mock_activation_response() {
         let response = super::FrlActivationResponseBody::mock_from_device_id("test-id");
-        let body = response.to_body_string();
+        let body = response.to_body();
         let response: super::FrlActivationResponseBody =
             serde_json::from_str(&body).unwrap();
         assert_eq!(response.customer_cert_signed_values.values.device_id, "test-id");
@@ -576,7 +454,7 @@ mod test {
     fn test_parse_mock_deactivation_request() {
         let params = super::FrlDeactivationQueryParams::mock_from_device_id("test-id");
         let body: super::FrlDeactivationQueryParams =
-            serde_urlencoded::from_str(&params.to_query_params()).unwrap();
+            serde_urlencoded::from_str(&params.to_query()).unwrap();
         assert_eq!(body.npd_id, "YzQ5ZmIw...elided...jFiOD");
         assert_eq!(body.device_id, "test-id");
     }
@@ -585,7 +463,7 @@ mod test {
     fn test_parse_valid_deactivation_request() {
         let params = super::FrlDeactivationQueryParams::valid_from_device_id("test-id");
         let body: super::FrlDeactivationQueryParams =
-            serde_urlencoded::from_str(&params.to_query_params()).unwrap();
+            serde_urlencoded::from_str(&params.to_query()).unwrap();
         assert_eq!(body.npd_id, "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz");
         assert_eq!(body.device_id, "test-id");
     }
@@ -602,7 +480,7 @@ mod test {
     fn test_parse_mock_deactivation_response() {
         let mock = super::FrlDeactivationResponseBody::mock_from_device_id("test-id");
         let response: super::FrlDeactivationResponseBody =
-            serde_json::from_str(&mock.to_body_string()).unwrap();
+            serde_json::from_str(&mock.to_body()).unwrap();
         assert!(response.invalidation_successful);
     }
 }

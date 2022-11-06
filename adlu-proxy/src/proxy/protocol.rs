@@ -55,7 +55,7 @@ pub struct Request {
     pub path: String,
     pub query: Option<String>,
     pub body: Option<String>,
-    pub content_type: String,
+    pub content_type: Option<String>,
     pub accept_type: Option<String>,
     pub accept_language: Option<String>,
     pub user_agent: Option<String>,
@@ -64,6 +64,12 @@ pub struct Request {
     pub request_id: Option<String>,
     pub session_id: Option<String>,
     pub authorization: Option<String>,
+}
+
+impl std::fmt::Display for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} request {}", self.request_type, self.with_id())
+    }
 }
 
 impl Request {
@@ -117,7 +123,7 @@ impl Request {
             .and(warp::method())
             .and(warp::path::full())
             .and(optional_raw_query())
-            .and(warp::header::<String>("Content-Type"))
+            .and(warp::filters::header::optional::<String>("Content-Type"))
             .and(warp::filters::header::optional::<String>("Accept"))
             .and(warp::filters::header::optional::<String>("Accept-Language"))
             .and(warp::filters::header::optional::<String>("User-Agent"))
@@ -183,14 +189,18 @@ impl Request {
             RequestType::LogUpload => conf.log_server.as_str(),
             _ => conf.frl_server.as_str(),
         };
-        let endpoint = format!("{}/{}", server, &self.path);
-        let mut builder = conf.client.request(self.method.clone(), &endpoint);
-        if let Some(query) = &self.query {
-            builder = builder.query(query);
+        let endpoint = if let Some(query) = &self.query {
+            format!("{}/{}?{}", server, &self.path, query)
+        } else {
+            format!("{}/{}", server, &self.path)
+        };
+        let mut builder = conf
+            .client
+            .request(self.method.clone(), &endpoint)
+            .header("Accept-Encoding", "gzip, deflate, br");
+        if let Some(content_type) = &self.content_type {
+            builder = builder.header("Content-Type", content_type)
         }
-        builder = builder
-            .header("Accept-Encoding", "gzip, deflate, br")
-            .header("Content-Type", &self.content_type);
         if let Some(accept_type) = &self.accept_type {
             builder = builder.header("Accept", accept_type)
         }
@@ -255,7 +265,7 @@ pub struct Response {
 
 impl From<Response> for warp::reply::Response {
     fn from(resp: Response) -> Self {
-        let mut builder = http::Response::builder().status(resp.status.clone());
+        let mut builder = http::Response::builder().status(resp.status);
         if let Some(server) = resp.server {
             builder = builder.header("Server", server);
         }
@@ -289,7 +299,11 @@ impl Reply for Response {
 
 impl Response {
     pub async fn from_network(req: &Request, resp: reqwest::Response) -> Result<Self> {
-        let timestamp = Timestamp::now();
+        let timestamp = if let Some(val) = resp.headers().get("Date") {
+            val.to_str().map(Timestamp::from_db).unwrap_or_default()
+        } else {
+            Timestamp::now()
+        };
         let request_type = req.request_type.clone();
         let status = resp.status();
         let content_type = if let Some(val) = resp.headers().get("Content-Type") {
@@ -321,7 +335,7 @@ impl Response {
         let body = if content.is_empty() {
             None
         } else {
-            if !content_type.is_some() {
+            if content_type.is_none() {
                 warn!("Response has body but no content type");
             }
             Some(content)

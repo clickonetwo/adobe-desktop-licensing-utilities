@@ -185,7 +185,7 @@ pub async fn status(conf: Config) -> reply::Response {
 }
 
 pub async fn process_adobe_request(req: Request, conf: Config) -> reply::Response {
-    info!("Received {} request {}", &req.request_type, req.with_id());
+    info!("Received {}", req);
     debug!("Received {} request: {:?}", &req.request_type, &req);
     if !matches!(conf.settings.proxy.mode, ProxyMode::Isolated) {
         conf.cache.store_request(&req).await;
@@ -212,38 +212,37 @@ pub enum SendOutcome {
 }
 
 pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
-    let id = format!("{} request {}", &req.request_type, req.with_id());
     let outcome = if let ProxyMode::Isolated = conf.settings.proxy.mode {
-        info!("Isolated - not forwarding {}", id);
+        info!("Isolated - not forwarding {}", req);
         SendOutcome::Isolated
     } else {
-        info!("Sending {} to Adobe endpoint", id);
+        info!("Sending {} to Adobe endpoint", req);
         match req.send_to_adobe(conf).await {
             Ok(response) => {
                 let status = response.status();
                 if status.is_success() {
-                    info!("Received valid response status for {}: {}", id, status);
+                    info!("Received valid response status for {}: {}", req, status);
                     match Response::from_network(req, response).await {
                         Ok(resp) => {
-                            debug!("Response for {}: {:?}", id, resp);
+                            debug!("Response for {}: {:?}", req, resp);
                             // cache the response
-                            conf.cache.store_response(&resp).await;
+                            conf.cache.store_response(req, &resp).await;
                             SendOutcome::Success(resp)
                         }
                         Err(err) => {
-                            error!("Can't parse response for {}: {}", id, err);
+                            error!("Can't parse response for {}: {}", req, err);
                             SendOutcome::ParseFailure(err)
                         }
                     }
                 } else {
-                    error!("Received failure status for {}: {}", id, status);
-                    debug!("Response for {}: {:?}", id, response);
+                    error!("Received failure status for {}: {}", req, status);
+                    debug!("Response for {}: {:?}", req, response);
                     // return the safe bits of the response
                     SendOutcome::ErrorStatus(response)
                 }
             }
             Err(err) => {
-                info!("Network failure sending {}", id);
+                info!("Network failure sending {}", req);
                 SendOutcome::Unreachable(err)
             }
         }
@@ -251,7 +250,7 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
     if let SendOutcome::Success(resp) = outcome {
         SendOutcome::Success(resp)
     } else if let Some(resp) = conf.cache.fetch_response(req).await {
-        info!("Using previously cached response for {}", id);
+        info!("Using previously cached response for {}", req);
         SendOutcome::Success(resp)
     } else {
         outcome

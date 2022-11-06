@@ -27,28 +27,6 @@ use warp::Reply;
 
 use adlu_base::Timestamp;
 
-#[derive(Debug, Clone)]
-pub struct LogUploadRequest {
-    pub timestamp: Timestamp,
-    pub request_id: String,
-    pub authorization: String,
-    pub api_key: String,
-    pub log_data: bytes::Bytes,
-    pub session_data: Vec<LogSession>,
-}
-
-impl LogUploadRequest {
-    pub fn to_network(
-        &self,
-        builder: reqwest::RequestBuilder,
-    ) -> reqwest::RequestBuilder {
-        builder
-            .header("Authorization", &self.authorization)
-            .header("X-Api-Key", &self.api_key)
-            .body(self.log_data.clone())
-    }
-}
-
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct LogSession {
