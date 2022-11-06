@@ -112,7 +112,13 @@ pub async fn forward_stored_requests(settings: &Settings, cache: &Cache) -> Resu
 pub fn routes(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    status_route(conf.clone()).or(adobe_route(conf)).with(warp::log("route::summary"))
+    status_route(conf.clone())
+        .or(frl_activate_route(conf.clone()))
+        .or(frl_deactivate_route(conf.clone()))
+        .or(nul_license_route(conf.clone()))
+        .or(upload_route(conf.clone()))
+        .or(unknown_route(conf))
+        .with(warp::log("route::summary"))
 }
 
 pub fn with_conf(
@@ -129,22 +135,6 @@ pub fn status_route(
         .and(warp::path::end())
         .and(with_conf(conf))
         .then(status)
-}
-
-pub fn adobe_route(
-    conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::frl_activation_filter()
-        .or(Request::frl_deactivation_filter())
-        .unify()
-        .or(Request::nul_license_filter())
-        .unify()
-        .or(Request::log_upload_filter())
-        .unify()
-        .or(Request::unknown_filter())
-        .unify()
-        .and(with_conf(conf))
-        .then(process_adobe_request)
 }
 
 pub fn frl_activate_route(

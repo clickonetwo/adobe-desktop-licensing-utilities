@@ -48,7 +48,7 @@ pub fn mock_log_upload_request(
     builder = builder
         .header("Authorization", &mi.authorization())
         .header("X-Api-Key", &mi.api_key());
-    builder.body(session.to_body_string())
+    builder.body(session.to_body())
 }
 
 pub fn mock_log_response(_req: reqwest::Request) -> reqwest::Response {

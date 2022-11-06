@@ -20,7 +20,7 @@ use adlu_parse::protocol::{NulLicenseRequestBody, NulLicenseResponseBody};
 
 use super::{MockInfo, MockOutcome, MockRequestType};
 
-pub fn mock_activation_request(
+pub fn mock_license_request(
     ask: &MockOutcome,
     device_id: &str,
     builder: warp::test::RequestBuilder,

@@ -95,12 +95,13 @@ impl Request {
     pub fn nul_license_filter(
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         warp::post()
-            .and(warp::path!("asnp" / "nud"))
+            .and(warp::path("asnp"))
+            .and(warp::path("nud"))
             .and(required_header("X-Api-Key"))
             .and(required_header("X-Request-Id"))
             .and(required_header("X-Session-Id"))
             .and(required_header("Authorization"))
-            .and(Self::request_filter(RequestType::FrlDeactivation))
+            .and(Self::request_filter(RequestType::NulLicense))
     }
 
     pub fn log_upload_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone
@@ -109,7 +110,7 @@ impl Request {
             .and(warp::path!("ulecs" / "v1"))
             .and(required_header("X-Api-Key"))
             .and(required_header("Authorization"))
-            .and(Self::request_filter(RequestType::FrlDeactivation))
+            .and(Self::request_filter(RequestType::LogUpload))
     }
 
     pub fn unknown_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
@@ -393,7 +394,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn protocol_missing_content_type_reject() {
+    async fn protocol_missing_content_type_accept_warn() {
         let filter = super::Request::unknown_filter();
         let req = warp::test::request()
             .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
@@ -405,6 +406,6 @@ mod test {
             .body(r#"{"key1": "value1", "key2": 300}"#)
             .filter(&filter)
             .await;
-        assert!(req.is_err());
+        assert!(req.is_ok());
     }
 }

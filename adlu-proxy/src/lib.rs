@@ -105,14 +105,14 @@ mod tests {
         response.status().as_u16()
     }
 
-    async fn send_nul_activation(
+    async fn send_nul_license(
         conf: &proxy::Config,
         outcome: &MockOutcome,
         device_id: &str,
     ) -> u16 {
         let filter = proxy::nul_license_route(conf.clone());
         let mut builder = warp::test::request();
-        builder = named_user::mock_activation_request(outcome, device_id, builder);
+        builder = named_user::mock_license_request(outcome, device_id, builder);
         let response = builder.reply(&filter).await;
         response.status().as_u16()
     }
@@ -139,8 +139,8 @@ mod tests {
 
     // we don't want to test round trips to Adobe servers as part of general library testing,
     // only explicitly while developing when we think we may have broken it.
-    #[cfg(feature = "test_to_adobe")]
     #[tokio::test]
+    #[ignore]
     async fn test_frl_activation_deactivation_to_adobe() {
         // this device_id is the sha256 of the NIST test string "abc"
         let device_id =
@@ -206,9 +206,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nul_activation_request() {
+    async fn test_nul_license_request() {
         let conf = get_test_config(&ProxyMode::Connected).await;
-        let result = send_nul_activation(&conf, &MockOutcome::Success, "nul1").await;
+        let result = send_nul_license(&conf, &MockOutcome::Success, "nul1").await;
         assert_eq!(result, 200);
         release_test_config(conf).await;
     }
@@ -217,7 +217,7 @@ mod tests {
     async fn test_license_report() {
         let tempdir = get_test_directory().await;
         let conf = get_test_config(&ProxyMode::Connected).await;
-        let result = send_nul_activation(&conf, &MockOutcome::Success, "nul1").await;
+        let result = send_nul_license(&conf, &MockOutcome::Success, "nul1").await;
         assert_eq!(result, 200);
         let path = tempdir.join("launch-report1.csv");
         eprintln!("Launch report at: {:?}", path);

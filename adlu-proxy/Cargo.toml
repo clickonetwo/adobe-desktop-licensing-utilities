@@ -8,7 +8,6 @@ edition = "2021"
 
 [features]
 parse_responses = ["adlu-parse/parse-reponses"]
-test_to_adobe = []
 
 [dependencies]
 adlu-base = { path = "../adlu-base" }

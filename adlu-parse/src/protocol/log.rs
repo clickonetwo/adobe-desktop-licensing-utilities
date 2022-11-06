@@ -143,7 +143,7 @@ impl LogSession {
         }
     }
 
-    pub fn to_body_string(&self) -> String {
+    pub fn to_body(&self) -> String {
         let session_id = &self.session_id;
         let start_time = self.initial_entry.clone();
         let end_time = self.final_entry.clone();
@@ -424,9 +424,8 @@ mod test {
 
     #[test]
     fn test_parse_mock_log_upload() {
-        let data = bytes::Bytes::from(
-            LogSession::mock_from_session_id("test-id").to_body_string(),
-        );
+        let data =
+            bytes::Bytes::from(LogSession::mock_from_session_id("test-id").to_body());
         let sessions = super::parse_log_data(data);
         assert_eq!(sessions.len(), 1);
         let session = &sessions[0];
