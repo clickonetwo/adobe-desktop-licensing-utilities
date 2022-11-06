@@ -217,7 +217,7 @@ pub async fn store_deactivation_request(pool: &SqlitePool, req: &Request) -> Res
     let result = sqlx::query(&i_str)
         .bind(&d_key)
         .bind(req.api_key.as_ref().ok_or_else(|| eyre!("{} has no api key", req))?)
-        .bind(&req.request_id.as_ref().ok_or_else(|| eyre!("{} has no request id", req))?)
+        .bind(req.request_id.as_ref().ok_or_else(|| eyre!("{} has no request id", req))?)
         .bind(&parse.npd_id)
         .bind(&parse.device_id)
         .bind(&parse.os_user_id)
