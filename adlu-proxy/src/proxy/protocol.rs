@@ -119,7 +119,7 @@ impl Request {
     fn request_filter(
         kind: RequestType,
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
-        warp::filters::addr::remote()
+        proxy_remote_addr()
             .and(warp::method())
             .and(warp::path::full())
             .and(optional_raw_query())
@@ -231,6 +231,19 @@ impl Request {
             conf.client.execute(request).await.wrap_err("Error executing network request")
         }
     }
+}
+
+fn proxy_remote_addr(
+) -> impl Filter<Extract = (Option<std::net::SocketAddr>,), Error = std::convert::Infallible>
+       + Clone {
+    warp::filters::header::optional::<std::net::SocketAddr>("X-Forwarded-For")
+        .or(warp::filters::header::optional::<std::net::SocketAddr>("X-Real-Ip"))
+        .unify()
+        .or_else(|_| async {
+            Ok::<(Option<std::net::SocketAddr>,), std::convert::Infallible>((None,))
+        })
+        .and(warp::filters::addr::remote())
+        .map(|p: Option<std::net::SocketAddr>, r: Option<std::net::SocketAddr>| p.or(r))
 }
 
 fn optional_raw_query(
@@ -356,13 +369,11 @@ impl Response {
 
 #[cfg(test)]
 mod test {
-    use std::net;
-
     #[tokio::test]
     async fn protocol_generic_post_json_body() {
         let filter = super::Request::unknown_filter();
         let req = warp::test::request()
-            .remote_addr("127.0.0.1:18040".parse::<net::SocketAddr>().unwrap())
+            .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
             .method("POST")
             .path("/asnp/v1")
             .header("User-Agent", "TestAgent")
@@ -385,7 +396,7 @@ mod test {
     async fn protocol_missing_content_type_reject() {
         let filter = super::Request::unknown_filter();
         let req = warp::test::request()
-            .remote_addr("127.0.0.1:18040".parse::<net::SocketAddr>().unwrap())
+            .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
             .method("POST")
             .path("/asnp/v1")
             .header("User-Agent", "TestAgent")
