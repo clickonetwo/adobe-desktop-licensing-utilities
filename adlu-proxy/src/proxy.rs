@@ -131,7 +131,11 @@ pub async fn serve_incoming_https_requests(
     let server =
         warp::serve(routes).tls().cert(cert_data.cert_pem()).key(cert_data.key_pem());
     let (addr, server) = server.bind_with_graceful_shutdown(bind_addr, stop_signal);
-    info!("Serving HTTPS requests on {:?}...", addr);
+    info!(
+        "adlu-proxy v{} serving HTTPS requests on {:?}...",
+        env!("CARGO_PKG_VERSION"),
+        addr
+    );
     match tokio::task::spawn(server).await {
         Ok(_) => info!("HTTPS server terminated normally"),
         Err(err) => error!("HTTPS server terminated abnormally: {:?}", err),
@@ -149,7 +153,11 @@ pub async fn serve_incoming_http_requests(
     let bind_addr = conf.bind_addr()?;
     let (addr, server) =
         warp::serve(routes).bind_with_graceful_shutdown(bind_addr, stop_signal);
-    info!("Serving HTTP requests on {:?}...", addr);
+    info!(
+        "adlu-proxy v{} serving HTTP requests on {:?}...",
+        env!("CARGO_PKG_VERSION"),
+        addr
+    );
     match tokio::task::spawn(server).await {
         Ok(_) => info!("HTTP server terminated normally"),
         Err(err) => error!("HTTP server terminated abnormally: {:?}", err),

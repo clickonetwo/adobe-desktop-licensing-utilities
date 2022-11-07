@@ -485,6 +485,7 @@ impl SettingsVal {
             "Variable IP server (lcs-cops.adobe.io)",
             "Fixed IP server (lcs-cops-proxy.adobe.com)",
         ];
+        #[allow(clippy::bool_to_int_with_if)]
         let default = if self.frl.remote_host == "https://lcs-cops-proxy.adobe.com" {
             1
         } else {
