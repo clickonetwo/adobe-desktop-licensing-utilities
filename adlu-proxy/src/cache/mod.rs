@@ -25,7 +25,7 @@ use dialoguer::Confirm;
 use eyre::{eyre, Result, WrapErr};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
-    ConnectOptions,
+    ConnectOptions, Row,
 };
 
 use adlu_parse::protocol::{Request, RequestType};
@@ -196,6 +196,24 @@ async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
     log::db_init(&pool).await?;
     named_user::db_init(&pool).await?;
     Ok(pool)
+}
+
+async fn schema_upgrade(
+    data_type: &str,
+    max_version: usize,
+    alterations_table: &[&str],
+    pool: &SqlitePool,
+) -> Result<()> {
+    let q_str = r#"select * from schema_version where data_type = ?"#;
+    let u_str = "update schema_version set schema_version = ? where data_type = ?";
+    let row = sqlx::query(q_str).bind(data_type).fetch_one(pool).await?;
+    let mut version: i64 = row.get("schema_version");
+    while (version as usize) < max_version {
+        sqlx::query(alterations_table[(version as usize)]).execute(pool).await?;
+        version += 1;
+        sqlx::query(u_str).bind(version).bind(data_type).execute(pool).await?;
+    }
+    Ok(())
 }
 
 const SCHEMA_VERSION_SCHEMA: &str = r#"

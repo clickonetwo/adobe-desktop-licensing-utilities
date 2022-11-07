@@ -16,19 +16,24 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use adlu_base::Timestamp;
-use adlu_parse::protocol::{LicenseSession, NulLicenseRequestBody};
-use eyre::{eyre, Result, WrapErr};
+use eyre::Result;
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
     Row,
 };
 
+use adlu_base::Timestamp;
+use adlu_parse::protocol::LicenseSession;
+
 use crate::proxy::{Request, Response};
+
+use super::schema_upgrade;
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
+    schema_upgrade("log", SESSION_SCHEMA_VERSION, &SCHEMA_ALTERATIONS_BY_VERSION, pool)
+        .await?;
     Ok(())
 }
 
@@ -60,6 +65,7 @@ pub async fn report(
 fn report_headers(timezone: bool) -> Vec<String> {
     let time_suffix = if timezone { "" } else { " (UTC)" };
     let mut result = vec![];
+    result.push("Source Address".to_string());
     result.push("Session ID".to_string());
     result.push(format!("Session Start{time_suffix}"));
     result.push(format!("Session End{time_suffix}"));
@@ -82,6 +88,7 @@ fn report_record(session: &LicenseSession, timezone: bool, rfc3339: bool) -> Vec
         }
     };
     let result = vec![
+        session.source_addr.clone(),
         session.session_id.clone(),
         format_ts(&session.session_start),
         format_ts(&session.session_end),
@@ -97,13 +104,7 @@ fn report_record(session: &LicenseSession, timezone: bool, rfc3339: bool) -> Vec
 }
 
 pub async fn store_license_request(pool: &SqlitePool, req: &Request) -> Result<()> {
-    let body = req.body.as_ref().ok_or_else(|| eyre!("{} has no body", req))?;
-    let parse = NulLicenseRequestBody::from_body(body).wrap_err(req.to_string())?;
-    let new = LicenseSession::from_parts(
-        &req.timestamp,
-        req.session_id.as_ref().ok_or_else(|| eyre!("{} has no session id", req))?,
-        &parse,
-    );
+    let new = req.parse_license()?;
     if let Some(existing) = fetch_license_session(pool, &new.session_id).await? {
         store_license_session(pool, &existing.merge(new)?).await?;
     } else {
@@ -201,6 +202,7 @@ async fn store_license_session(
 
 fn session_from_row(row: &SqliteRow) -> LicenseSession {
     LicenseSession {
+        source_addr: row.get("source_addr"),
         session_id: row.get("session_id"),
         session_start: Timestamp::from_db(row.get("session_start")),
         session_end: Timestamp::from_db(row.get("session_end")),
@@ -231,3 +233,8 @@ const SESSION_SCHEMA: &str = r#"
 const CLEAR_ALL: &str = r#"
     delete from license_sessions;
     "#;
+
+const SESSION_SCHEMA_VERSION: usize = 1;
+
+const SCHEMA_ALTERATIONS_BY_VERSION: [&str; SESSION_SCHEMA_VERSION] =
+    ["alter table license_sessions add column source_addr not null default 'unknown'"];

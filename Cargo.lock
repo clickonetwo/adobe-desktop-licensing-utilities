@@ -57,6 +57,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "tokio",
  "visdom",
  "warp",
  "zip",

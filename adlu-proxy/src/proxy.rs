@@ -531,7 +531,7 @@ async fn adobe_bad_status_reply(resp: reqwest::Response) -> warp::reply::Respons
 }
 
 fn adobe_error_reply(err: Report) -> warp::reply::Response {
-    let message = format!("Malformed Adobe response: {}", err);
+    let message = format!("Invalid Adobe response: {}", err);
     error!("{}", &message);
     let body = json!({"statusCode": 500, "message": message});
     proxy_reply(http::StatusCode::INTERNAL_SERVER_ERROR, &body)

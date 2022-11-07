@@ -262,7 +262,7 @@ lazy_static! {
 impl Request {
     pub fn parse_log(&self) -> Result<Vec<LogSession>> {
         if !matches!(self.request_type, RequestType::LogUpload) {
-            return Err(eyre!("{} cannot have log data", self));
+            return Err(eyre!("{} is not a log upload, please report a bug!", self));
         }
         let body = bytes::Bytes::from(
             self.body

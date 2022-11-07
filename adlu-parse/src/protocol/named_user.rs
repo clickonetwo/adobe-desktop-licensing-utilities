@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use adlu_base::Timestamp;
 
+use crate::protocol::{Request, RequestType};
 use crate::{AdobeSignatures, CustomerSignatures};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +35,7 @@ pub struct NulLicenseRequestBody {
 
 impl NulLicenseRequestBody {
     pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Malformed body")
+        serde_json::from_str(body).wrap_err("Invalid license data")
     }
 
     pub fn to_body(&self) -> String {
@@ -157,6 +158,7 @@ pub struct NulDeviceDetails {
 
 #[derive(Debug, Clone)]
 pub struct LicenseSession {
+    pub source_addr: String,
     pub session_id: String,
     pub session_start: Timestamp,
     pub session_end: Timestamp,
@@ -167,6 +169,23 @@ pub struct LicenseSession {
     pub os_name: String,
     pub os_version: String,
     pub user_id: String,
+}
+
+impl Request {
+    pub fn parse_license(&self) -> Result<LicenseSession> {
+        if !matches!(self.request_type, RequestType::NulLicense) {
+            return Err(eyre!("{} is not a license request; please report a bug", self));
+        }
+        let source_addr = self.source_ip.map_or("unknown".to_string(), |a| a.to_string());
+        let session_id = self
+            .session_id
+            .as_ref()
+            .ok_or_else(|| eyre!("{} has no session id", self))?;
+        let body =
+            self.body.as_ref().ok_or_else(|| eyre!("{} has no license data", self))?;
+        let parse = NulLicenseRequestBody::from_body(body).wrap_err(self.to_string())?;
+        Ok(LicenseSession::from_parts(&self.timestamp, &source_addr, session_id, &parse))
+    }
 }
 
 impl LicenseSession {
@@ -180,8 +199,9 @@ impl LicenseSession {
         }
     }
 
-    pub fn from_parts(
+    fn from_parts(
         timestamp: &Timestamp,
+        source_addr: &str,
         session_id: &str,
         body: &NulLicenseRequestBody,
     ) -> Self {
@@ -191,6 +211,7 @@ impl LicenseSession {
             session_id.to_string()
         };
         Self {
+            source_addr: source_addr.to_string(),
             session_id,
             session_start: timestamp.clone(),
             session_end: timestamp.clone(),
@@ -214,7 +235,7 @@ pub struct NulLicenseResponseBody {
 
 impl NulLicenseResponseBody {
     pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Malformed body")
+        serde_json::from_str(body).wrap_err("Invalid NUL license data")
     }
 
     pub fn to_body(&self) -> String {

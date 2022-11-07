@@ -28,19 +28,17 @@ use adlu_parse::protocol::LogSession;
 
 use crate::proxy::{Request, RequestType, Response};
 
+use super::schema_upgrade;
+
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
-    let q_str = r#"select * from schema_version where data_type = 'log'"#;
-    let u_str = "update schema_version set schema_version = ? where data_type = 'log'";
-    let row = sqlx::query(q_str).fetch_one(pool).await?;
-    let mut version: i64 = row.get("schema_version");
-    while (version as usize) < SESSION_SCHEMA_VERSION {
-        sqlx::query(SCHEMA_ALTERATIONS_BY_VERSION[(version as usize)])
-            .execute(pool)
-            .await?;
-        version += 1;
-        sqlx::query(u_str).bind(version).execute(pool).await?;
-    }
+    schema_upgrade(
+        "license",
+        SESSION_SCHEMA_VERSION,
+        &SCHEMA_ALTERATIONS_BY_VERSION,
+        pool,
+    )
+    .await?;
     Ok(())
 }
 

@@ -204,7 +204,7 @@ pub struct FrlActivationResponseBody {
 
 impl FrlActivationResponseBody {
     pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Malformed body")
+        serde_json::from_str(body).wrap_err("Invalid FRL activation data")
     }
 
     pub fn to_body(&self) -> String {
@@ -322,7 +322,7 @@ pub struct FrlDeactivationResponseBody {
 
 impl FrlDeactivationResponseBody {
     pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Malformed body")
+        serde_json::from_str(body).wrap_err("Invalid FRL deactivation data")
     }
 
     pub fn to_body(&self) -> String {
