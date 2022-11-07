@@ -23,19 +23,16 @@ that can be used to ensure the proxy is up and find out which services it is pro
  */
 use std::convert::Infallible;
 
-use eyre::{eyre, Report, Result};
+use eyre::{eyre, Context, Report, Result};
 use log::{debug, error, info};
 use serde_json::{json, Value};
-use warp::{reply, Filter, Rejection, Reply};
+use warp::{Filter, Rejection, Reply};
+
+use adlu_base::{load_pem_files, load_pfx_file, CertificateData, Timestamp};
+pub use adlu_parse::protocol::{Request, RequestType};
 
 use crate::cache::Cache;
 use crate::settings::{ProxyMode, Settings};
-
-pub use self::config::Config;
-pub use self::protocol::{Request, RequestType, Response};
-
-pub mod config;
-pub mod protocol;
 
 pub async fn serve_incoming_https_requests(
     settings: &Settings,
@@ -109,6 +106,188 @@ pub async fn forward_stored_requests(settings: &Settings, cache: &Cache) -> Resu
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub settings: Settings,
+    pub cache: Cache,
+    pub client: reqwest::Client,
+    pub frl_server: String,
+    pub log_server: String,
+}
+
+impl Config {
+    pub fn new(settings: Settings, cache: Cache) -> Result<Self> {
+        let mut builder = reqwest::Client::builder();
+        builder = builder.timeout(std::time::Duration::new(59, 0));
+        if settings.upstream.use_proxy {
+            let proxy_host = format!(
+                "{}://{}:{}",
+                settings.upstream.proxy_protocol,
+                settings.upstream.proxy_host,
+                settings.upstream.proxy_port
+            );
+            let mut proxy = reqwest::Proxy::https(&proxy_host)
+                .wrap_err("Invalid proxy configuration")?;
+            if settings.upstream.use_basic_auth {
+                proxy = proxy.basic_auth(
+                    &settings.upstream.proxy_username,
+                    &settings.upstream.proxy_password,
+                );
+            }
+            builder = builder.proxy(proxy)
+        }
+        let client = builder.build().wrap_err("Can't create proxy client")?;
+        let frl_server: http::Uri =
+            settings.frl.remote_host.parse().wrap_err("Invalid FRL endpoint")?;
+        let log_server: http::Uri =
+            settings.log.remote_host.parse().wrap_err("Invalid log endpoint")?;
+        Ok(Config {
+            settings,
+            cache,
+            client,
+            frl_server: frl_server.to_string(),
+            log_server: log_server.to_string(),
+        })
+    }
+
+    #[cfg(test)]
+    pub fn clone_with_mode(&self, mode: &ProxyMode) -> Self {
+        let mut new_settings = self.settings.as_ref().clone();
+        new_settings.proxy.mode = mode.clone();
+        let mut new_config = self.clone();
+        new_config.settings = Settings::new(new_settings);
+        new_config
+    }
+
+    pub fn bind_addr(&self) -> Result<std::net::SocketAddr> {
+        let proxy_addr = if self.settings.proxy.ssl {
+            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.ssl_port)
+        } else {
+            format!("{}:{}", self.settings.proxy.host, self.settings.proxy.port)
+        };
+        proxy_addr.parse().wrap_err("Invalid proxy host/port configuration")
+    }
+
+    pub fn cert_data(&self) -> Result<CertificateData> {
+        if self.settings.proxy.ssl {
+            load_cert_data(&self.settings).wrap_err("SSL configuration failure")
+        } else {
+            Err(eyre!("SSL is not enabled"))
+        }
+    }
+}
+
+fn load_cert_data(settings: &Settings) -> Result<CertificateData> {
+    if settings.ssl.use_pfx {
+        load_pfx_file(&settings.ssl.cert_path, &settings.ssl.password)
+            .wrap_err("Failed to load PKCS12 data:")
+    } else {
+        let key_pass = match settings.ssl.password.as_str() {
+            "" => None,
+            p => Some(p),
+        };
+        load_pem_files(&settings.ssl.key_path, &settings.ssl.cert_path, key_pass)
+            .wrap_err("Failed to load certificate and key files")
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Response {
+    pub timestamp: Timestamp,
+    pub request_type: RequestType,
+    pub status: http::status::StatusCode,
+    pub body: Option<String>,
+    pub content_type: Option<String>,
+    pub server: Option<String>,
+    pub via: Option<String>,
+    pub request_id: Option<String>,
+    pub session_id: Option<String>,
+}
+
+impl From<Response> for warp::reply::Response {
+    fn from(resp: Response) -> Self {
+        let mut builder = http::Response::builder().status(resp.status);
+        if let Some(server) = resp.server {
+            builder = builder.header("Server", server);
+        }
+        if let Some(via) = resp.via {
+            builder = builder.header("Via", format!("{}, {}", via, proxy_id()));
+        } else {
+            builder = builder.header("Via", proxy_id());
+        }
+        if let Some(request_id) = resp.request_id {
+            builder = builder.header("X-Request-Id", request_id);
+        }
+        if let Some(session_id) = resp.session_id {
+            builder = builder.header("X-Session-Id", session_id);
+        }
+        if let Some(content) = resp.body {
+            if let Some(content_type) = resp.content_type {
+                builder = builder.header("Content-Type", content_type);
+            }
+            builder.body(content.into()).unwrap()
+        } else {
+            builder.body("".into()).unwrap()
+        }
+    }
+}
+
+impl Reply for Response {
+    fn into_response(self) -> warp::reply::Response {
+        self.into()
+    }
+}
+
+impl Response {
+    pub async fn from_network(req: &Request, resp: reqwest::Response) -> Result<Self> {
+        let timestamp = if let Some(val) = resp.headers().get("Date") {
+            val.to_str().map(Timestamp::from_db).unwrap_or_default()
+        } else {
+            Timestamp::now()
+        };
+        let request_type = req.request_type.clone();
+        let status = resp.status();
+        let content_type = if let Some(val) = resp.headers().get("Content-Type") {
+            Some(val.to_str().wrap_err("Content-Type is not valid")?.to_string())
+        } else {
+            None
+        };
+        let server = if let Some(val) = resp.headers().get("Server") {
+            Some(val.to_str().wrap_err("Server is not valid")?.to_string())
+        } else {
+            None
+        };
+        let via = if let Some(val) = resp.headers().get("Via") {
+            Some(val.to_str().wrap_err("Via is not valid")?.to_string())
+        } else {
+            None
+        };
+        let request_id = if let Some(val) = resp.headers().get("X-Request-Id") {
+            Some(val.to_str().wrap_err("X-Request-Id is not valid")?.to_string())
+        } else {
+            None
+        };
+        let session_id = if let Some(val) = resp.headers().get("X-Session-Id") {
+            Some(val.to_str().wrap_err("X-Request-Id is not valid")?.to_string())
+        } else {
+            None
+        };
+        let content = resp.text().await.wrap_err("Failure to receive body")?;
+        let body = if content.is_empty() { None } else { Some(content) };
+        Ok(Self {
+            timestamp,
+            request_type,
+            status,
+            body,
+            content_type,
+            server,
+            via,
+            request_id,
+            session_id,
+        })
+    }
+}
+
 pub fn routes(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -167,14 +346,14 @@ pub fn unknown_route(
     Request::unknown_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
-pub async fn status(conf: Config) -> reply::Response {
+pub async fn status(conf: Config) -> warp::reply::Response {
     let status = format!("{} running in {:?} mode", proxy_id(), conf.settings.proxy.mode);
     info!("Status request received, issuing status: {}", &status);
     let body = json!({"statusCode": 200, "status": &status});
     proxy_reply(http::StatusCode::OK, &body)
 }
 
-pub async fn process_adobe_request(req: Request, conf: Config) -> reply::Response {
+pub async fn process_adobe_request(req: Request, conf: Config) -> warp::reply::Response {
     info!("Received {}", req);
     debug!("Received {} request: {:?}", &req.request_type, &req);
     if !matches!(conf.settings.proxy.mode, ProxyMode::Isolated) {
@@ -207,7 +386,7 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
         SendOutcome::Isolated
     } else {
         info!("Sending {} to Adobe endpoint", req);
-        match req.send_to_adobe(conf).await {
+        match send_to_adobe(req, conf).await {
             Ok(response) => {
                 let status = response.status();
                 if status.is_success() {
@@ -247,6 +426,52 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
     }
 }
 
+pub async fn send_to_adobe(req: &Request, conf: &Config) -> Result<reqwest::Response> {
+    let server = match req.request_type {
+        RequestType::LogUpload => conf.log_server.as_str(),
+        _ => conf.frl_server.as_str(),
+    };
+    let endpoint = if let Some(query) = &req.query {
+        format!("{}/{}?{}", server, &req.path, query)
+    } else {
+        format!("{}/{}", server, &req.path)
+    };
+    let mut builder = conf
+        .client
+        .request(req.method.clone(), &endpoint)
+        .header("Accept-Encoding", "gzip, deflate, br");
+    if let Some(content_type) = &req.content_type {
+        builder = builder.header("Content-Type", content_type)
+    }
+    if let Some(accept_type) = &req.accept_type {
+        builder = builder.header("Accept", accept_type)
+    }
+    if let Some(accept_language) = &req.accept_language {
+        builder = builder.header("Accept-Language", accept_language);
+    }
+    if let Some(api_key) = &req.api_key {
+        builder = builder.header("X-Api-Key", api_key);
+    }
+    if let Some(request_id) = &req.request_id {
+        builder = builder.header("X-Request-Id", request_id);
+    }
+    if let Some(session_id) = &req.session_id {
+        builder = builder.header("X-Session-Id", session_id);
+    }
+    if let Some(authorization) = &req.authorization {
+        builder = builder.header("Authorization", authorization);
+    }
+    if let Some(body) = &req.body {
+        builder = builder.body(body.clone())
+    }
+    let request = builder.build().wrap_err("Error creating network request")?;
+    if cfg!(test) {
+        mock_adobe_server(conf, request).await.wrap_err("Error mocking network request")
+    } else {
+        conf.client.execute(request).await.wrap_err("Error executing network request")
+    }
+}
+
 #[cfg(test)]
 async fn mock_adobe_server(
     conf: &Config,
@@ -260,26 +485,29 @@ async fn mock_adobe_server(_: &Config, _: reqwest::Request) -> Result<reqwest::R
     Err(eyre!("Can't mock except in testing"))
 }
 
-fn proxy_reply(status: http::StatusCode, body: &Value) -> reply::Response {
-    reply::with_status(reply::with_header(reply::json(body), "Via", proxy_via()), status)
-        .into_response()
+fn proxy_reply(status: http::StatusCode, body: &Value) -> warp::reply::Response {
+    warp::reply::with_status(
+        warp::reply::with_header(warp::reply::json(body), "Via", proxy_via()),
+        status,
+    )
+    .into_response()
 }
 
-fn proxy_offline_reply() -> reply::Response {
+fn proxy_offline_reply() -> warp::reply::Response {
     let message = "Proxy is operating offline: request stored for later replay";
     debug!("{}", message);
     let body = json!({"statusCode": 502, "message": message});
     proxy_reply(http::StatusCode::BAD_GATEWAY, &body)
 }
 
-fn unreachable_reply(err: Report) -> reply::Response {
+fn unreachable_reply(err: Report) -> warp::reply::Response {
     let message = format!("Could not reach Adobe: {}", err);
     error!("{}", &message);
     let body = json!({"statusCode": 502, "message": message});
     proxy_reply(http::StatusCode::BAD_GATEWAY, &body)
 }
 
-async fn adobe_bad_status_reply(resp: reqwest::Response) -> reply::Response {
+async fn adobe_bad_status_reply(resp: reqwest::Response) -> warp::reply::Response {
     let mut builder = http::Response::builder().status(resp.status());
     if let Some(request_id) = resp.headers().get("X-Request-Id") {
         builder = builder.header("X-Request-Id", request_id)
@@ -302,7 +530,7 @@ async fn adobe_bad_status_reply(resp: reqwest::Response) -> reply::Response {
     builder.body(body).into_response()
 }
 
-fn adobe_error_reply(err: Report) -> reply::Response {
+fn adobe_error_reply(err: Report) -> warp::reply::Response {
     let message = format!("Malformed Adobe response: {}", err);
     error!("{}", &message);
     let body = json!({"statusCode": 500, "message": message});

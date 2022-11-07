@@ -16,7 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use eyre::{eyre, Result};
+use eyre::Result;
 use log::debug;
 use sqlx::{
     sqlite::{SqlitePool, SqliteRow},
@@ -123,9 +123,7 @@ fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<Str
 }
 
 pub async fn store_upload_request(pool: &SqlitePool, req: &Request) -> Result<()> {
-    let body = req.body.clone().ok_or_else(|| eyre!("{} has no body", req))?;
-    let sessions =
-        adlu_parse::protocol::parse_log_data(&req.source_ip, bytes::Bytes::from(body));
+    let sessions = req.parse_log()?;
     for new in sessions.iter() {
         if let Some(existing) = fetch_log_session(pool, &new.session_id).await? {
             store_log_session(pool, &existing.merge(new)?).await?;

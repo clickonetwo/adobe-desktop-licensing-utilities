@@ -28,8 +28,10 @@ use sqlx::{
     ConnectOptions,
 };
 
+use adlu_parse::protocol::{Request, RequestType};
+
 use crate::cli::Datasource;
-use crate::proxy::protocol::{Request, RequestType, Response};
+use crate::proxy::Response;
 
 mod frl;
 mod log;
