@@ -1,9 +1,12 @@
 name: publish
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
+      - 'proxy-v*'
+      - 'decoder-v*'
 
 jobs:
   publish:
