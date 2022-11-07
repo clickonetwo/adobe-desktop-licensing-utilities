@@ -188,8 +188,25 @@ async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
         options.disable_statement_logging();
     }
     let pool = SqlitePoolOptions::new().max_connections(5).connect_with(options).await?;
+    sqlx::query(SCHEMA_VERSION_SCHEMA).execute(&pool).await?;
+    sqlx::query(SCHEMA_VERSION_INITIALIZE).execute(&pool).await?;
     frl::db_init(&pool).await?;
     log::db_init(&pool).await?;
     named_user::db_init(&pool).await?;
     Ok(pool)
 }
+
+const SCHEMA_VERSION_SCHEMA: &str = r#"
+    create table if not exists schema_version (
+        data_type text not null unique,
+        schema_version integer not null default 0
+    );"#;
+
+const SCHEMA_VERSION_INITIALIZE: &str = r#"
+    insert or ignore into schema_version
+        (data_type, schema_version)
+    values
+        ("frl", 0),
+        ("license", 0),
+        ("log", 0);
+    "#;

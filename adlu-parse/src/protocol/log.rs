@@ -30,6 +30,7 @@ use adlu_base::Timestamp;
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct LogSession {
+    pub source_addr: String,
     pub session_id: String,
     pub initial_entry: Timestamp,
     pub final_entry: Timestamp,
@@ -62,6 +63,11 @@ impl LogSession {
             Err(eyre!("Can't merge sessions with different IDs"))
         } else {
             Ok(LogSession {
+                source_addr: if self.source_addr == "unknown" {
+                    other.source_addr.clone()
+                } else {
+                    self.source_addr.clone()
+                },
                 session_id: self.session_id.clone(),
                 initial_entry: if self.initial_entry <= other.initial_entry {
                     self.initial_entry.clone()
@@ -128,6 +134,7 @@ impl LogSession {
         let end_time: Timestamp =
             Timestamp::from_millis(start_time.to_millis() + session_len);
         Self {
+            source_addr: "unknown".to_string(),
             session_id: session_id.to_string(),
             initial_entry: start_time.clone(),
             final_entry: end_time.clone(),
@@ -251,7 +258,11 @@ lazy_static! {
     };
 }
 
-pub fn parse_log_data(data: bytes::Bytes) -> Vec<LogSession> {
+pub fn parse_log_data(
+    source_addr: &Option<std::net::SocketAddr>,
+    data: bytes::Bytes,
+) -> Vec<LogSession> {
+    let source_addr = source_addr.map_or("unknown".to_string(), |a| a.to_string());
     let line_pattern = &RE_MAP["line"];
     let mut sessions: Vec<LogSession> = Vec::new();
     let mut session: LogSession = Default::default();
@@ -264,6 +275,7 @@ pub fn parse_log_data(data: bytes::Bytes) -> Vec<LogSession> {
                 sessions.push(session.clone())
             }
             session = LogSession {
+                source_addr: source_addr.clone(),
                 session_id: sid,
                 initial_entry: timestamp.clone(),
                 final_entry: timestamp.clone(),
@@ -354,7 +366,7 @@ mod test {
     fn test_parse_complete_log_upload() {
         let path = "../rsrc/logs/mac/NGLClient_PremierePro122.5.0.log.bin";
         let data = bytes::Bytes::from(read_to_string(path).unwrap());
-        let sessions = super::parse_log_data(data);
+        let sessions = super::parse_log_data(&None, data);
         assert_eq!(sessions.len(), 1);
         let session = &sessions[0];
         let session_id = "4f7c3960-48da-49bb-9359-e0f040ecae66.1660326622129";
@@ -379,7 +391,7 @@ mod test {
     fn test_parse_partial_log_upload() {
         let path = "../rsrc/logs/mac/NGLClient_AcrobatDC122.1.20169.7.log.bin";
         let data = bytes::Bytes::from(read_to_string(path).unwrap());
-        let sessions = super::parse_log_data(data);
+        let sessions = super::parse_log_data(&None, data);
         assert_eq!(sessions.len(), 1);
         let session = &sessions[0];
         let session_id = "e6ab2d44-5909-4838-a79f-5091f5736073.1659806990834";
@@ -401,7 +413,7 @@ mod test {
     fn test_parse_win_unterminated_log_upload() {
         let path = "../rsrc/logs/win/NGLClient_Illustrator126.4.1.log.bin";
         let data = bytes::Bytes::from(read_to_string(path).unwrap());
-        let sessions = super::parse_log_data(data);
+        let sessions = super::parse_log_data(&None, data);
         assert_eq!(sessions.len(), 1);
         let session = &sessions[0];
         let session_id = "bc532766-d56c-43fe-aaba-eb5f4323a53c.1660495166236";
@@ -426,7 +438,7 @@ mod test {
     fn test_parse_mock_log_upload() {
         let data =
             bytes::Bytes::from(LogSession::mock_from_session_id("test-id").to_body());
-        let sessions = super::parse_log_data(data);
+        let sessions = super::parse_log_data(&None, data);
         assert_eq!(sessions.len(), 1);
         let session = &sessions[0];
         assert_eq!(session.session_id, "test-id");
@@ -460,7 +472,7 @@ mod test {
         let mut sessions: Vec<LogSession> = vec![];
         for date in dates {
             let data = bytes::Bytes::from(read_to_string(path(date)).unwrap());
-            sessions.append(&mut super::parse_log_data(data));
+            sessions.append(&mut super::parse_log_data(&None, data));
         }
         sessions.reverse();
         let mut result = sessions.pop().unwrap();

@@ -16,8 +16,6 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use adlu_base::Timestamp;
-use adlu_parse::protocol::LogSession;
 use eyre::{eyre, Result};
 use log::debug;
 use sqlx::{
@@ -25,10 +23,24 @@ use sqlx::{
     Row,
 };
 
+use adlu_base::Timestamp;
+use adlu_parse::protocol::LogSession;
+
 use crate::proxy::{Request, RequestType, Response};
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
+    let q_str = r#"select * from schema_version where data_type = 'log'"#;
+    let u_str = "update schema_version set schema_version = ? where data_type = 'log'";
+    let row = sqlx::query(q_str).fetch_one(pool).await?;
+    let mut version: i64 = row.get("schema_version");
+    while (version as usize) < SESSION_SCHEMA_VERSION {
+        sqlx::query(SCHEMA_ALTERATIONS_BY_VERSION[(version as usize)])
+            .execute(pool)
+            .await?;
+        version += 1;
+        sqlx::query(u_str).bind(version).execute(pool).await?;
+    }
     Ok(())
 }
 
@@ -60,6 +72,7 @@ pub async fn report(
 fn report_headers(timezone: bool) -> Vec<String> {
     let time_suffix = if timezone { "" } else { " (UTC)" };
     let mut result = vec![];
+    result.push("Source Address".to_string());
     result.push("Session ID".to_string());
     result.push(format!("Initial Entry{time_suffix}"));
     result.push(format!("Final Entry{time_suffix}"));
@@ -92,6 +105,7 @@ fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<Str
         }
     };
     let result = vec![
+        session.source_addr.clone(),
         session.session_id.clone(),
         format_ts(&session.initial_entry),
         format_ts(&session.final_entry),
@@ -110,7 +124,8 @@ fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<Str
 
 pub async fn store_upload_request(pool: &SqlitePool, req: &Request) -> Result<()> {
     let body = req.body.clone().ok_or_else(|| eyre!("{} has no body", req))?;
-    let sessions = adlu_parse::protocol::parse_log_data(bytes::Bytes::from(body));
+    let sessions =
+        adlu_parse::protocol::parse_log_data(&req.source_ip, bytes::Bytes::from(body));
     for new in sessions.iter() {
         if let Some(existing) = fetch_log_session(pool, &new.session_id).await? {
             store_log_session(pool, &existing.merge(new)?).await?;
@@ -232,6 +247,7 @@ fn session_from_row(row: &SqliteRow) -> LogSession {
         }
     }
     LogSession {
+        source_addr: row.get("source_addr"),
         session_id: row.get("session_id"),
         initial_entry: Timestamp::from_db(row.get("initial_entry")),
         final_entry: Timestamp::from_db(row.get("final_entry")),
@@ -266,3 +282,8 @@ const SESSION_SCHEMA: &str = r#"
 const CLEAR_ALL: &str = r#"
     delete from log_sessions;
     "#;
+
+const SESSION_SCHEMA_VERSION: usize = 1;
+
+const SCHEMA_ALTERATIONS_BY_VERSION: [&str; SESSION_SCHEMA_VERSION] =
+    ["alter table log_sessions add column source_addr not null default 'unknown'"];
