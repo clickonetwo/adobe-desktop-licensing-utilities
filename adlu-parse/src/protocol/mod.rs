@@ -165,8 +165,7 @@ impl Request {
             .and(warp::filters::header::optional::<String>("X-Request-Id"))
             .and(warp::filters::header::optional::<String>("X-Session-Id"))
             .and(warp::filters::header::optional::<String>("Authorization"))
-            .and(warp::body::content_length_limit(32_000))
-            .and(warp::body::bytes())
+            .and(optional_body_filter())
             .map(
                 move |source_ip,
                       method,
@@ -181,12 +180,7 @@ impl Request {
                       request_id,
                       session_id,
                       authorization,
-                      body: bytes::Bytes| {
-                    let body: Option<String> = if body.is_empty() {
-                        None
-                    } else {
-                        Some(String::from_utf8_lossy(&body).to_string())
-                    };
+                      body| {
                     Self {
                         timestamp: Timestamp::now(),
                         request_type: request_type.clone(),
@@ -216,6 +210,14 @@ impl Request {
             format!("with Timestamp: {:x}", self.timestamp.millis)
         }
     }
+}
+
+fn optional_body_filter(
+) -> impl Filter<Extract = (Option<String>,), Error = std::convert::Infallible> + Clone {
+    warp::body::content_length_limit(32_000)
+        .and(warp::body::bytes())
+        .map(|b: bytes::Bytes| Some(String::from_utf8_lossy(&b).to_string()))
+        .or_else(|_| async { Ok::<(Option<String>,), std::convert::Infallible>((None,)) })
 }
 
 fn proxied_remote_addr(
@@ -249,7 +251,7 @@ fn required_header(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[tokio::test]
     async fn protocol_generic_post_json_body() {
         let filter = super::Request::unknown_filter();
@@ -274,9 +276,9 @@ mod test {
     }
 
     #[tokio::test]
-    async fn protocol_missing_content_type_accept_warn() {
+    async fn protocol_missing_content_type_accept() {
         let filter = super::Request::unknown_filter();
-        let req = warp::test::request()
+        warp::test::request()
             .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
             .method("POST")
             .path("/asnp/v1")
@@ -285,7 +287,23 @@ mod test {
             .header("Accept-Encoding", "deflate")
             .body(r#"{"key1": "value1", "key2": 300}"#)
             .filter(&filter)
-            .await;
-        assert!(req.is_ok());
+            .await
+            .expect("Req with no content-type was rejected");
+    }
+
+    #[tokio::test]
+    async fn protocol_missing_content_length_accept() {
+        let filter = super::Request::unknown_filter();
+        let req = warp::test::request()
+            .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
+            .method("GET")
+            .path("/")
+            .header("User-Agent", "TestAgent")
+            .header("Accept", "application/json")
+            .header("Accept-Encoding", "deflate")
+            .filter(&filter)
+            .await
+            .expect("Request with no body was rejected");
+        assert!(req.body.is_none());
     }
 }
