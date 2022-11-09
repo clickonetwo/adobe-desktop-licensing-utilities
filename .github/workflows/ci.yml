@@ -32,50 +32,33 @@ jobs:
         if: ${{ matrix.arch == 'aarch64-apple-darwin' }}
 
       - name: fetch head
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          target: ${{ matrix.arch }}
-          toolchain: stable
+          targets: ${{ matrix.arch }}
           components: rustfmt, clippy
 
       - name: Format check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Clippy check
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+        run: cargo clippy -- -D warnings
 
       - name: Test libraries (except when cross-compiling on mac)
-        uses: actions-rs/cargo@v1
+        run: cargo test --target ${{ matrix.arch }} --workspace --lib -- --nocapture
         if: ${{ matrix.arch != 'aarch64-apple-darwin' }}
-        with:
-          command: test
-          args: --target ${{ matrix.arch }} --workspace --lib -- --nocapture
 
       - name: Build release adlu-proxy (all platforms)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target ${{ matrix.arch }} --package adlu-proxy  --release --locked
+        run: cargo build --target ${{ matrix.arch }} --package adlu-proxy  --release --locked
 
       - name: Build release adlu-decoder (mac and win only)
-        uses: actions-rs/cargo@v1
+        run: cargo build --target ${{ matrix.arch }} --package adlu-decoder --release --locked
         if: ${{ matrix.arch != 'x86_64-unknown-linux-gnu' }}
-        with:
-          command: build
-          args: --target ${{ matrix.arch }} --package adlu-decoder --release --locked
 
       - name: Upload executables
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: executables
           path: |
