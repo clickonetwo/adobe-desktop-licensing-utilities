@@ -16,8 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use warp::filters::BoxedFilter;
-use warp::{Filter, Rejection};
+use warp::{filters::BoxedFilter, Filter, Rejection};
 
 use adlu_base::Timestamp;
 pub use frl::{
@@ -92,7 +91,7 @@ impl Request {
             .and(warp::path!("asnp" / "frl_connected" / "values" / "v2"))
             .and(required_header("X-Api-Key"))
             .and(required_header("X-Request-Id"))
-            .and(Self::request_filter(RequestType::FrlActivation))
+            .and(Self::request_boxed_filter(RequestType::FrlActivation))
     }
 
     pub fn frl_deactivation_boxed_filter() -> BoxedFilter<(Self,)> {
@@ -106,7 +105,7 @@ impl Request {
             .and(required_header("X-Api-Key"))
             .and(required_header("X-Request-Id"))
             .and(required_query())
-            .and(Self::request_filter(RequestType::FrlDeactivation))
+            .and(Self::request_boxed_filter(RequestType::FrlDeactivation))
     }
 
     pub fn nul_license_boxed_filter() -> BoxedFilter<(Self,)> {
@@ -122,11 +121,11 @@ impl Request {
             .and(required_header("X-Request-Id"))
             .and(required_header("X-Session-Id"))
             .and(required_header("Authorization"))
-            .and(Self::request_filter(RequestType::NulLicense))
+            .and(Self::request_boxed_filter(RequestType::NulLicense))
     }
 
     pub fn log_upload_boxed_filter() -> BoxedFilter<(Self,)> {
-        Request::log_upload_filter().boxed()
+        Self::log_upload_filter().boxed()
     }
 
     pub fn log_upload_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone
@@ -135,19 +134,23 @@ impl Request {
             .and(warp::path!("ulecs" / "v1"))
             .and(required_header("X-Api-Key"))
             .and(required_header("Authorization"))
-            .and(Self::request_filter(RequestType::LogUpload))
+            .and(Self::request_boxed_filter(RequestType::LogUpload))
     }
 
     pub fn unknown_boxed_filter() -> BoxedFilter<(Self,)> {
-        Request::unknown_filter().boxed()
+        Self::unknown_filter().boxed()
     }
 
     pub fn unknown_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
-        warp::any().and(Self::request_filter(RequestType::Unknown))
+        warp::any().and(Self::request_boxed_filter(RequestType::Unknown))
+    }
+
+    fn request_boxed_filter(request_type: RequestType) -> BoxedFilter<(Self,)> {
+        Self::request_filter(request_type).boxed()
     }
 
     fn request_filter(
-        kind: RequestType,
+        request_type: RequestType,
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         proxied_remote_addr()
             .and(warp::method())
@@ -186,7 +189,7 @@ impl Request {
                     };
                     Self {
                         timestamp: Timestamp::now(),
-                        request_type: kind.clone(),
+                        request_type: request_type.clone(),
                         source_ip,
                         method,
                         path: path.as_str().to_string(),
