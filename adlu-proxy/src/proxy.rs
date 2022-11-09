@@ -319,31 +319,35 @@ pub fn status_route(
 pub fn frl_activate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::frl_activation_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::frl_activation_boxed_filter()
+        .and(with_conf(conf))
+        .then(process_adobe_request)
 }
 
 pub fn frl_deactivate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::frl_deactivation_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::frl_deactivation_boxed_filter()
+        .and(with_conf(conf))
+        .then(process_adobe_request)
 }
 
 pub fn nul_license_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::nul_license_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::nul_license_boxed_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
 pub fn upload_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::log_upload_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::log_upload_boxed_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
 pub fn unknown_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::unknown_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::unknown_boxed_filter().and(with_conf(conf)).then(process_adobe_request)
 }
 
 pub async fn status(conf: Config) -> warp::reply::Response {

@@ -16,6 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
+use warp::filters::BoxedFilter;
 use warp::{Filter, Rejection};
 
 use adlu_base::Timestamp;
@@ -81,6 +82,10 @@ impl std::fmt::Display for Request {
 }
 
 impl Request {
+    pub fn frl_activation_boxed_filter() -> BoxedFilter<(Self,)> {
+        Request::frl_activation_filter().boxed()
+    }
+
     pub fn frl_activation_filter(
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         warp::post()
@@ -88,6 +93,10 @@ impl Request {
             .and(required_header("X-Api-Key"))
             .and(required_header("X-Request-Id"))
             .and(Self::request_filter(RequestType::FrlActivation))
+    }
+
+    pub fn frl_deactivation_boxed_filter() -> BoxedFilter<(Self,)> {
+        Request::frl_deactivation_filter().boxed()
     }
 
     pub fn frl_deactivation_filter(
@@ -98,6 +107,10 @@ impl Request {
             .and(required_header("X-Request-Id"))
             .and(required_query())
             .and(Self::request_filter(RequestType::FrlDeactivation))
+    }
+
+    pub fn nul_license_boxed_filter() -> BoxedFilter<(Self,)> {
+        Request::nul_license_filter().boxed()
     }
 
     pub fn nul_license_filter(
@@ -112,6 +125,10 @@ impl Request {
             .and(Self::request_filter(RequestType::NulLicense))
     }
 
+    pub fn log_upload_boxed_filter() -> BoxedFilter<(Self,)> {
+        Request::log_upload_filter().boxed()
+    }
+
     pub fn log_upload_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone
     {
         warp::post()
@@ -119,6 +136,10 @@ impl Request {
             .and(required_header("X-Api-Key"))
             .and(required_header("Authorization"))
             .and(Self::request_filter(RequestType::LogUpload))
+    }
+
+    pub fn unknown_boxed_filter() -> BoxedFilter<(Self,)> {
+        Request::unknown_filter().boxed()
     }
 
     pub fn unknown_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
