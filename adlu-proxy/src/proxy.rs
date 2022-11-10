@@ -347,7 +347,24 @@ pub fn upload_route(
 pub fn unknown_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::unknown_boxed_filter().and(with_conf(conf)).then(process_adobe_request)
+    // we only pass requests to Adobe if they are intended for an Adobe server
+    to_adobe_host()
+        .and(Request::unknown_boxed_filter())
+        .and(with_conf(conf))
+        .then(process_adobe_request)
+}
+
+fn to_adobe_host() -> impl Filter<Extract = (), Error = Rejection> + Clone {
+    warp::host::optional()
+        .and_then(|auth: Option<http::uri::Authority>| async move {
+            match auth {
+                Some(auth) if auth.host().to_ascii_lowercase().contains(".adobe.") => {
+                    Ok(())
+                }
+                _ => Err(warp::reject::not_found()),
+            }
+        })
+        .untuple_one()
 }
 
 pub async fn status(conf: Config) -> warp::reply::Response {
@@ -547,4 +564,28 @@ pub fn proxy_id() -> String {
 
 pub fn proxy_via() -> String {
     format!("1.1 {}", proxy_id())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::to_adobe_host;
+    use adlu_parse::protocol::Request;
+    use warp::Filter;
+
+    #[tokio::test]
+    async fn unknown_request_accept_or_reject() {
+        let filter = to_adobe_host().and(Request::unknown_boxed_filter());
+        warp::test::request()
+            .method("GET")
+            .path("https://test.adobe.com/")
+            .filter(&filter)
+            .await
+            .expect("Request to adobe server was rejected");
+        warp::test::request()
+            .method("GET")
+            .path("https://test.clickonetwo.io/")
+            .filter(&filter)
+            .await
+            .expect_err("Request to non-adobe server was accepted");
+    }
 }
