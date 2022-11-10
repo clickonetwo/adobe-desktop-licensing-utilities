@@ -168,6 +168,7 @@ pub struct LicenseSession {
     pub ngl_version: String,
     pub os_name: String,
     pub os_version: String,
+    pub device_name: String,
     pub user_id: String,
 }
 
@@ -220,8 +221,9 @@ impl LicenseSession {
             app_locale: body.app_details.locale.clone(),
             ngl_version: body.app_details.ngl_lib_version.clone(),
             os_name: body.device_details.os_name.clone(),
-            os_version: body.device_details.os_name.clone(),
-            user_id: body.device_details.os_name.clone(),
+            os_version: body.device_details.os_version.clone(),
+            device_name: body.device_details.device_name.clone(),
+            user_id: body.device_details.os_user_id.clone(),
         }
     }
 }

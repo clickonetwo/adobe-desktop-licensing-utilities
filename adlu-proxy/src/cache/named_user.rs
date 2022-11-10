@@ -75,6 +75,7 @@ fn report_headers(timezone: bool) -> Vec<String> {
     result.push("NGL Version".to_string());
     result.push("OS Name".to_string());
     result.push("OS Version".to_string());
+    result.push("Machine Name".to_string());
     result.push("User ID".to_string());
     result
 }
@@ -98,6 +99,7 @@ fn report_record(session: &LicenseSession, timezone: bool, rfc3339: bool) -> Vec
         session.ngl_version.clone(),
         session.os_name.clone(),
         session.os_version.clone(),
+        session.device_name.clone(),
         session.user_id.clone(),
     ];
     result
@@ -173,9 +175,10 @@ async fn store_license_session(
     let field_list = r#"
         (
             session_id, session_start, session_end,
-            app_id, app_version, app_locale, ngl_version, os_name, os_version, user_id
+            app_id, app_version, app_locale, ngl_version, 
+            os_name, os_version, device_name, user_id
         )"#;
-    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     let i_str = format!(
         "insert or replace into license_sessions {} values {}",
         field_list, value_list
@@ -192,6 +195,7 @@ async fn store_license_session(
         .bind(&session.ngl_version)
         .bind(&session.os_name)
         .bind(&session.os_version)
+        .bind(&session.device_name)
         .bind(&session.user_id)
         .execute(&mut tx)
         .await?;
@@ -212,6 +216,7 @@ fn session_from_row(row: &SqliteRow) -> LicenseSession {
         ngl_version: row.get("ngl_version"),
         os_name: row.get("os_name"),
         os_version: row.get("os_version"),
+        device_name: row.get("device_name"),
         user_id: row.get("user_id"),
     }
 }
@@ -234,7 +239,9 @@ const CLEAR_ALL: &str = r#"
     delete from license_sessions;
     "#;
 
-const SESSION_SCHEMA_VERSION: usize = 1;
+const SESSION_SCHEMA_VERSION: usize = 2;
 
-const SCHEMA_ALTERATIONS_BY_VERSION: [&str; SESSION_SCHEMA_VERSION] =
-    ["alter table license_sessions add column source_addr not null default 'unknown'"];
+const SCHEMA_ALTERATIONS_BY_VERSION: [&str; SESSION_SCHEMA_VERSION] = [
+    "alter table license_sessions add column source_addr not null default 'unknown'",
+    "alter table license_sessions add column device_name not null default ''",
+];
