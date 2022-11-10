@@ -147,7 +147,7 @@ impl PreconditioningData {
             .wrap_err("Cannot parse package")?;
         let data_node = doc.find("Preconditioning");
         let json_data = data_node.text();
-        let pc_data: PreconditioningData = serde_json::from_str(json_data)
+        let pc_data: PreconditioningData = serde_json::from_str(&json_data)
             .wrap_err("Can't parse preconditioning data in ccp file")?;
         Ok(pc_data)
     }
