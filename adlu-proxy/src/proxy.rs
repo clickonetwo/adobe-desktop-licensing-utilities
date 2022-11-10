@@ -21,10 +21,8 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 Provides the top-level proxy framework, both insecure and secure.  This includes a status endpoint
 that can be used to ensure the proxy is up and find out which services it is providing.
  */
-use std::convert::Infallible;
-
 use eyre::{eyre, Context, Report, Result};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use warp::{Filter, Rejection, Reply};
 
@@ -302,7 +300,7 @@ pub fn routes(
 
 pub fn with_conf(
     conf: Config,
-) -> impl Filter<Extract = (Config,), Error = Infallible> + Clone {
+) -> impl Filter<Extract = (Config,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || conf.clone())
 }
 
@@ -352,6 +350,18 @@ pub fn unknown_route(
         .and(Request::unknown_boxed_filter())
         .and(with_conf(conf))
         .then(process_adobe_request)
+        .recover(|err: Rejection| async move {
+            if err.is_not_found() {
+                info!("Rejecting unknown request to non-Adobe endpoint");
+                let reply = serde_json::json!({"status": "Not Found", "statusCode": 404});
+                Ok(proxy_reply(http::StatusCode::NOT_FOUND, &reply))
+            } else {
+                warn!("Unknown request rejected for unknown reason: {:?}", err);
+                let message = format!("Request rejected: {:?}", err);
+                let reply = serde_json::json!({"status": message, "statusCode": 500});
+                Ok(proxy_reply(http::StatusCode::INTERNAL_SERVER_ERROR, &reply))
+            }
+        })
 }
 
 fn to_adobe_host() -> impl Filter<Extract = (), Error = Rejection> + Clone {
@@ -425,7 +435,7 @@ pub async fn send_request(conf: &Config, req: &Request) -> SendOutcome {
                         }
                     }
                 } else {
-                    error!("Received failure status for {}: {}", req, status);
+                    info!("Received failure status for {}: {}", req, status);
                     debug!("Response for {}: {:?}", req, response);
                     // return the safe bits of the response
                     SendOutcome::ErrorStatus(response)
