@@ -209,6 +209,12 @@ async fn schema_upgrade(
     let row = sqlx::query(q_str).bind(data_type).fetch_one(pool).await?;
     let mut version: i64 = row.get("schema_version");
     while (version as usize) < max_version {
+        info!(
+            "Upgrading '{}' data table from version {} to {}",
+            data_type,
+            version,
+            version + 1
+        );
         sqlx::query(alterations_table[(version as usize)]).execute(pool).await?;
         version += 1;
         sqlx::query(u_str).bind(version).bind(data_type).execute(pool).await?;
