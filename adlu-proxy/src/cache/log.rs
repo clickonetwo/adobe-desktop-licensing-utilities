@@ -199,10 +199,10 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
     }
     let field_list = r#"
         (
-            session_id, initial_entry, final_entry, session_start, session_end,
+            source_addr, session_id, initial_entry, final_entry, session_start, session_end,
             app_id, app_version, app_locale, ngl_version, os_name, os_version, user_id
         )"#;
-    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     let i_str = format!(
         "insert or replace into log_sessions {} values {}",
         field_list, value_list
@@ -210,6 +210,7 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
     debug!("Storing log session with id: {}", &session.session_id);
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
+        .bind(&session.source_addr)
         .bind(&session.session_id)
         .bind(session.initial_entry.to_db())
         .bind(session.final_entry.to_db())

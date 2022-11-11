@@ -269,7 +269,8 @@ impl Request {
                 .clone()
                 .ok_or_else(|| eyre!("{} has no attached log data", self))?,
         );
-        let source_addr = self.source_ip.map_or("unknown".to_string(), |a| a.to_string());
+        let source_addr =
+            self.source_ip.map_or_else(|| "unknown".to_string(), |a| a.to_string());
         Ok(parse_log_data(&source_addr, &body))
     }
 }
