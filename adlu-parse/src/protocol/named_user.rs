@@ -177,7 +177,8 @@ impl Request {
         if !matches!(self.request_type, RequestType::NulLicense) {
             return Err(eyre!("{} is not a license request; please report a bug", self));
         }
-        let source_addr = self.source_ip.map_or("unknown".to_string(), |a| a.to_string());
+        let source_addr =
+            self.source_ip.map_or_else(|| "unknown".to_string(), |a| a.to_string());
         let session_id = self
             .session_id
             .as_ref()

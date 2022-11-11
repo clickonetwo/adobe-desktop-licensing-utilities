@@ -32,13 +32,8 @@ use super::schema_upgrade;
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
-    schema_upgrade(
-        "license",
-        SESSION_SCHEMA_VERSION,
-        &SCHEMA_ALTERATIONS_BY_VERSION,
-        pool,
-    )
-    .await?;
+    schema_upgrade("log", SESSION_SCHEMA_VERSION, &SCHEMA_ALTERATIONS_BY_VERSION, pool)
+        .await?;
     Ok(())
 }
 

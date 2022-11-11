@@ -32,8 +32,13 @@ use super::schema_upgrade;
 
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
-    schema_upgrade("log", SESSION_SCHEMA_VERSION, &SCHEMA_ALTERATIONS_BY_VERSION, pool)
-        .await?;
+    schema_upgrade(
+        "license",
+        SESSION_SCHEMA_VERSION,
+        &SCHEMA_ALTERATIONS_BY_VERSION,
+        pool,
+    )
+    .await?;
     Ok(())
 }
 
@@ -174,11 +179,11 @@ async fn store_license_session(
 ) -> Result<()> {
     let field_list = r#"
         (
-            session_id, session_start, session_end,
+            source_addr, session_id, session_start, session_end,
             app_id, app_version, app_locale, ngl_version, 
             os_name, os_version, device_name, user_id
         )"#;
-    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     let i_str = format!(
         "insert or replace into license_sessions {} values {}",
         field_list, value_list
@@ -186,6 +191,7 @@ async fn store_license_session(
     debug!("Storing license session with id: {}", &session.session_id);
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
+        .bind(&session.source_addr)
         .bind(&session.session_id)
         .bind(Timestamp::to_db(&session.session_start))
         .bind(Timestamp::to_db(&session.session_end))
