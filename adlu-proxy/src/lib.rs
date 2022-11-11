@@ -17,7 +17,7 @@ materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use eyre::{Result, WrapErr};
-use log::debug;
+use log::{debug, info};
 
 use cli::{Command, ProxyArgs};
 use settings::Settings;
@@ -36,6 +36,7 @@ pub async fn run(
     stop_signal: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
     logging::init(&settings.logging)?;
+    info!("{} invoked with command: {:?}", proxy::proxy_id(), args.cmd);
     debug!("Loaded config: {:?}", &settings);
     let cache = cache::connect(&settings.proxy.db_path).await?;
     let result = match args.cmd {

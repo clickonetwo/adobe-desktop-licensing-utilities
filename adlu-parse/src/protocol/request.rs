@@ -68,38 +68,41 @@ impl std::fmt::Display for Request {
 }
 
 impl Request {
-    pub fn frl_activation_boxed_filter() -> BoxedFilter<(Self,)> {
-        Request::frl_activation_filter().boxed()
+    pub fn frl_activation_boxed_filter(body_limit: u64) -> BoxedFilter<(Self,)> {
+        Request::frl_activation_filter(body_limit).boxed()
     }
 
     pub fn frl_activation_filter(
+        body_limit: u64,
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         warp::post()
             .and(warp::path!("asnp" / "frl_connected" / "values" / "v2"))
             .and(required_header("X-Api-Key"))
             .and(required_header("X-Request-Id"))
-            .and(Self::request_boxed_filter(RequestType::FrlActivation))
+            .and(Self::request_boxed_filter(RequestType::FrlActivation, body_limit))
     }
 
-    pub fn frl_deactivation_boxed_filter() -> BoxedFilter<(Self,)> {
-        Request::frl_deactivation_filter().boxed()
+    pub fn frl_deactivation_boxed_filter(body_limit: u64) -> BoxedFilter<(Self,)> {
+        Request::frl_deactivation_filter(body_limit).boxed()
     }
 
     pub fn frl_deactivation_filter(
+        body_limit: u64,
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         warp::delete()
             .and(warp::path!("asnp" / "frl_connected" / "v1"))
             .and(required_header("X-Api-Key"))
             .and(required_header("X-Request-Id"))
             .and(required_query())
-            .and(Self::request_boxed_filter(RequestType::FrlDeactivation))
+            .and(Self::request_boxed_filter(RequestType::FrlDeactivation, body_limit))
     }
 
-    pub fn nul_license_boxed_filter() -> BoxedFilter<(Self,)> {
-        Request::nul_license_filter().boxed()
+    pub fn nul_license_boxed_filter(body_limit: u64) -> BoxedFilter<(Self,)> {
+        Request::nul_license_filter(body_limit).boxed()
     }
 
     pub fn nul_license_filter(
+        body_limit: u64,
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         warp::post()
             .and(warp::path("asnp"))
@@ -108,36 +111,43 @@ impl Request {
             .and(required_header("X-Request-Id"))
             .and(required_header("X-Session-Id"))
             .and(required_header("Authorization"))
-            .and(Self::request_boxed_filter(RequestType::NulLicense))
+            .and(Self::request_boxed_filter(RequestType::NulLicense, body_limit))
     }
 
-    pub fn log_upload_boxed_filter() -> BoxedFilter<(Self,)> {
-        Self::log_upload_filter().boxed()
+    pub fn log_upload_boxed_filter(body_limit: u64) -> BoxedFilter<(Self,)> {
+        Self::log_upload_filter(body_limit).boxed()
     }
 
-    pub fn log_upload_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone
-    {
+    pub fn log_upload_filter(
+        body_limit: u64,
+    ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         warp::post()
             .and(warp::path!("ulecs" / "v1"))
             .and(required_header("X-Api-Key"))
             .and(required_header("Authorization"))
-            .and(Self::request_boxed_filter(RequestType::LogUpload))
+            .and(Self::request_boxed_filter(RequestType::LogUpload, body_limit))
     }
 
-    pub fn unknown_boxed_filter() -> BoxedFilter<(Self,)> {
-        Self::unknown_filter().boxed()
+    pub fn unknown_boxed_filter(body_limit: u64) -> BoxedFilter<(Self,)> {
+        Self::unknown_filter(body_limit).boxed()
     }
 
-    pub fn unknown_filter() -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
-        warp::any().and(Self::request_boxed_filter(RequestType::Unknown))
+    pub fn unknown_filter(
+        body_limit: u64,
+    ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
+        warp::any().and(Self::request_boxed_filter(RequestType::Unknown, body_limit))
     }
 
-    fn request_boxed_filter(request_type: RequestType) -> BoxedFilter<(Self,)> {
-        Self::request_filter(request_type).boxed()
+    fn request_boxed_filter(
+        request_type: RequestType,
+        body_limit: u64,
+    ) -> BoxedFilter<(Self,)> {
+        Self::request_filter(request_type, body_limit).boxed()
     }
 
     fn request_filter(
         request_type: RequestType,
+        body_limit: u64,
     ) -> impl Filter<Extract = (Self,), Error = Rejection> + Clone {
         proxied_remote_addr()
             .and(warp::method())
@@ -152,7 +162,7 @@ impl Request {
             .and(warp::filters::header::optional::<String>("X-Request-Id"))
             .and(warp::filters::header::optional::<String>("X-Session-Id"))
             .and(warp::filters::header::optional::<String>("Authorization"))
-            .and(optional_body_filter())
+            .and(optional_body_filter(body_limit))
             .map(
                 move |source_ip,
                       method,
@@ -200,8 +210,9 @@ impl Request {
 }
 
 fn optional_body_filter(
+    body_limit: u64,
 ) -> impl Filter<Extract = (Option<String>,), Error = std::convert::Infallible> + Clone {
-    warp::body::content_length_limit(32_000)
+    warp::body::content_length_limit(body_limit)
         .and(warp::body::bytes())
         .map(|b: bytes::Bytes| Some(String::from_utf8_lossy(&b).to_string()))
         .or_else(|_| async { Ok::<(Option<String>,), std::convert::Infallible>((None,)) })
@@ -256,7 +267,7 @@ fn required_header(
 mod tests {
     #[tokio::test]
     async fn protocol_generic_post_json_body() {
-        let filter = super::Request::unknown_filter();
+        let filter = super::Request::unknown_filter(32_000);
         let req = warp::test::request()
             .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
             .method("POST")
@@ -279,7 +290,7 @@ mod tests {
 
     #[tokio::test]
     async fn protocol_missing_content_type_accept() {
-        let filter = super::Request::unknown_filter();
+        let filter = super::Request::unknown_filter(32_000);
         warp::test::request()
             .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
             .method("POST")
@@ -295,7 +306,7 @@ mod tests {
 
     #[tokio::test]
     async fn protocol_missing_content_length_accept() {
-        let filter = super::Request::unknown_filter();
+        let filter = super::Request::unknown_filter(32_000);
         let req = warp::test::request()
             .remote_addr("127.0.0.1:18040".parse::<std::net::SocketAddr>().unwrap())
             .method("GET")

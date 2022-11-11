@@ -317,7 +317,7 @@ pub fn status_route(
 pub fn frl_activate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::frl_activation_boxed_filter()
+    Request::frl_activation_boxed_filter(50_000)
         .and(with_conf(conf))
         .then(process_adobe_request)
 }
@@ -325,7 +325,7 @@ pub fn frl_activate_route(
 pub fn frl_deactivate_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::frl_deactivation_boxed_filter()
+    Request::frl_deactivation_boxed_filter(50_000)
         .and(with_conf(conf))
         .then(process_adobe_request)
 }
@@ -333,13 +333,17 @@ pub fn frl_deactivate_route(
 pub fn nul_license_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::nul_license_boxed_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::nul_license_boxed_filter(50_000)
+        .and(with_conf(conf))
+        .then(process_adobe_request)
 }
 
 pub fn upload_route(
     conf: Config,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    Request::log_upload_boxed_filter().and(with_conf(conf)).then(process_adobe_request)
+    Request::log_upload_boxed_filter(1_500_000)
+        .and(with_conf(conf))
+        .then(process_adobe_request)
 }
 
 pub fn unknown_route(
@@ -347,18 +351,18 @@ pub fn unknown_route(
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     // we only pass requests to Adobe if they are intended for an Adobe server
     to_adobe_host()
-        .and(Request::unknown_boxed_filter())
+        .and(Request::unknown_boxed_filter(100_000))
         .and(with_conf(conf))
         .then(process_adobe_request)
         .recover(|err: Rejection| async move {
             if err.is_not_found() {
                 info!("Rejecting unknown request to non-Adobe endpoint");
-                let reply = serde_json::json!({"status": "Not Found", "statusCode": 404});
+                let reply = json!({"status": "Not Found", "statusCode": 404});
                 Ok(proxy_reply(http::StatusCode::NOT_FOUND, &reply))
             } else {
                 warn!("Unknown request rejected for unknown reason: {:?}", err);
                 let message = format!("Request rejected: {:?}", err);
-                let reply = serde_json::json!({"status": message, "statusCode": 500});
+                let reply = json!({"status": message, "statusCode": 500});
                 Ok(proxy_reply(http::StatusCode::INTERNAL_SERVER_ERROR, &reply))
             }
         })
@@ -584,7 +588,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_request_accept_or_reject() {
-        let filter = to_adobe_host().and(Request::unknown_boxed_filter());
+        let filter = to_adobe_host().and(Request::unknown_boxed_filter(100_000));
         warp::test::request()
             .method("GET")
             .path("https://test.adobe.com/")
