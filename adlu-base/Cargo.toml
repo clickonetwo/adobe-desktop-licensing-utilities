@@ -11,7 +11,7 @@ cross-compile = []
 [dependencies]
 base64 = "0.13"
 bytes = "1"
-chrono = "0.4"
+chrono = "=0.4.22"  # avoid deprecation warnings in 0.4.23
 ctrlc = { version = "3.1", features = ["termination"] }
 eyre = "0.6"
 keyring = "1"

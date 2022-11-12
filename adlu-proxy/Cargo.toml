@@ -3,7 +3,7 @@ name = "adlu-proxy"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 description = "A protocol-aware, caching, store/forward reverse proxy for Adobe desktop licensing servers"
 license = "AGPLv3"
-version = "1.2.0-alpha.6"
+version = "1.2.0-beta.1"
 edition = "2021"
 
 [features]
@@ -14,7 +14,7 @@ adlu-base = { path = "../adlu-base" }
 adlu-parse = { path = "../adlu-parse" }
 anyhow = "1"    # needed for log4rs trigger definition
 bytes = "1.1"
-chrono = "0.4"
+chrono = "=0.4.22"  # avoid deprecation warnings in 0.4.23
 clap = { version = "4", features = ["derive"] }
 config = "0.13"
 ctrlc = { version = "3.1", features = ["termination"] }
