@@ -37,7 +37,7 @@ use log4rs::{
 use crate::settings::{LogDestination, LogLevel, LogRotationType, Logging};
 
 pub fn init(logging: &Logging) -> Result<()> {
-    let pattern = "{d([%Y-%m-%d][%H:%M:%S])}[{t}][{l}] {m}{n}";
+    let pattern = "{d([%Y-%m-%d][%H:%M:%S])}[{P:5}][{t}][{l}] {m}{n}";
     let encoder = PatternEncoder::new(pattern);
     let filter = log_level(&logging.level);
     let appender = if let LogDestination::Console = &logging.destination {
