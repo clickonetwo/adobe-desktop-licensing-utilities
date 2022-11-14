@@ -74,5 +74,6 @@ mod test {
             id.chars().all(|c| c.is_ascii_digit() || c.is_ascii_lowercase()),
             "Adobe device ID is not all lowercase!"
         );
+        println!("The test machine's Adobe device ID is '{}'", id);
     }
 }

@@ -207,13 +207,6 @@ mod tests {
     use super::Timestamp;
 
     #[test]
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    fn test_get_device_id() {
-        let id = super::get_adobe_device_id();
-        println!("The test machine's Adobe device ID is '{}'", id);
-    }
-
-    #[test]
     fn test_timestamp_from_storage() {
         let ts1 = Timestamp { millis: 0 };
         let ts2 = Timestamp::from_db("1970-01-01T00:00:00.000+00:00");
