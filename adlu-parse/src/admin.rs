@@ -18,7 +18,7 @@ released.  That license is reproduced here in the LICENSE-MIT file.
 */
 use super::user::get_cached_expiry;
 use super::{AdobeSignatures, CustomerSignatures, SignatureSpecifier};
-use adlu_base::u64decode;
+use adlu_base::{u64decode, Timestamp};
 use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::io::Read;
@@ -278,9 +278,11 @@ impl OcFileSpec {
             .and_then(|asnp| asnp.adobe_cert_signed_values.as_ref())
         {
             let timestamp = adobe_values.values.license_expiry_timestamp.as_str();
-            adlu_base::local_date_from_epoch_millis(timestamp).unwrap_or_else(|_| {
-                panic!("Invalid license data (bad timestamp: {})", timestamp)
-            })
+            if let Ok(ts) = timestamp.parse::<Timestamp>() {
+                ts.as_local_datetime().format("%Y-%m-%d").to_string()
+            } else {
+                "Invalid expiry date".to_string()
+            }
         } else {
             "controlled by server".to_string()
         }

@@ -16,6 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
+use chrono::{DateTime, Local, LocalResult, TimeZone};
 use eyre::{eyre, Result, WrapErr};
 use log::LevelFilter;
 use log4rs::{
@@ -116,8 +117,7 @@ struct DailyTrigger {
 impl DailyTrigger {
     /// Returns a new trigger which rolls the log daily at midnight.
     fn new() -> Self {
-        let now = chrono::Local::now();
-        let next = now.date().succ().and_hms(0, 0, 0);
+        let next = tomorrow_midnight();
         Self { next_millis: std::sync::atomic::AtomicI64::new(next.timestamp_millis()) }
     }
 }
@@ -125,10 +125,24 @@ impl DailyTrigger {
 impl Trigger for DailyTrigger {
     fn trigger(&self, _: &LogFile) -> anyhow::Result<bool> {
         let now = chrono::Local::now();
-        let next = now.date().succ().and_hms(0, 0, 0);
+        let next = tomorrow_midnight();
         let last_millis = self
             .next_millis
             .swap(next.timestamp_millis(), std::sync::atomic::Ordering::AcqRel);
         Ok(now.timestamp_millis() >= last_millis)
+    }
+}
+
+fn tomorrow_midnight() -> DateTime<Local> {
+    let now = chrono::Local::now();
+    let naive_midnight = now
+        .checked_add_days(chrono::Days::new(1))
+        .expect("There is no tomorrow!")
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .expect("There is no midnight!");
+    match Local.from_local_datetime(&naive_midnight) {
+        LocalResult::Single(dt) => dt,
+        _ => panic!("There is no midnight tomorrow!"),
     }
 }

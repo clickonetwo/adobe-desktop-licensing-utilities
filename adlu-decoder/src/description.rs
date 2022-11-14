@@ -16,7 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use adlu_base::local_date_from_epoch_millis;
+use adlu_base::Timestamp;
 use adlu_parse::admin::{ActivationType, Configuration, OcFileSpec, PreconditioningData};
 
 pub fn describe_configuration(config: &Configuration, verbose: i32) {
@@ -55,11 +55,15 @@ fn describe_operating_configs(ocs: &[OcFileSpec], verbose: i32) {
         }
         // if -vv is given, check for locally cached licenses
         if verbose > 1 {
-            if let Some(date) = oc.cached_expiry() {
-                println!(
-                    "    Cached activation expires: {}",
-                    local_date_from_epoch_millis(&date).expect("Invalid timestamp")
-                )
+            if let Some(s) = oc.cached_expiry() {
+                if let Ok(ts) = s.parse::<Timestamp>() {
+                    println!(
+                        "    Cached activation expires: {}",
+                        ts.as_local_datetime().format("%Y-%m-%d")
+                    )
+                } else {
+                    println!("    Invalid cached expiration")
+                }
             } else {
                 println!("    No cached activation")
             }
