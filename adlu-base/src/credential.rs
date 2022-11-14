@@ -53,3 +53,8 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
         Ok(result)
     }
 }
+
+#[cfg(target_os = "linux")]
+pub fn get_saved_credential(_key: &str) -> Result<String> {
+    Err(eyre!("No credential data cached on Linux"))
+}

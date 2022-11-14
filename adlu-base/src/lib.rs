@@ -22,7 +22,6 @@ use eyre::{Result, WrapErr};
 use serde_json::Value;
 
 pub use certificate::{load_pem_files, load_pfx_file, CertificateData};
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub use credential::get_saved_credential;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub use ngl::get_adobe_device_id;
@@ -30,7 +29,6 @@ pub use signal::get_first_interrupt;
 pub use timestamp::Timestamp;
 
 mod certificate;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
 mod credential;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod ngl;
