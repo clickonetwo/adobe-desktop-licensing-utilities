@@ -122,3 +122,4 @@ flowchart BT
 
 ## The ADLU Proxy
 
+The ADLU includes a web service, `adlu-proxy`, that is meant to be deployed on the customer side of their internet gateway; that is, inside their local-area or corporate-area network.
