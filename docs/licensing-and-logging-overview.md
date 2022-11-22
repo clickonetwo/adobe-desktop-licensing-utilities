@@ -1,4 +1,10 @@
-# Adobe Licensing and Logging
+---
+layout: default
+title: Licensing Primer
+nav_order: 2
+---
+
+# Adobe Licensing and Logging: a Primer
 
 In order to use the ADLU effectively, you have to have a basic understanding of how the licensing and logging mechanisms in Adobe desktop software work.
 

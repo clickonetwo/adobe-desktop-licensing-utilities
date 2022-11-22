@@ -1,3 +1,9 @@
+---
+layout: default
+title: Proxy Overview
+nav_order: 3
+---
+
 # ADLU Proxy Overview
 
 The ADLU includes a web service, `adlu-proxy`, that is meant to be deployed on a customer-controlled server.  This document gives an overview of the proxy’s behavior and how it can be used effectively in various customer situations.
@@ -10,7 +16,7 @@ The ADLU proxy is a protocol-aware, caching, store-forward, reverse proxy server
 
 A *reverse* proxy server is a proxy server that pretends to be another server (called the _origin_ server).  Clients who ask for the origin server’s IP address are given the proxy’s IP address instead.  When a reverse proxy server receives a client request, it passes the request on to the origin server and returns the origin server’s response to the client.  This behavior allows both clients and origin servers to be protected from snooping. The proxy can hide sensitive client details from being passed to the origin server, and it can hide origin server details from being passed to the client.
 
-The `adlu-proxy` can act as a reverse proxy for either the Adobe License Server, the Adobe Log Server, or both at the same time.  It is meant to be deployed on the customer side of an internet gateway; that is, inside the customer local-area or corporate-area network.  Referring to the [simplest scenario in the Adobe Licensing Overview](./adobe-licensing-overview.md#launch-time-licensing), the proxy would be positioned as follows:
+The `adlu-proxy` can act as a reverse proxy for either the Adobe License Server, the Adobe Log Server, or both at the same time.  It is meant to be deployed on the customer side of an internet gateway; that is, inside the customer local-area or corporate-area network.  Referring to the [simplest scenario in the Adobe Licensing Overview](./licensing-and-logging-overview.md#launch-time-licensing), the proxy would be positioned as follows:
 
 ```mermaid
 flowchart BT
@@ -19,7 +25,7 @@ flowchart BT
     id2(["app1 (e.g., Photoshop)"])
     id3(["app2 (e.g., Illustrator)"])
   end
-  id4{{internet gateway}}
+  id4([internet gateway])
   id5([adlu-proxy])
   id2 ==> id5
   id3 ==> id5
