@@ -1,0 +1,14 @@
+title: ADLU Documentation
+description: Docs for the Adobe Desktop License Utilities from clickonetwo.io
+theme: just-the-docs
+
+url: https://just-the-docs.github.io
+
+plugins:
+  - jekyll-relative-links
+
+mermaid:
+  version: 9.2.2
+
+aux_links:
+  Latest Release: https://github.com/clickonetwo/adobe-desktop-licensing-utilities/releases/latest
