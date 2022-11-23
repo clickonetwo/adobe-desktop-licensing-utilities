@@ -1,6 +1,11 @@
 name: ci
 
-on: [workflow_dispatch, push, pull_request]
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: ["docs"]
+  pull_request:
+    branches-ignore: ["docs"]
 
 jobs:
   ci:
