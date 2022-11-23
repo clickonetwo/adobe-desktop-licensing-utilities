@@ -3,11 +3,9 @@ name: ci
 on:
   workflow_dispatch:
   push:
-    branches:
-      exclude: ["docs"]
+    branches-ignore: ["docs"]
   pull_request:
-    branches:
-      exclude: ["docs"]
+    branches-ignore: ["docs"]
 
 jobs:
   ci:
