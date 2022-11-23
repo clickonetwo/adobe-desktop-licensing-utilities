@@ -1,5 +1,6 @@
-# Build and deploy docs directory to GitHub Pages
-name: Deploy docs to GitHub Pages
+# Deploy Docs to GitHub Pages
+# based on a sample from just-the-docs theme
+name: docs
 
 on:
   push:
@@ -24,17 +25,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Setup Pages
-        uses: actions/configure-pages@v2
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
         with:
-          source: ./docs
-          destination: ./docs/_site
+          ruby-version: '3.0'
+          bundler-cache: true
+          cache-version: 0
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v2
+        with:
+          generator_config_file: "./docs/_config.yml"
+      - run: bundle exec jekyll build --source ./docs --target ./docs/_site --baseurl ${{ steps.pages.outputs.base_path }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./docs/_site
+          path: "./docs/_site"
 
   # Deployment job
   deploy:
