@@ -37,7 +37,8 @@ jobs:
         uses: actions/configure-pages@v2
         with:
           generator_config_file: "./docs/_config.yml"
-      - run: |
+      - name: Build static pages
+        run: |
           cd ./docs
           bundle exec jekyll build --baseurl ${{ steps.pages.outputs.base_path }}
       - name: Upload artifact
