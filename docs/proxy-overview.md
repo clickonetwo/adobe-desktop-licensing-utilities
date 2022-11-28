@@ -37,3 +37,11 @@ In the case of feature-restricted licensing, this interposition of the ADLU prox
 
 ## Deployment Scenarios
 
+### Combined Package Problems
+
+Because the administrative process for _package creation_ allows creating combined packages (which have both licenses and applications in them), this is what many customers do, and it’s almost always a mistake because:
+
+- each machine needs _one_ license package for *all*  versions of each application.
+- each machine needs _one_ application package for _each_ version of each application.
+
+Customers who make combination packages end up with multiple licenses for each application—one for each version that was installed—and those multiple licenses will each activate separately, making it almost impossible to deactivate the machine
