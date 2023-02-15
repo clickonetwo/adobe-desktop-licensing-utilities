@@ -123,7 +123,7 @@ High security networks are sometimes “air gapped” completely, so that all da
 
 There can be advantages to using the ADLU Proxy even in fully connected network situations.  Because the creation of FRL packages allows creating combined packages (which have both licenses and applications in them), many customers :
 
-- each machine needs _one_ license package for *all*  versions of each application.
+- each machine needs _one_ license package for *all* versions of each application.
 - each machine needs _one_ application package for _each_ version of each application.
 
 Customers who make combination packages end up with multiple licenses for each application—one for each version that was installed—and those multiple licenses will each activate separately, making it almost impossible to deactivate the machine
