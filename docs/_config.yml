@@ -2,7 +2,7 @@ title: ADLU Documentation
 description: Docs for the Adobe Desktop License Utilities from clickonetwo.io
 theme: just-the-docs
 
-url: https://just-the-docs.github.io
+url: https://clickonetwo.github.io/adobe-desktop-licensing-utilities
 
 plugins:
   - jekyll-relative-links
