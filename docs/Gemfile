@@ -9,3 +9,6 @@ gem "just-the-docs", "0.4.0.rc3" # currently the latest pre-release
 # jekyll-relative-links turns .md links into .html links
 # so the docs can be read directly on github as well as pages
 gem "jekyll-relative-links", "~> 0.6.1"
+
+# make it easy to check the integrity of the generated site
+gem "html-proofer"
