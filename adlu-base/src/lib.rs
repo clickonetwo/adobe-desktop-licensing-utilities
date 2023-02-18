@@ -74,7 +74,7 @@ pub mod base64_encoded_json {
         let json_str = serde_json::to_string(val).map_err(|e| {
             serde::ser::Error::custom(format!("Can't serialize into JSON: {:?}", e))
         })?;
-        let base64_str = base64::encode_config(&json_str, base64::URL_SAFE_NO_PAD);
+        let base64_str = base64::encode_config(json_str, base64::URL_SAFE_NO_PAD);
         serializer.serialize_str(&base64_str)
     }
 
@@ -87,13 +87,13 @@ pub mod base64_encoded_json {
         // println!("base64 string starts: {:?}", &base64_string);
         let json_bytes = base64::decode_config(&base64_string, base64::URL_SAFE_NO_PAD)
             .map_err(|e| {
-            serde::de::Error::custom(&format!("Illegal base64: {:?}", e))
+            serde::de::Error::custom(format!("Illegal base64: {:?}", e))
         })?;
         // println!("JSON bytes start: {:?}", &json_bytes);
         serde_json::from_reader(json_bytes.as_slice()).map_err(|e| {
             println!("Failure to parse looking for: {:?}", std::any::type_name::<T>());
             println!("JSON is: {}", &super::u64decode(&base64_string).unwrap());
-            serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e))
+            serde::de::Error::custom(format!("Can't deserialize from JSON: {:?}", e))
         })
     }
 }
@@ -123,7 +123,7 @@ pub mod template_json {
     {
         let json_string = String::deserialize(deserializer)?;
         serde_json::from_str(&json_string).map_err(|e| {
-            serde::de::Error::custom(&format!("Can't deserialize from JSON: {:?}", e))
+            serde::de::Error::custom(format!("Can't deserialize from JSON: {:?}", e))
         })
     }
 }

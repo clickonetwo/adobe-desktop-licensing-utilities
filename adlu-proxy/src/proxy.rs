@@ -124,7 +124,7 @@ impl Config {
                 settings.upstream.proxy_host,
                 settings.upstream.proxy_port
             );
-            let mut proxy = reqwest::Proxy::https(&proxy_host)
+            let mut proxy = reqwest::Proxy::https(proxy_host)
                 .wrap_err("Invalid proxy configuration")?;
             if settings.upstream.use_basic_auth {
                 proxy = proxy.basic_auth(
@@ -288,7 +288,7 @@ impl Response {
 
 pub fn routes(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     status_route(conf.clone())
         .or(frl_activate_route(conf.clone()))
         .or(frl_deactivate_route(conf.clone()))
@@ -306,7 +306,7 @@ pub fn with_conf(
 
 pub fn status_route(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::get()
         .and(warp::path("status"))
         .and(warp::path::end())
@@ -316,7 +316,7 @@ pub fn status_route(
 
 pub fn frl_activate_route(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     Request::frl_activation_boxed_filter(50_000)
         .and(with_conf(conf))
         .then(process_adobe_request)
@@ -324,7 +324,7 @@ pub fn frl_activate_route(
 
 pub fn frl_deactivate_route(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     Request::frl_deactivation_boxed_filter(50_000)
         .and(with_conf(conf))
         .then(process_adobe_request)
@@ -332,7 +332,7 @@ pub fn frl_deactivate_route(
 
 pub fn nul_license_route(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     Request::nul_license_boxed_filter(50_000)
         .and(with_conf(conf))
         .then(process_adobe_request)
@@ -340,7 +340,7 @@ pub fn nul_license_route(
 
 pub fn upload_route(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     Request::log_upload_boxed_filter(1_500_000)
         .and(with_conf(conf))
         .then(process_adobe_request)
@@ -348,7 +348,7 @@ pub fn upload_route(
 
 pub fn unknown_route(
     conf: Config,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     // we only pass requests to Adobe if they are intended for an Adobe server
     to_adobe_host()
         .and(Request::unknown_boxed_filter(100_000))
