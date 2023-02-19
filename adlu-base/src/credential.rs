@@ -37,7 +37,7 @@ pub fn get_saved_credential(key: &str) -> Result<String> {
     let mut result = String::new();
     for i in 1..100 {
         let service = format!("Adobe App Info ({})(Part{})", key, i);
-        let entry = keyring::Entry::new_with_target(&service, &service, "App Info");
+        let entry = keyring::Entry::new_with_target(&service, &service, "App Info")?;
         match entry.get_password() {
             Ok(val) => result.push_str(val.trim()),
             Err(keyring::Error::NoStorageAccess(_)) => {
