@@ -16,6 +16,7 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
+use chrono::{DateTime, Local, LocalResult, TimeZone};
 use eyre::{eyre, Result, WrapErr};
 use log::LevelFilter;
 use log4rs::{
@@ -37,7 +38,7 @@ use log4rs::{
 use crate::settings::{LogDestination, LogLevel, LogRotationType, Logging};
 
 pub fn init(logging: &Logging) -> Result<()> {
-    let pattern = "{d([%Y-%m-%d][%H:%M:%S])}[{t}][{l}] {m}{n}";
+    let pattern = "{d([%Y-%m-%d][%H:%M:%S])}[{P:5}][{t}][{l}] {m}{n}";
     let encoder = PatternEncoder::new(pattern);
     let filter = log_level(&logging.level);
     let appender = if let LogDestination::Console = &logging.destination {
@@ -68,7 +69,7 @@ pub fn init(logging: &Logging) -> Result<()> {
             .map_err(|err| eyre!("Can't build log rotation config: {:?}", err))?;
         let compound_policy = if let LogRotationType::Sized = logging.rotate_type {
             let size_limit = 1024 * logging.rotate_size_kb;
-            let size_trigger = SizeTrigger::new(size_limit as u64);
+            let size_trigger = SizeTrigger::new(size_limit);
             CompoundPolicy::new(Box::new(size_trigger), Box::new(fixed_window_roller))
         } else {
             let daily_trigger = DailyTrigger::new();
@@ -116,8 +117,7 @@ struct DailyTrigger {
 impl DailyTrigger {
     /// Returns a new trigger which rolls the log daily at midnight.
     fn new() -> Self {
-        let now = chrono::Local::now();
-        let next = now.date().succ().and_hms(0, 0, 0);
+        let next = tomorrow_midnight();
         Self { next_millis: std::sync::atomic::AtomicI64::new(next.timestamp_millis()) }
     }
 }
@@ -125,10 +125,24 @@ impl DailyTrigger {
 impl Trigger for DailyTrigger {
     fn trigger(&self, _: &LogFile) -> anyhow::Result<bool> {
         let now = chrono::Local::now();
-        let next = now.date().succ().and_hms(0, 0, 0);
+        let next = tomorrow_midnight();
         let last_millis = self
             .next_millis
             .swap(next.timestamp_millis(), std::sync::atomic::Ordering::AcqRel);
         Ok(now.timestamp_millis() >= last_millis)
+    }
+}
+
+fn tomorrow_midnight() -> DateTime<Local> {
+    let now = chrono::Local::now();
+    let naive_midnight = now
+        .checked_add_days(chrono::Days::new(1))
+        .expect("There is no tomorrow!")
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .expect("There is no midnight!");
+    match Local.from_local_datetime(&naive_midnight) {
+        LocalResult::Single(dt) => dt,
+        _ => panic!("There is no midnight tomorrow!"),
     }
 }

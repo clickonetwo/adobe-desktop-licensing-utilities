@@ -16,8 +16,6 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use adlu_base::Timestamp;
-use adlu_parse::protocol::{LogSession, LogUploadRequest, LogUploadResponse};
 use eyre::Result;
 use log::debug;
 use sqlx::{
@@ -25,8 +23,17 @@ use sqlx::{
     Row,
 };
 
+use adlu_base::Timestamp;
+use adlu_parse::protocol::LogSession;
+
+use crate::proxy::{Request, RequestType, Response};
+
+use super::schema_upgrade;
+
 pub async fn db_init(pool: &SqlitePool) -> Result<()> {
     sqlx::query(SESSION_SCHEMA).execute(pool).await?;
+    schema_upgrade("log", SESSION_SCHEMA_VERSION, &SCHEMA_ALTERATIONS_BY_VERSION, pool)
+        .await?;
     Ok(())
 }
 
@@ -58,6 +65,7 @@ pub async fn report(
 fn report_headers(timezone: bool) -> Vec<String> {
     let time_suffix = if timezone { "" } else { " (UTC)" };
     let mut result = vec![];
+    result.push("Source Address".to_string());
     result.push("Session ID".to_string());
     result.push(format!("Initial Entry{time_suffix}"));
     result.push(format!("Final Entry{time_suffix}"));
@@ -90,6 +98,7 @@ fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<Str
         }
     };
     let result = vec![
+        session.source_addr.clone(),
         session.session_id.clone(),
         format_ts(&session.initial_entry),
         format_ts(&session.final_entry),
@@ -106,11 +115,8 @@ fn report_record(session: &LogSession, timezone: bool, rfc3339: bool) -> Vec<Str
     result
 }
 
-pub async fn store_upload_request(
-    pool: &SqlitePool,
-    req: &LogUploadRequest,
-) -> Result<()> {
-    let sessions = &req.session_data;
+pub async fn store_upload_request(pool: &SqlitePool, req: &Request) -> Result<()> {
+    let sessions = req.parse_log()?;
     for new in sessions.iter() {
         if let Some(existing) = fetch_log_session(pool, &new.session_id).await? {
             store_log_session(pool, &existing.merge(new)?).await?;
@@ -123,8 +129,8 @@ pub async fn store_upload_request(
 
 pub async fn store_upload_response(
     _pool: &SqlitePool,
-    _req: &LogUploadRequest,
-    _resp: &LogUploadResponse,
+    _req: &Request,
+    _resp: &Response,
 ) -> Result<()> {
     // a no-op, since all responses are the same
     Ok(())
@@ -132,9 +138,19 @@ pub async fn store_upload_response(
 
 pub async fn fetch_upload_response(
     _pool: &SqlitePool,
-    _req: &LogUploadRequest,
-) -> Result<Option<LogUploadResponse>> {
-    Ok(Some(LogUploadResponse::new()))
+    _req: &Request,
+) -> Result<Option<Response>> {
+    Ok(Some(Response {
+        timestamp: Timestamp::now(),
+        request_type: RequestType::LogUpload,
+        status: http::StatusCode::OK,
+        body: None,
+        content_type: None,
+        server: Some(crate::proxy::proxy_id()),
+        via: None,
+        request_id: None,
+        session_id: None,
+    }))
 }
 
 async fn fetch_log_session(
@@ -183,10 +199,10 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
     }
     let field_list = r#"
         (
-            session_id, initial_entry, final_entry, session_start, session_end,
+            source_addr, session_id, initial_entry, final_entry, session_start, session_end,
             app_id, app_version, app_locale, ngl_version, os_name, os_version, user_id
         )"#;
-    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    let value_list = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     let i_str = format!(
         "insert or replace into log_sessions {} values {}",
         field_list, value_list
@@ -194,6 +210,7 @@ async fn store_log_session(pool: &SqlitePool, session: &LogSession) -> Result<()
     debug!("Storing log session with id: {}", &session.session_id);
     let mut tx = pool.begin().await?;
     let result = sqlx::query(&i_str)
+        .bind(&session.source_addr)
         .bind(&session.session_id)
         .bind(session.initial_entry.to_db())
         .bind(session.final_entry.to_db())
@@ -222,6 +239,7 @@ fn session_from_row(row: &SqliteRow) -> LogSession {
         }
     }
     LogSession {
+        source_addr: row.get("source_addr"),
         session_id: row.get("session_id"),
         initial_entry: Timestamp::from_db(row.get("initial_entry")),
         final_entry: Timestamp::from_db(row.get("final_entry")),
@@ -256,3 +274,8 @@ const SESSION_SCHEMA: &str = r#"
 const CLEAR_ALL: &str = r#"
     delete from log_sessions;
     "#;
+
+const SESSION_SCHEMA_VERSION: usize = 1;
+
+const SCHEMA_ALTERATIONS_BY_VERSION: [&str; SESSION_SCHEMA_VERSION] =
+    ["alter table log_sessions add column source_addr not null default 'unknown'"];

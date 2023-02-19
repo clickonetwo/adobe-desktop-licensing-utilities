@@ -28,7 +28,7 @@ pub fn mock_activation_request(
     device_id: &str,
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
-    let mi = MockInfo::with_type_and_outcome(&MockRequestType::Activation, ask);
+    let mi = MockInfo::with_type_and_outcome(&MockRequestType::FrlActivation, ask);
     let body = if matches!(ask, MockOutcome::FromAdobe) {
         FrlActivationRequestBody::valid_from_device_id(device_id)
     } else {
@@ -55,7 +55,7 @@ pub fn mock_activation_response(req: reqwest::Request) -> reqwest::Response {
         None => builder,
         Some(val) => builder.header("X-Request-Id", val),
     };
-    builder.body(body.to_body_string()).unwrap().into()
+    builder.body(body.to_body()).unwrap().into()
 }
 
 pub fn mock_deactivation_request(
@@ -63,13 +63,13 @@ pub fn mock_deactivation_request(
     device_id: &str,
     builder: warp::test::RequestBuilder,
 ) -> warp::test::RequestBuilder {
-    let mi = MockInfo::with_type_and_outcome(&MockRequestType::Deactivation, ask);
+    let mi = MockInfo::with_type_and_outcome(&MockRequestType::FrlDeactivation, ask);
     let params = if matches!(ask, MockOutcome::FromAdobe) {
         FrlDeactivationQueryParams::valid_from_device_id(device_id)
     } else {
         FrlDeactivationQueryParams::mock_from_device_id(device_id)
     };
-    let path = format!("//asnp/frl_connected/v1?{}", params.to_query_params());
+    let path = format!("//asnp/frl_connected/v1?{}", params.to_query());
     let mut builder = builder.method("DELETE").path(&path);
     builder = builder
         .header("X-Request-Id", &mi.request_id())
@@ -87,5 +87,5 @@ pub fn mock_deactivation_response(req: reqwest::Request) -> reqwest::Response {
         None => builder,
         Some(val) => builder.header("X-Request-Id", val),
     };
-    builder.body(body.to_body_string()).unwrap().into()
+    builder.body(body.to_body()).unwrap().into()
 }

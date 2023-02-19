@@ -16,48 +16,26 @@ The files in those original works are copyright 2022 Adobe and the use of those
 materials in this work is permitted by the MIT license under which they were
 released.  That license is reproduced here in the LICENSE-MIT file.
 */
-use eyre::{Result, WrapErr};
+use eyre::{eyre, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 
 use adlu_base::Timestamp;
 
+use crate::protocol::{Request, RequestType};
 use crate::{AdobeSignatures, CustomerSignatures};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlActivationRequestBody {
-    pub app_details: FrlAppDetails,
-    pub asnp_template_id: String,
-    pub device_details: FrlDeviceDetails,
-    pub npd_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub npd_precedence: Option<i32>,
+pub struct NulLicenseRequestBody {
+    pub app_details: NulAppDetails,
+    pub device_details: NulDeviceDetails,
+    #[serde(default)]
+    pub device_token_hash: String,
 }
 
-impl FrlActivationRequestBody {
-    pub fn activation_id(&self) -> String {
-        let d_id = self.deactivation_id();
-        let factors: Vec<&str> =
-            vec![&self.app_details.ngl_app_id, &self.app_details.ngl_lib_version, &d_id];
-        factors.join("|")
-    }
-
-    pub fn deactivation_id(&self) -> String {
-        let factors: Vec<&str> = vec![
-            &self.npd_id,
-            if self.device_details.enable_vdi_marker_exists
-                && self.device_details.is_virtual_environment
-            {
-                &self.device_details.os_user_id
-            } else {
-                &self.device_details.device_id
-            },
-        ];
-        factors.join("|")
-    }
-
+impl NulLicenseRequestBody {
     pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Invalid FRL activation body")
+        serde_json::from_str(body).wrap_err("Invalid license data")
     }
 
     pub fn to_body(&self) -> String {
@@ -66,16 +44,25 @@ impl FrlActivationRequestBody {
 
     pub fn mock_from_device_id(device_id: &str) -> Self {
         Self {
-            app_details: FrlAppDetails {
+            app_details: NulAppDetails {
+                app_name_for_locale: "MockApp".to_string(),
+                app_version_for_locale: "2022".to_string(),
                 current_asnp_id: "".to_string(),
+                e_tag: "".to_string(),
+                locale: "en_US".to_string(),
                 ngl_app_id: "MockApp1".to_string(),
+                ngl_app_launch_state: "WORKFLOW_STATE".to_string(),
+                ngl_app_profile_scope: "".to_string(),
                 ngl_app_version: "10.1.3".to_string(),
+                ngl_lib_runtime_mode: "NAMED_USER_ONLINE".to_string(),
                 ngl_lib_version: "1.23.0.5".to_string(),
             },
-            asnp_template_id: "WXpRNVpt...elided...wNy05Z".to_string(),
-            device_details: FrlDeviceDetails {
+            device_details: NulDeviceDetails {
                 current_date: "2022-06-28T17:08:01.736-0700".to_string(),
+                current_timestamp: 1656450481736,
                 device_id: device_id.to_string(),
+                device_name: "mock_device".to_string(),
+                embedded_browser_version: "".to_string(),
                 enable_vdi_marker_exists: false,
                 is_os_user_account_in_domain: false,
                 is_virtual_environment: false,
@@ -83,8 +70,7 @@ impl FrlActivationRequestBody {
                 os_user_id: "b693be35...elided...2aff7".to_string(),
                 os_version: "12.4.0".to_string(),
             },
-            npd_id: "YzQ5ZmIw...elided...jFiOD".to_string(),
-            npd_precedence: Some(80),
+            device_token_hash: "9f5d39712...elided...246aa4b".to_string(),
         }
     }
 
@@ -92,119 +78,167 @@ impl FrlActivationRequestBody {
         let timestamp = Timestamp::now();
         let device_date = timestamp.to_device_date();
         Self {
-            app_details: FrlAppDetails {
-                current_asnp_id: "".to_string(),
-                ngl_app_id: "Photoshop1".to_string(),
-                ngl_app_version: "23.5.0".to_string(),
+            app_details: NulAppDetails {
+                app_name_for_locale: "Premiere Pro".to_string(),
+                app_version_for_locale: "2022".to_string(),
+                current_asnp_id: "57ba50f3-e5d8-4509-8718-cadfd8b22286".to_string(),
+                e_tag: "_9tdZvyiUM8CC_nKU4s98fVIDBc74U1Vh8r2J_XKjXn7AIqaH48IfvM7ZkWGl"
+                    .to_string(),
+                locale: "en_US".to_string(),
+                ngl_app_id: "PremierePro1".to_string(),
+                ngl_app_launch_state: "WORKFLOW_STATE".to_string(),
+                ngl_app_profile_scope: "".to_string(),
+                ngl_app_version: "22.6.2".to_string(),
+                ngl_lib_runtime_mode: "NAMED_USER_ONLINE".to_string(),
                 ngl_lib_version: "1.30.0.1".to_string(),
             },
-            asnp_template_id: "WXpRNVptSXdPVFl0TkRjME55MDBNR001TFdKaE5HUXRNekZoWmpGaU9ERXpNR1V6e302Y2JjYTViYy01NTZjLTRhNTYtYjgwNy05ZjNjMWFhM2VhZjc".to_string(),
-            device_details: FrlDeviceDetails {
+            device_details: NulDeviceDetails {
                 current_date: device_date,
+                current_timestamp: timestamp.millis,
                 device_id: device_id.to_string(),
+                device_name: "dan".to_string(),
+                embedded_browser_version: "WK-17613.3.9.1.16".to_string(),
                 enable_vdi_marker_exists: false,
                 is_os_user_account_in_domain: false,
                 is_virtual_environment: false,
                 os_name: "MAC".to_string(),
-                os_user_id: "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d".to_string(),
-                os_version: "12.5.1".to_string(),
+                os_user_id:
+                    "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d"
+                        .to_string(),
+                os_version: "12.6.0".to_string(),
             },
-            npd_id: "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz".to_string(),
-            npd_precedence: Some(80)
+            device_token_hash: "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b".to_string(),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlAppDetails {
+pub struct NulAppDetails {
+    #[serde(default)]
+    pub app_name_for_locale: String,
+    #[serde(default)]
+    pub app_version_for_locale: String,
     #[serde(default)]
     pub current_asnp_id: String,
+    #[serde(default)]
+    pub e_tag: String,
+    pub locale: String,
     pub ngl_app_id: String,
+    #[serde(default)]
+    pub ngl_app_launch_state: String,
+    #[serde(default)]
+    pub ngl_app_profile_scope: String,
     pub ngl_app_version: String,
+    #[serde(default)]
+    pub ngl_lib_runtime_mode: String,
     pub ngl_lib_version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlDeviceDetails {
+pub struct NulDeviceDetails {
     pub current_date: String,
+    #[serde(default)]
+    pub current_timestamp: i64,
     pub device_id: String,
+    pub device_name: String,
+    #[serde(default)]
+    pub embedded_browser_version: String,
+    #[serde(default)]
     pub enable_vdi_marker_exists: bool,
+    #[serde(default)]
     pub is_os_user_account_in_domain: bool,
+    #[serde(default)]
     pub is_virtual_environment: bool,
     pub os_name: String,
     pub os_user_id: String,
     pub os_version: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrlDeactivationQueryParams {
-    pub npd_id: String,
-    pub device_id: String,
-    pub os_user_id: String,
-    pub enable_vdi_marker_exists: i8,
-    pub is_virtual_environment: i8,
-    pub is_os_user_account_in_domain: i8,
+#[derive(Debug, Clone)]
+pub struct LicenseSession {
+    pub source_addr: String,
+    pub session_id: String,
+    pub session_start: Timestamp,
+    pub session_end: Timestamp,
+    pub app_id: String,
+    pub app_version: String,
+    pub app_locale: String,
+    pub ngl_version: String,
+    pub os_name: String,
+    pub os_version: String,
+    pub device_name: String,
+    pub user_id: String,
 }
 
-impl FrlDeactivationQueryParams {
-    pub fn deactivation_id(&self) -> String {
-        let factors: Vec<&str> = vec![
-            &self.npd_id,
-            if self.enable_vdi_marker_exists != 0 && self.is_virtual_environment != 0 {
-                &self.os_user_id
-            } else {
-                &self.device_id
-            },
-        ];
-        factors.join("|")
+impl Request {
+    pub fn parse_license(&self) -> Result<LicenseSession> {
+        if !matches!(self.request_type, RequestType::NulLicense) {
+            return Err(eyre!("{} is not a license request; please report a bug", self));
+        }
+        let source_addr =
+            self.source_ip.map_or_else(|| "unknown".to_string(), |a| a.to_string());
+        let session_id = self
+            .session_id
+            .as_ref()
+            .ok_or_else(|| eyre!("{} has no session id", self))?;
+        let body =
+            self.body.as_ref().ok_or_else(|| eyre!("{} has no license data", self))?;
+        let parse = NulLicenseRequestBody::from_body(body).wrap_err(self.to_string())?;
+        Ok(LicenseSession::from_parts(&self.timestamp, &source_addr, session_id, &parse))
     }
+}
 
-    pub fn mock_from_device_id(device_id: &str) -> Self {
-        Self {
-            npd_id: "YzQ5ZmIw...elided...jFiOD".to_string(),
-            device_id: device_id.to_string(),
-            os_user_id: "b693be35...elided...2aff7".to_string(),
-            enable_vdi_marker_exists: 0,
-            is_virtual_environment: 0,
-            is_os_user_account_in_domain: 0,
+impl LicenseSession {
+    pub fn merge(&self, other: LicenseSession) -> Result<Self> {
+        if self.session_id != other.session_id {
+            Err(eyre!("Can't merge sessions with different IDs"))
+        } else {
+            let mut result = self.clone();
+            result.session_end = other.session_end;
+            Ok(result)
         }
     }
 
-    pub fn valid_from_device_id(device_id: &str) -> Self {
+    fn from_parts(
+        timestamp: &Timestamp,
+        source_addr: &str,
+        session_id: &str,
+        body: &NulLicenseRequestBody,
+    ) -> Self {
+        let session_id = if let Some(start) = session_id.find('/') {
+            session_id[0..start].to_string()
+        } else {
+            session_id.to_string()
+        };
         Self {
-            npd_id: "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz".to_string(),
-            device_id: device_id.to_string(),
-            os_user_id:
-                "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d"
-                    .to_string(),
-            enable_vdi_marker_exists: 0,
-            is_virtual_environment: 0,
-            is_os_user_account_in_domain: 0,
+            source_addr: source_addr.to_string(),
+            session_id,
+            session_start: timestamp.clone(),
+            session_end: timestamp.clone(),
+            app_id: body.app_details.ngl_app_id.clone(),
+            app_version: body.app_details.ngl_app_version.clone(),
+            app_locale: body.app_details.locale.clone(),
+            ngl_version: body.app_details.ngl_lib_version.clone(),
+            os_name: body.device_details.os_name.clone(),
+            os_version: body.device_details.os_version.clone(),
+            device_name: body.device_details.device_name.clone(),
+            user_id: body.device_details.os_user_id.clone(),
         }
-    }
-
-    pub fn from_query(query: &str) -> Result<Self> {
-        serde_urlencoded::from_str(query).wrap_err("Invalid deactivation query")
-    }
-
-    pub fn to_query(&self) -> String {
-        serde_urlencoded::to_string(self).unwrap()
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlActivationResponseBody {
-    pub adobe_cert_signed_values: FrlAdobeCertSignedValues,
-    pub customer_cert_signed_values: FrlCustomerCertSignedValues,
+pub struct NulLicenseResponseBody {
+    pub adobe_cert_signed_values: NulAdobeCertSignedValues,
+    pub customer_cert_signed_values: NulCustomerCertSignedValues,
 }
 
-impl FrlActivationResponseBody {
+impl NulLicenseResponseBody {
     pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Invalid FRL activation data")
+        serde_json::from_str(body).wrap_err("Invalid NUL license data")
     }
 
     pub fn to_body(&self) -> String {
@@ -213,12 +247,12 @@ impl FrlActivationResponseBody {
 
     pub fn mock_from_device_id(device_id: &str) -> Self {
         Self {
-            adobe_cert_signed_values: FrlAdobeCertSignedValues {
+            adobe_cert_signed_values: NulAdobeCertSignedValues {
                 signatures: AdobeSignatures {
                     signature1: "laj2sLb...elided...Oi9zqEy12olv6M".to_string(),
                     signature2: "aSAqFfd...elided...XkbpwFzAWgoLQ".to_string(),
                 },
-                values: FrlAdobeSignedValues {
+                values: NulAdobeSignedValues {
                     license_expiry_timestamp: "1750060801000".to_string(),
                     enigma_data: "{{...elided...}}".to_string(),
                     grace_time: "8553600000".to_string(),
@@ -233,12 +267,12 @@ impl FrlActivationResponseBody {
                     app_entitlement_status: "SUBSCRIPTION".to_string(),
                 },
             },
-            customer_cert_signed_values: FrlCustomerCertSignedValues {
+            customer_cert_signed_values: NulCustomerCertSignedValues {
                 signatures: CustomerSignatures {
                     customer_signature2: "LV5a3B2I...elided...lQDSI".to_string(),
                     customer_signature1: "mmzlAlEc...elided...I3oYY".to_string(),
                 },
-                values: FrlCustomerSignedValues {
+                values: NulCustomerSignedValues {
                     npd_id: "YzQ5ZmIw...elided...jFiOD".to_string(),
                     asnp_id: "221bf...elided...c23ff".to_string(),
                     creation_timestamp: 1656461282009,
@@ -261,14 +295,14 @@ impl FrlActivationResponseBody {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlAdobeCertSignedValues {
+pub struct NulAdobeCertSignedValues {
     pub signatures: AdobeSignatures,
-    pub values: FrlAdobeSignedValues,
+    pub values: NulAdobeSignedValues,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlAdobeSignedValues {
+pub struct NulAdobeSignedValues {
     pub license_expiry_timestamp: String,
     pub enigma_data: String,
     pub grace_time: String,
@@ -285,15 +319,15 @@ pub struct FrlAdobeSignedValues {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlCustomerCertSignedValues {
+pub struct NulCustomerCertSignedValues {
     pub signatures: CustomerSignatures,
     #[serde(with = "adlu_base::base64_encoded_json")]
-    pub values: FrlCustomerSignedValues,
+    pub values: NulCustomerSignedValues,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FrlCustomerSignedValues {
+pub struct NulCustomerSignedValues {
     pub npd_id: String,
     pub asnp_id: String,
     pub creation_timestamp: i64,
@@ -314,65 +348,54 @@ pub struct CacheExpiryWarningControl {
     warning_interval: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FrlDeactivationResponseBody {
-    invalidation_successful: bool,
-}
-
-impl FrlDeactivationResponseBody {
-    pub fn from_body(body: &str) -> Result<Self> {
-        serde_json::from_str(body).wrap_err("Invalid FRL deactivation data")
-    }
-
-    pub fn to_body(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-
-    pub fn mock_from_device_id(_device_id: &str) -> Self {
-        FrlDeactivationResponseBody { invalidation_successful: true }
-    }
-}
-
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     #[test]
     fn test_parse_activation_request() {
         let request_str = r#"
         {
             "appDetails" : 
             {
-                "currentAsnpId" : "",
-                "nglAppId" : "Photoshop1",
-                "nglAppVersion" : "23.4.1",
+                "appNameForLocale" : "Premiere Pro",
+                "appVersionForLocale" : "2022",
+                "currentAsnpId" : "57ba50f3-e5d8-4509-8718-cadfd8b22286",
+                "eTag" : "_9tdZvyiUM8CC_nKU4s98fVIDBc74U1Vh8r2J_XKjXn7AIqaH48IfvM7ZkWGl-g9",
+                "locale" : "en_US",
+                "nglAppId" : "PremierePro1",
+                "nglAppLaunchState" : "WORKFLOW_STATE",
+                "nglAppProfileScope" : "",
+                "nglAppVersion" : "22.6.2",
+                "nglLibRuntimeMode" : "NAMED_USER_ONLINE",
                 "nglLibVersion" : "1.30.0.1"
             },
-            "asnpTemplateId" : "WXpRNVpt...elided...wNy05Z",
             "deviceDetails" : 
             {
-                "currentDate" : "2022-06-28T17:08:01.736-0700",
-                "deviceId" : "2c93c879...elided...8c2fa",
+                "currentDate" : "2022-10-13T00:52:53.058-0400",
+                "currentTimestamp" : 1665636773396,
+                "deviceId" : "2c93c8798aa2b6253c651e6efd5fe4694595a8dad82dc3d35de233df5928c2fa",
+                "deviceName" : "dan",
+                "embeddedBrowserVersion" : "WK-17613.3.9.1.16",
                 "enableVdiMarkerExists" : false,
                 "isOsUserAccountInDomain" : false,
                 "isVirtualEnvironment" : false,
                 "osName" : "MAC",
-                "osUserId" : "b693be35...elided...2aff7",
-                "osVersion" : "12.4.0"
+                "osUserId" : "b693be356ac52411389a6c06eede8b4e47e583818384cddc62aff78c3ece084d",
+                "osVersion" : "12.6.0"
             },
-            "npdId" : "YzQ5ZmIw...elided...jFiOD",
-            "npdPrecedence" : 80
+            "deviceTokenHash" : "9f5d39712181d23ad8f6d6a50feb8a3c50e08ae0ffc323a411bc529caf9ed779ad68abc9ac83e87818b9188d0de4b32721425c5abb98c0dfae6f8efe7246aa4b"
         }"#;
-        let request: super::FrlActivationRequestBody =
+        let request: super::NulLicenseRequestBody =
             serde_json::from_str(request_str).unwrap();
-        assert_eq!(request.app_details.ngl_app_id, "Photoshop1");
+        assert_eq!(request.app_details.ngl_app_id, "PremierePro1");
         assert!(!request.device_details.is_os_user_account_in_domain);
-        assert_eq!(request.npd_precedence, Some(80));
     }
 
     #[test]
     fn test_parse_mock_activation_request() {
-        let body = super::FrlActivationRequestBody::mock_from_device_id("test-id");
-        let request: super::FrlActivationRequestBody =
+        let body = super::NulLicenseRequestBody::mock_from_device_id("test-id");
+        let request: super::NulLicenseRequestBody =
             serde_json::from_str(body.to_body().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
         assert_eq!(request.app_details.ngl_app_id, "MockApp1");
@@ -380,11 +403,11 @@ mod test {
 
     #[test]
     fn test_parse_valid_activation_request() {
-        let body = super::FrlActivationRequestBody::valid_from_device_id("test-id");
-        let request: super::FrlActivationRequestBody =
+        let body = super::NulLicenseRequestBody::valid_from_device_id("test-id");
+        let request: super::NulLicenseRequestBody =
             serde_json::from_str(body.to_body().as_str()).unwrap();
         assert_eq!(request.device_details.device_id, "test-id");
-        assert_eq!(request.app_details.ngl_app_id, "Photoshop1");
+        assert_eq!(request.app_details.ngl_app_id, "PremierePro1");
     }
 
     #[test]
@@ -420,7 +443,7 @@ mod test {
             }
         }
         "#;
-        let response: super::FrlActivationResponseBody =
+        let response: super::NulLicenseResponseBody =
             serde_json::from_str(response_str).unwrap();
         assert_eq!(
             response.adobe_cert_signed_values.values.profile_status,
@@ -434,53 +457,18 @@ mod test {
 
     #[test]
     fn test_parse_mock_activation_response() {
-        let response = super::FrlActivationResponseBody::mock_from_device_id("test-id");
+        let response = super::NulLicenseResponseBody::mock_from_device_id("test-id");
         let body = response.to_body();
-        let response: super::FrlActivationResponseBody =
+        let response: super::NulLicenseResponseBody =
             serde_json::from_str(&body).unwrap();
         assert_eq!(response.customer_cert_signed_values.values.device_id, "test-id");
     }
 
     #[test]
     fn test_parse_deactivation_request() {
-        let query = "npdId=YzQ5ZmIw...elided...zMGUz&deviceId=2c93c879...elided...28c2fa&osUserId=b693be35...elided...e084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0";
-        let body: super::FrlDeactivationQueryParams =
-            serde_urlencoded::from_str(query).unwrap();
-        assert_eq!(body.npd_id, "YzQ5ZmIw...elided...zMGUz");
-        assert_eq!(body.os_user_id, "b693be35...elided...e084d");
-    }
-
-    #[test]
-    fn test_parse_mock_deactivation_request() {
-        let params = super::FrlDeactivationQueryParams::mock_from_device_id("test-id");
-        let body: super::FrlDeactivationQueryParams =
-            serde_urlencoded::from_str(&params.to_query()).unwrap();
-        assert_eq!(body.npd_id, "YzQ5ZmIw...elided...jFiOD");
-        assert_eq!(body.device_id, "test-id");
-    }
-
-    #[test]
-    fn test_parse_valid_deactivation_request() {
-        let params = super::FrlDeactivationQueryParams::valid_from_device_id("test-id");
-        let body: super::FrlDeactivationQueryParams =
-            serde_urlencoded::from_str(&params.to_query()).unwrap();
-        assert_eq!(body.npd_id, "YzQ5ZmIwOTYtNDc0Ny00MGM5LWJhNGQtMzFhZjFiODEzMGUz");
-        assert_eq!(body.device_id, "test-id");
-    }
-
-    #[test]
-    fn test_parse_deactivation_response() {
-        let response_str = r#"{"invalidationSuccessful":true}"#;
-        let response: super::FrlDeactivationResponseBody =
-            serde_json::from_str(response_str).unwrap();
-        assert!(response.invalidation_successful);
-    }
-
-    #[test]
-    fn test_parse_mock_deactivation_response() {
-        let mock = super::FrlDeactivationResponseBody::mock_from_device_id("test-id");
-        let response: super::FrlDeactivationResponseBody =
-            serde_json::from_str(&mock.to_body()).unwrap();
-        assert!(response.invalidation_successful);
+        let query = "deviceId=2c93c879...elided...28c2fa&osUserId=b693be35...elided...e084d&enableVdiMarkerExists=0&isVirtualEnvironment=0&isOsUserAccountInDomain=0";
+        let parse: HashMap<String, String> = serde_urlencoded::from_str(query).unwrap();
+        assert_eq!(parse["deviceId"], "2c93c879...elided...28c2fa");
+        assert_eq!(parse["osUserId"], "b693be35...elided...e084d");
     }
 }

@@ -25,13 +25,17 @@ use dialoguer::Confirm;
 use eyre::{eyre, Result, WrapErr};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
-    ConnectOptions,
+    ConnectOptions, Row,
 };
 
-use adlu_parse::protocol::{Request, Response};
+use adlu_parse::protocol::{Request, RequestType};
+
+use crate::cli::Datasource;
+use crate::proxy::Response;
 
 mod frl;
 mod log;
+mod named_user;
 
 /// A cache for requests and responses.
 ///
@@ -73,104 +77,100 @@ impl Db {
             let pool = &self.pool;
             frl::clear(pool).await?;
             log::clear(pool).await?;
+            named_user::clear(pool).await?;
         }
         Ok(())
     }
 
-    pub async fn import(&self, path: &str) -> Result<()> {
-        frl::import(&self.pool, path).await
+    pub async fn import(&self, source: &Datasource, path: &str) -> Result<()> {
+        if let Datasource::Frl = source {
+            frl::import(&self.pool, path).await
+        } else {
+            Err(eyre!("Import of {} is not yet implemented.", &source))
+        }
     }
 
-    pub async fn export(&self, path: &str) -> Result<()> {
-        frl::export(&self.pool, path).await
+    pub async fn export(&self, source: &Datasource, path: &str) -> Result<()> {
+        if let Datasource::Frl = source {
+            frl::export(&self.pool, path).await
+        } else {
+            Err(eyre!("Export of {} is not yet implemented.", &source))
+        }
     }
 
     pub async fn report(
         &self,
+        source: &Datasource,
         path: &str,
         empty: bool,
         timezone: bool,
         rfc3339: bool,
     ) -> Result<()> {
-        log::report(&self.pool, path, empty, timezone, rfc3339).await
+        match source {
+            Datasource::Frl => {
+                Err(eyre!("Reporting of {} is not yet implemented", &source))
+            }
+            Datasource::Nul => {
+                named_user::report(&self.pool, path, empty, timezone, rfc3339).await
+            }
+            Datasource::Log => {
+                log::report(&self.pool, path, empty, timezone, rfc3339).await
+            }
+        }
     }
 
     pub async fn store_request(&self, req: &Request) {
         let pool = &self.pool;
-        let result = match req {
-            Request::Activation(req) => frl::store_activation_request(pool, req).await,
-            Request::Deactivation(req) => {
+        let result = match req.request_type {
+            RequestType::FrlActivation => frl::store_activation_request(pool, req).await,
+            RequestType::FrlDeactivation => {
                 frl::store_deactivation_request(pool, req).await
             }
-            Request::LogUpload(req) => log::store_upload_request(pool, req).await,
+            RequestType::NulLicense => named_user::store_license_request(pool, req).await,
+            RequestType::LogUpload => log::store_upload_request(pool, req).await,
+            RequestType::Unknown => Ok(()),
         };
         if let Err(err) = result {
-            let id = req.request_id();
-            error!("Cache store of request ID {} failed: {}", id, err);
+            error!("Cache store of {} failed: {}", req, err);
         }
     }
 
     pub async fn store_response(&self, req: &Request, resp: &Response) {
         let pool = &self.pool;
-        let mismatch =
-            eyre!("Internal request/response inconsistency: please report a bug!");
-        let result = match resp {
-            Response::Activation(resp) => {
-                if let Request::Activation(req) = req {
-                    frl::store_activation_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
+        let result = match resp.request_type {
+            RequestType::FrlActivation => {
+                frl::store_activation_response(pool, req, resp).await
             }
-            Response::Deactivation(resp) => {
-                if let Request::Deactivation(req) = req {
-                    frl::store_deactivation_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
+            RequestType::FrlDeactivation => {
+                frl::store_deactivation_response(pool, req, resp).await
             }
-            Response::LogUpload(resp) => {
-                if let Request::LogUpload(req) = req {
-                    log::store_upload_response(pool, req, resp).await
-                } else {
-                    Err(mismatch)
-                }
+            RequestType::NulLicense => {
+                named_user::store_license_response(pool, req, resp).await
             }
+            RequestType::LogUpload => log::store_upload_response(pool, req, resp).await,
+            RequestType::Unknown => Ok(()),
         };
         if let Err(err) = result {
-            error!("Cache store of request ID {} failed: {}", req.request_id(), err);
+            error!("Cache store of {} failed: {}", req, err);
         }
     }
 
     pub async fn fetch_response(&self, req: &Request) -> Option<Response> {
         let pool = &self.pool;
-        let result = match req {
-            Request::Activation(req) => {
-                match frl::fetch_activation_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::Activation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
+        let result = match &req.request_type {
+            RequestType::FrlActivation => frl::fetch_activation_response(pool, req).await,
+            RequestType::FrlDeactivation => {
+                frl::fetch_deactivation_response(pool, req).await
             }
-            Request::Deactivation(req) => {
-                match frl::fetch_deactivation_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::Deactivation(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
+            RequestType::NulLicense => {
+                named_user::fetch_license_response(pool, req).await
             }
-            Request::LogUpload(req) => {
-                match log::fetch_upload_response(pool, req).await {
-                    Ok(Some(resp)) => Ok(Some(Response::LogUpload(Box::new(resp)))),
-                    Ok(None) => Ok(None),
-                    Err(err) => Err(err),
-                }
-            }
+            RequestType::LogUpload => log::fetch_upload_response(pool, req).await,
+            RequestType::Unknown => Ok(None),
         };
         match result {
             Err(err) => {
-                let id = req.request_id();
-                error!("Cache fetch of request ID {} failed: {}", id, err);
+                error!("Cache fetch of response for {} failed: {}", req, err);
                 None
             }
             Ok(val) => val,
@@ -190,7 +190,49 @@ async fn db_init(db_name: &str, mode: &str) -> Result<SqlitePool> {
         options.disable_statement_logging();
     }
     let pool = SqlitePoolOptions::new().max_connections(5).connect_with(options).await?;
+    sqlx::query(SCHEMA_VERSION_SCHEMA).execute(&pool).await?;
+    sqlx::query(SCHEMA_VERSION_INITIALIZE).execute(&pool).await?;
     frl::db_init(&pool).await?;
     log::db_init(&pool).await?;
+    named_user::db_init(&pool).await?;
     Ok(pool)
 }
+
+async fn schema_upgrade(
+    data_type: &str,
+    max_version: usize,
+    alterations_table: &[&str],
+    pool: &SqlitePool,
+) -> Result<()> {
+    let q_str = r#"select * from schema_version where data_type = ?"#;
+    let u_str = "update schema_version set schema_version = ? where data_type = ?";
+    let row = sqlx::query(q_str).bind(data_type).fetch_one(pool).await?;
+    let mut version: i64 = row.get("schema_version");
+    while (version as usize) < max_version {
+        info!(
+            "Upgrading '{}' data table from version {} to {}",
+            data_type,
+            version,
+            version + 1
+        );
+        sqlx::query(alterations_table[(version as usize)]).execute(pool).await?;
+        version += 1;
+        sqlx::query(u_str).bind(version).bind(data_type).execute(pool).await?;
+    }
+    Ok(())
+}
+
+const SCHEMA_VERSION_SCHEMA: &str = r#"
+    create table if not exists schema_version (
+        data_type text not null unique,
+        schema_version integer not null default 0
+    );"#;
+
+const SCHEMA_VERSION_INITIALIZE: &str = r#"
+    insert or ignore into schema_version
+        (data_type, schema_version)
+    values
+        ("frl", 0),
+        ("license", 0),
+        ("log", 0);
+    "#;
