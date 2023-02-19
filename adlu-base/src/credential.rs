@@ -21,7 +21,7 @@ use eyre::{eyre, Result};
 #[cfg(target_os = "macos")]
 pub fn get_saved_credential(key: &str) -> Result<String> {
     let service = format!("Adobe App Info ({})", &key);
-    let entry = keyring::Entry::new(&service, "App Info");
+    let entry = keyring::Entry::new(&service, "App Info")?;
     match entry.get_password() {
         Ok(s) => Ok(s),
         Err(keyring::Error::NoStorageAccess(err)) => {
