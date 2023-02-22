@@ -3,10 +3,13 @@ name = "adlu-proxy"
 authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 description = "A protocol-aware, caching, store/forward reverse proxy for Adobe desktop licensing servers"
 license = "AGPLv3"
-version = "1.2.0"
+version = "1.3.0-alpha.1"
 edition = "2021"
 
 [features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+postgres = ["sqlx/postgres"]
 parse_responses = ["adlu-parse/parse-reponses"]
 
 [dependencies]
@@ -30,7 +33,7 @@ reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_urlencoded = "0.7"
 serde_json = "1.0"
-sqlx = { version = "0.6", default-features = false, features = [ "runtime-tokio-native-tls", "sqlite" ] }
+sqlx = { version = "0.6", default-features = false, features = ["runtime-tokio-native-tls"] }
 sys-info = "0.9"
 tokio = { version = "1", features = ["full"] }
 tokio-native-tls = "0.3"
