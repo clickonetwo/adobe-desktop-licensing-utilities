@@ -23,7 +23,7 @@ flowchart BT
       id7[[AI license]]
     end
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id2 == 1 ==> id4
   id3 == 1 ==> id4
   id4 == 1 ==> id1
@@ -50,8 +50,8 @@ flowchart BT
       id3[[identity token]]
       id5[[PS license]]
     end
- end
-  id4{{internet gateway}}
+  end
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id3 -- 2 --- id2 == 1 ==> id4 == 1 ==> id8
   id5 -- 4 --- id2 == 3 ==> id4 == 3 ==> id1
 ```
@@ -71,7 +71,7 @@ flowchart BT
       id6[[AI license]]
     end
  end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id3 -- 1 --- id9
   id6 -- 3 --- id9 == 2 ==> id4 == 2 ==> id1 == 2 ==> id8
 ```
@@ -96,7 +96,7 @@ flowchart BT
       id7[[AI license]]
     end
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id8 -- 2 --- id5 == 1 ==> id4 == 1 ==> id9
   id6 -- 4 --- id5 == 3 ==> id4 == 3 ==> id1
   id7 -- 4 --- id5
@@ -122,7 +122,7 @@ flowchart BT
     	id5[[PS license]]
     end
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id3 -- 1 --- id2
   id2 == 2 ==> id4 == 2 ==> id1
   id5 -- 3 --- id2
@@ -146,7 +146,7 @@ flowchart BT
       id6[[log of launch C]]
     end
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id3 == 1 === id2
   id5 == 1 === id2
   id6 == 1 === id2

@@ -50,7 +50,7 @@ flowchart BT
     id2(["Photoshop (PS))"])
     id3(["Illustrator (AI))"])
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id5([adlu-proxy])
   id2 ==> id5
   id3 ==> id5
@@ -67,9 +67,9 @@ flowchart BT
     id2(["app1 (e.g., Photoshop)"])
     id3(["app2 (e.g., Illustrator)"])
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id5([adlu-proxy])
-  id6{{sandbox gateway}}
+  {% raw %}id6{{sandbox gateway}}{% endraw %}
   id2 ==> id6
   id3 ==> id6
   id6 ==> id5
@@ -88,7 +88,7 @@ flowchart BT
     id2(["app1 (e.g., Photoshop)"])
     id3(["app2 (e.g., Illustrator)"])
   end
-  id4{{internet gateway}}
+  {% raw %}id4{{internet gateway}}{% endraw %}
   id5([adlu-proxy])
   id2 ==> id4
   id3 ==> id4
